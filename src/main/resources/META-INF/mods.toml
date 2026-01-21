@@ -1,0 +1,17 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="All rights reserved"
+
+[[mods]]
+modId="areamonitor"
+version="1.0.0"
+displayName="区域监控模组"
+authors="您的名字"
+description='监控特定维度区域，自动切换玩家游戏模式'
+
+[[dependencies.areamonitor]]
+modId="forge"
+mandatory=true
+versionRange="[47,)"
+ordering="NONE"
+side="SERVER"
