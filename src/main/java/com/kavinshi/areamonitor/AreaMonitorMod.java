@@ -22,11 +22,9 @@ public class AreaMonitorMod {
         // 注册事件监听器
         MinecraftForge.EVENT_BUS.register(this);
         modEventBus.addListener(this::setup);
-
-        LOGGER.info("区域监控模组加载成功！");
     }
 
     private void setup(final FMLCommonSetupEvent event) {
-        LOGGER.info("区域监控模组初始化中...");
+        // 模组初始化完成
     }
 }

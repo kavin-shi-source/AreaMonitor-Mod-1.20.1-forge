@@ -12,11 +12,22 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
 @Mod.EventBusSubscriber(modid = AreaMonitorMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ModCommands {
+
+    private static final List<String> DIMENSION_SUGGESTIONS = Arrays.asList(
+            "minecraft:overworld",
+            "minecraft:the_nether",
+            "minecraft:the_end"
+    );
+
+    private static final List<String> GAME_MODE_SUGGESTIONS = Arrays.asList(
+            "survival", "creative", "adventure", "spectator"
+    );
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
@@ -25,7 +36,6 @@ public class ModCommands {
         dispatcher.register(Commands.literal("areamonitor")
                 .requires(source -> source.hasPermission(2))
 
-                // 只保留 toggle 命令，删除 on/off 命令
                 .then(Commands.literal("toggle")
                         .executes(ModCommands::toggleMonitor)
                 )
@@ -45,9 +55,49 @@ public class ModCommands {
                 )
 
                 .then(Commands.literal("setDimension")
-                        .then(Commands.argument("dimension", StringArgumentType.string())
+                        .then(Commands.argument("dimension", StringArgumentType.greedyString())
+                                .suggests((context, builder) -> {
+                                    for (String dim : DIMENSION_SUGGESTIONS) {
+                                        if (dim.startsWith(builder.getRemaining().toLowerCase())) {
+                                            builder.suggest(dim);
+                                        }
+                                    }
+                                    return builder.buildFuture();
+                                })
                                 .executes(context -> setDimension(
                                         StringArgumentType.getString(context, "dimension"),
+                                        context
+                                )))
+                )
+
+                .then(Commands.literal("setEnterMode")
+                        .then(Commands.argument("mode", StringArgumentType.string())
+                                .suggests((context, builder) -> {
+                                    for (String mode : GAME_MODE_SUGGESTIONS) {
+                                        if (mode.startsWith(builder.getRemaining().toLowerCase())) {
+                                            builder.suggest(mode);
+                                        }
+                                    }
+                                    return builder.buildFuture();
+                                })
+                                .executes(context -> setEnterMode(
+                                        StringArgumentType.getString(context, "mode"),
+                                        context
+                                )))
+                )
+
+                .then(Commands.literal("setLeaveMode")
+                        .then(Commands.argument("mode", StringArgumentType.string())
+                                .suggests((context, builder) -> {
+                                    for (String mode : GAME_MODE_SUGGESTIONS) {
+                                        if (mode.startsWith(builder.getRemaining().toLowerCase())) {
+                                            builder.suggest(mode);
+                                        }
+                                    }
+                                    return builder.buildFuture();
+                                })
+                                .executes(context -> setLeaveMode(
+                                        StringArgumentType.getString(context, "mode"),
                                         context
                                 )))
                 )
@@ -91,7 +141,6 @@ public class ModCommands {
         ConfigManager.CONFIG.isEnabled.set(newState);
         ConfigManager.CONFIG.isEnabled.save();
 
-        String state = newState ? "§a启用" : "§c禁用";
         String message = newState ?
                 "§6区域监控已§a启用§6，使用 /areamonitor status 查看状态" :
                 "§6区域监控已§c禁用§6，使用 /areamonitor toggle 重新启用";
@@ -101,7 +150,6 @@ public class ModCommands {
                 true
         );
 
-        AreaMonitorMod.LOGGER.info("区域监控状态已切换为: {}", newState ? "启用" : "禁用");
         return 1;
     }
 
@@ -128,11 +176,74 @@ public class ModCommands {
     }
 
     private static int setDimension(String dimension, CommandContext<CommandSourceStack> context) {
+        dimension = dimension.trim();
+
+        if (!isValidDimensionFormat(dimension)) {
+            String errorMessage = "§c维度格式错误！请使用完整的命名空间格式，例如：minecraft:overworld";
+
+            if (!dimension.contains(":") && !dimension.isEmpty()) {
+                String suggestedDimension = "minecraft:" + dimension;
+                if (DIMENSION_SUGGESTIONS.contains(suggestedDimension)) {
+                    errorMessage += "\n§e提示：您输入了 \"" + dimension + "\"，请尝试使用 \"" + suggestedDimension + "\"";
+                }
+            }
+
+            context.getSource().sendFailure(Component.literal(errorMessage));
+            return 0;
+        }
+
         ConfigManager.CONFIG.targetDimension.set(dimension);
         ConfigManager.CONFIG.targetDimension.save();
 
+        String displayDimension = getDimensionDisplayName(dimension);
         context.getSource().sendSuccess(
-                () -> Component.literal("§a目标维度已设置为: " + dimension),
+                () -> Component.literal("§a目标维度已设置为: " + displayDimension),
+                true
+        );
+        return 1;
+    }
+
+    private static boolean isValidDimensionFormat(String dimension) {
+        if (dimension == null || dimension.trim().isEmpty()) {
+            return false;
+        }
+
+        if (!dimension.startsWith("minecraft:")) {
+            return false;
+        }
+
+        String dimLower = dimension.toLowerCase();
+        return DIMENSION_SUGGESTIONS.contains(dimLower);
+    }
+
+    private static String getDimensionDisplayName(String dimension) {
+        if (dimension == null) return "未知维度";
+
+        return switch (dimension.toLowerCase()) {
+            case "minecraft:overworld" -> "主世界 (minecraft:overworld)";
+            case "minecraft:the_nether" -> "下界 (minecraft:the_nether)";
+            case "minecraft:the_end" -> "末地 (minecraft:the_end)";
+            default -> dimension;
+        };
+    }
+
+    private static int setEnterMode(String mode, CommandContext<CommandSourceStack> context) {
+        ConfigManager.CONFIG.enterGameMode.set(mode);
+        ConfigManager.CONFIG.enterGameMode.save();
+
+        context.getSource().sendSuccess(
+                () -> Component.literal("§a进入区域模式已设置为: " + mode),
+                true
+        );
+        return 1;
+    }
+
+    private static int setLeaveMode(String mode, CommandContext<CommandSourceStack> context) {
+        ConfigManager.CONFIG.leaveGameMode.set(mode);
+        ConfigManager.CONFIG.leaveGameMode.save();
+
+        context.getSource().sendSuccess(
+                () -> Component.literal("§a离开区域模式已设置为: " + mode),
                 true
         );
         return 1;
@@ -182,12 +293,11 @@ public class ModCommands {
                     false
             );
 
-            // 修复：将白名单转换为List，使用索引访问
             List<String> whitelistArray = new ArrayList<>(whitelist);
 
             for (int i = 0; i < whitelistArray.size(); i++) {
-                final int index = i + 1; // 创建final变量
-                final String player = whitelistArray.get(i); // 创建final变量
+                final int index = i + 1;
+                final String player = whitelistArray.get(i);
 
                 context.getSource().sendSuccess(
                         () -> Component.literal(String.format("§e%d. §f%s", index, player)),
@@ -231,7 +341,13 @@ public class ModCommands {
                 )), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§e目标维度: " + config.targetDimension.get()), false
+                () -> Component.literal("§e目标维度: " + getDimensionDisplayName(config.targetDimension.get())), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§e进入模式: " + config.enterGameMode.get()), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§e离开模式: " + config.leaveGameMode.get()), false
         );
 
         Set<String> whitelist = WhitelistManager.getWhitelist();
@@ -253,7 +369,13 @@ public class ModCommands {
                 () -> Component.literal("§b/areamonitor setArea <minX> <minZ> <maxX> <maxZ> §f- 设置区域"), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor setDimension <维度ID> §f- 设置目标维度"), false
+                () -> Component.literal("§b/areamonitor setDimension <维度ID> §f- 设置目标维度（必须使用完整格式，如：minecraft:overworld）"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor setEnterMode <模式> §f- 设置进入区域模式"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor setLeaveMode <模式> §f- 设置离开区域模式"), false
         );
         context.getSource().sendSuccess(
                 () -> Component.literal("§b/areamonitor whitelist add <玩家名> §f- 添加白名单"), false

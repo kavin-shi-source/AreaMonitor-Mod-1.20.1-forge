@@ -2,6 +2,7 @@ package com.kavinshi.areamonitor;
 
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -24,14 +25,28 @@ public class WhitelistManager {
         minecraftServer = event.getServer();
         whitelistFile = new File(minecraftServer.getServerDirectory(), "config/areamonitor-whitelist.txt");
         loadWhitelist();
-        AreaMonitorMod.LOGGER.info("白名单管理器初始化完成，已加载 {} 个玩家", playerWhitelist.size());
     }
 
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
         saveWhitelist();
         minecraftServer = null;
-        AreaMonitorMod.LOGGER.info("白名单已保存");
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            if (isWhitelisted(player.getName().getString())) {
+                whitelistUUIDs.add(player.getUUID());
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            whitelistUUIDs.remove(player.getUUID());
+        }
     }
 
     public static void loadWhitelist() {
@@ -39,21 +54,26 @@ public class WhitelistManager {
         whitelistUUIDs.clear();
 
         if (!whitelistFile.exists()) {
-            AreaMonitorMod.LOGGER.info("白名单文件不存在，将创建新文件: {}", whitelistFile.getAbsolutePath());
             return;
         }
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(whitelistFile))) {
+        try (FileReader fileReader = new FileReader(whitelistFile);
+             BufferedReader reader = new BufferedReader(fileReader)) {
             String line;
-            int count = 0;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
                 if (!line.isEmpty() && !line.startsWith("#")) {
                     playerWhitelist.add(line.toLowerCase());
-                    count++;
                 }
             }
-            AreaMonitorMod.LOGGER.info("成功加载白名单，共 {} 个玩家", count);
+
+            if (minecraftServer != null) {
+                for (ServerPlayer player : minecraftServer.getPlayerList().getPlayers()) {
+                    if (isWhitelisted(player.getName().getString())) {
+                        whitelistUUIDs.add(player.getUUID());
+                    }
+                }
+            }
         } catch (IOException e) {
             AreaMonitorMod.LOGGER.error("无法加载白名单文件", e);
         }
@@ -61,9 +81,16 @@ public class WhitelistManager {
 
     public static void saveWhitelist() {
         try {
-            whitelistFile.getParentFile().mkdirs();
+            if (!whitelistFile.getParentFile().exists()) {
+                boolean dirsCreated = whitelistFile.getParentFile().mkdirs();
+                if (!dirsCreated) {
+                    AreaMonitorMod.LOGGER.error("无法创建配置目录: {}", whitelistFile.getParentFile().getAbsolutePath());
+                    return;
+                }
+            }
 
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(whitelistFile))) {
+            try (FileWriter fileWriter = new FileWriter(whitelistFile);
+                 BufferedWriter writer = new BufferedWriter(fileWriter)) {
                 writer.write("# 区域监控模组白名单");
                 writer.newLine();
                 writer.write("# 每行一个玩家名（不区分大小写）");
@@ -75,7 +102,6 @@ public class WhitelistManager {
                     writer.newLine();
                 }
             }
-            AreaMonitorMod.LOGGER.info("白名单已保存到: {}", whitelistFile.getAbsolutePath());
         } catch (IOException e) {
             AreaMonitorMod.LOGGER.error("无法保存白名单文件", e);
         }
@@ -102,7 +128,6 @@ public class WhitelistManager {
                 }
             }
             saveWhitelist();
-            AreaMonitorMod.LOGGER.info("玩家 {} 已添加到白名单", playerName);
             return true;
         }
         return false;
@@ -117,7 +142,6 @@ public class WhitelistManager {
                 }
             }
             saveWhitelist();
-            AreaMonitorMod.LOGGER.info("玩家 {} 已从白名单移除", playerName);
             return true;
         }
         return false;
@@ -128,20 +152,8 @@ public class WhitelistManager {
     }
 
     public static void clearWhitelist() {
-        int count = playerWhitelist.size();
         playerWhitelist.clear();
         whitelistUUIDs.clear();
         saveWhitelist();
-        AreaMonitorMod.LOGGER.info("已清空白名单，共移除 {} 个玩家", count);
-    }
-
-    public static void onPlayerLogin(ServerPlayer player) {
-        if (isWhitelisted(player.getName().getString())) {
-            whitelistUUIDs.add(player.getUUID());
-        }
-    }
-
-    public static void onPlayerLogout(ServerPlayer player) {
-        whitelistUUIDs.remove(player.getUUID());
     }
 }

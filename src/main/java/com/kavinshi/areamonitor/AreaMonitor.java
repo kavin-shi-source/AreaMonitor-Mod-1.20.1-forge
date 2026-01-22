@@ -24,12 +24,15 @@ public class AreaMonitor {
     private static int tickCounter = 0;
     private static final int CHECK_INTERVAL = 5;
 
+    private static final int TITLE_FADE_IN = 10;
+    private static final int TITLE_STAY = 30;
+    private static final int TITLE_FADE_OUT = 10;
+    private static final long MODE_SWITCH_DELAY = 1000L;
+
     private static class PlayerState {
         boolean wasInArea = false;
         int lastX = 0;
         int lastZ = 0;
-        long pendingActionTime = 0;
-        GameType pendingGameMode = null;
     }
 
     private static class PendingAction {
@@ -49,7 +52,6 @@ public class AreaMonitor {
     @SubscribeEvent
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
         minecraftServer = event.getServer();
-        AreaMonitorMod.LOGGER.info("区域监控模组已连接到服务器");
     }
 
     @SubscribeEvent
@@ -97,59 +99,76 @@ public class AreaMonitor {
             state.lastZ = z;
 
             boolean inArea = ConfigManager.CONFIG.isInArea(x, z);
+            GameType currentMode = player.gameMode.getGameModeForPlayer();
+            GameType targetEnterMode = ConfigManager.CONFIG.getEnterGameMode();
+            GameType targetLeaveMode = ConfigManager.CONFIG.getLeaveGameMode();
 
-            if (inArea && !state.wasInArea) {
-                handleAreaEnter(player, state);
-            } else if (!inArea && state.wasInArea) {
-                handleAreaLeave(player, state);
+            if (inArea) {
+                if (!state.wasInArea) {
+                    handleAreaEnter(player, state);
+                } else if (currentMode != targetEnterMode) {
+                    player.setGameMode(targetEnterMode);
+                }
+            } else {
+                if (state.wasInArea) {
+                    handleAreaLeave(player, state);
+                } else if (currentMode != targetLeaveMode) {
+                    player.setGameMode(targetLeaveMode);
+                }
             }
         }
     }
 
     private static void handleAreaEnter(ServerPlayer player, PlayerState state) {
         state.wasInArea = true;
+        GameType targetMode = ConfigManager.CONFIG.getEnterGameMode();
 
         showTitle(player,
                 Component.literal("进入活动区域").withStyle(ChatFormatting.BOLD, ChatFormatting.GREEN),
-                Component.literal("1.5秒后切换为冒险模式").withStyle(ChatFormatting.GRAY),
-                10, 40, 10
+                Component.literal("1秒后切换为" + getModeDisplayName(targetMode)).withStyle(ChatFormatting.GRAY)
         );
 
         pendingActions.add(new PendingAction(player.getUUID(), () -> {
             if (player.isAlive() && state.wasInArea) {
-                player.setGameMode(GameType.ADVENTURE);
+                player.setGameMode(targetMode);
                 if (ConfigManager.CONFIG.showMessages.get()) {
-                    player.displayClientMessage(Component.literal("§a已切换为冒险模式"), true);
+                    player.displayClientMessage(Component.literal("§a已切换为" + getModeDisplayName(targetMode)), true);
                 }
             }
-        }, 1500));
+        }, MODE_SWITCH_DELAY));
     }
 
     private static void handleAreaLeave(ServerPlayer player, PlayerState state) {
         state.wasInArea = false;
+        GameType targetMode = ConfigManager.CONFIG.getLeaveGameMode();
 
         showTitle(player,
                 Component.literal("离开活动区域").withStyle(ChatFormatting.BOLD, ChatFormatting.RED),
-                Component.literal("1.5秒后切换为生存模式").withStyle(ChatFormatting.GRAY),
-                10, 40, 10
+                Component.literal("1秒后切换为" + getModeDisplayName(targetMode)).withStyle(ChatFormatting.GRAY)
         );
 
         pendingActions.add(new PendingAction(player.getUUID(), () -> {
             if (player.isAlive() && !state.wasInArea) {
-                player.setGameMode(GameType.SURVIVAL);
+                player.setGameMode(targetMode);
                 if (ConfigManager.CONFIG.showMessages.get()) {
-                    player.displayClientMessage(Component.literal("§c已恢复为生存模式"), true);
+                    player.displayClientMessage(Component.literal("§c已切换为" + getModeDisplayName(targetMode)), true);
                 }
             }
-        }, 1500));
+        }, MODE_SWITCH_DELAY));
     }
 
-    private static void showTitle(ServerPlayer player, Component title, Component subtitle,
-                                  int fadeIn, int stay, int fadeOut) {
-        if (player.connection == null) return;
+    private static String getModeDisplayName(GameType gameMode) {
+        return switch (gameMode) {
+            case CREATIVE -> "创造模式";
+            case ADVENTURE -> "冒险模式";
+            case SPECTATOR -> "旁观模式";
+            default -> "生存模式";
+        };
+    }
 
+    private static void showTitle(ServerPlayer player, Component title, Component subtitle) {
         try {
-            player.connection.send(new ClientboundSetTitlesAnimationPacket(fadeIn, stay, fadeOut));
+            player.connection.send(new ClientboundSetTitlesAnimationPacket(TITLE_FADE_IN, TITLE_STAY, TITLE_FADE_OUT));
 
             if (title != null) {
                 player.connection.send(new ClientboundSetTitleTextPacket(title));
@@ -159,7 +178,7 @@ public class AreaMonitor {
                 player.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));
             }
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.warn("发送标题消息失败", e);
+            AreaMonitorMod.LOGGER.error("发送标题消息失败", e);
         }
     }
 
@@ -189,12 +208,6 @@ public class AreaMonitor {
             synchronized (pendingActions) {
                 pendingActions.removeIf(action -> action.playerId.equals(playerId));
             }
-
-            AreaMonitorMod.LOGGER.debug("玩家退出，已清理状态: {}", player.getName().getString());
         }
-    }
-
-    public static MinecraftServer getMinecraftServer() {
-        return minecraftServer;
     }
 }
