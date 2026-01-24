@@ -13,7 +13,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 
-@Mod.EventBusSubscriber(modid = AreaMonitorMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class WhitelistManager {
     private static final Set<String> playerWhitelist = new HashSet<>();
     private static final Set<UUID> whitelistUUIDs = new HashSet<>();
@@ -25,6 +25,7 @@ public class WhitelistManager {
         minecraftServer = event.getServer();
         whitelistFile = new File(minecraftServer.getServerDirectory(), "config/areamonitor-whitelist.txt");
         loadWhitelist();
+        // 移除日志
     }
 
     @SubscribeEvent
