@@ -13,17 +13,15 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Mod.EventBusSubscriber(modid = AreaMonitorMod.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+@Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class AreaMonitor {
     private static final Map<UUID, PlayerState> playerStates = new ConcurrentHashMap<>();
     private static MinecraftServer minecraftServer;
     private static int tickCounter = 0;
     private static final int CHECK_INTERVAL = 5;
-
     private static final int TITLE_FADE_IN = 10;
     private static final int TITLE_STAY = 30;
     private static final int TITLE_FADE_OUT = 10;
@@ -31,21 +29,21 @@ public class AreaMonitor {
 
     private static class PlayerState {
         boolean wasInArea = false;
-        int lastX = 0;
-        int lastZ = 0;
-    }
+        int lastX = Integer.MAX_VALUE;
+        int lastZ = Integer.MAX_VALUE;
 
-    private static class PendingAction {
-        final UUID playerId;
-        final Runnable action;
-        final long executeTime;
-
-        PendingAction(UUID playerId, Runnable action, long delayMs) {
-            this.playerId = playerId;
-            this.action = action;
-            this.executeTime = System.currentTimeMillis() + delayMs;
+        public boolean isInitialized() {
+            return lastX != Integer.MAX_VALUE && lastZ != Integer.MAX_VALUE;
         }
     }
+
+    private record PendingAction(UUID playerId, Runnable action, long executeTime) {
+            private PendingAction(UUID playerId, Runnable action, long executeTime) {
+                this.playerId = playerId;
+                this.action = action;
+                this.executeTime = System.currentTimeMillis() + executeTime;
+            }
+        }
 
     private static final List<PendingAction> pendingActions = Collections.synchronizedList(new ArrayList<>());
 
@@ -72,6 +70,24 @@ public class AreaMonitor {
         }
     }
 
+    private static void processPendingActions() {
+        long currentTime = System.currentTimeMillis();
+        Iterator<PendingAction> iterator = pendingActions.iterator();
+
+        while (iterator.hasNext()) {
+            PendingAction action = iterator.next();
+            if (currentTime >= action.executeTime) {
+                try {
+                    action.action.run();
+                } catch (Exception e) {
+                    // 保留错误日志
+                    AreaMonitorMod.LOGGER.error("执行延迟动作时出错", e);
+                }
+                iterator.remove();
+            }
+        }
+    }
+
     private static void checkPlayer(ServerPlayer player) {
         if (WhitelistManager.isWhitelisted(player)) {
             return;
@@ -91,30 +107,40 @@ public class AreaMonitor {
 
         PlayerState state = playerStates.computeIfAbsent(playerId, k -> new PlayerState());
 
+        if (!state.isInitialized()) {
+            state.lastX = x;
+            state.lastZ = z;
+            checkPlayerArea(player, x, z, state);
+            return;
+        }
+
         int dx = Math.abs(x - state.lastX);
         int dz = Math.abs(z - state.lastZ);
 
         if (dx > 2 || dz > 2) {
             state.lastX = x;
             state.lastZ = z;
+            checkPlayerArea(player, x, z, state);
+        }
+    }
 
-            boolean inArea = ConfigManager.CONFIG.isInArea(x, z);
-            GameType currentMode = player.gameMode.getGameModeForPlayer();
-            GameType targetEnterMode = ConfigManager.CONFIG.getEnterGameMode();
-            GameType targetLeaveMode = ConfigManager.CONFIG.getLeaveGameMode();
+    private static void checkPlayerArea(ServerPlayer player, int x, int z, PlayerState state) {
+        boolean inArea = ConfigManager.CONFIG.isInArea(x, z);
+        GameType currentMode = player.gameMode.getGameModeForPlayer();
+        GameType targetEnterMode = ConfigManager.CONFIG.getEnterGameMode();
+        GameType targetLeaveMode = ConfigManager.CONFIG.getLeaveGameMode();
 
-            if (inArea) {
-                if (!state.wasInArea) {
-                    handleAreaEnter(player, state);
-                } else if (currentMode != targetEnterMode) {
-                    player.setGameMode(targetEnterMode);
-                }
-            } else {
-                if (state.wasInArea) {
-                    handleAreaLeave(player, state);
-                } else if (currentMode != targetLeaveMode) {
-                    player.setGameMode(targetLeaveMode);
-                }
+        if (inArea) {
+            if (!state.wasInArea) {
+                handleAreaEnter(player, state);
+            } else if (currentMode != targetEnterMode) {
+                player.setGameMode(targetEnterMode);
+            }
+        } else {
+            if (state.wasInArea) {
+                handleAreaLeave(player, state);
+            } else if (currentMode != targetLeaveMode) {
+                player.setGameMode(targetLeaveMode);
             }
         }
     }
@@ -178,24 +204,8 @@ public class AreaMonitor {
                 player.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));
             }
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("发送标题消息失败", e);
-        }
-    }
-
-    private static void processPendingActions() {
-        long currentTime = System.currentTimeMillis();
-        Iterator<PendingAction> iterator = pendingActions.iterator();
-
-        while (iterator.hasNext()) {
-            PendingAction action = iterator.next();
-            if (currentTime >= action.executeTime) {
-                try {
-                    action.action.run();
-                } catch (Exception e) {
-                    AreaMonitorMod.LOGGER.error("执行延迟动作时出错", e);
-                }
-                iterator.remove();
-            }
+            // 静默处理标题发送错误，避免影响游戏体验
+            // 常见原因：玩家断开连接、网络问题等
         }
     }
 

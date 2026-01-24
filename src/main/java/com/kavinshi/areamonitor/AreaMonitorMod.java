@@ -8,23 +8,21 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-@Mod(AreaMonitorMod.MODID)
+@Mod(AreaMonitorMod.MOD_ID)
 public class AreaMonitorMod {
-    public static final String MODID = "areamonitor";
-    public static final Logger LOGGER = LogManager.getLogger(MODID);
+    public static final String MOD_ID = "areamonitor";
+    public static final Logger LOGGER = LogManager.getLogger(MOD_ID);
 
     public AreaMonitorMod() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
-        // 初始化配置
         ConfigManager.init();
 
-        // 注册事件监听器
         MinecraftForge.EVENT_BUS.register(this);
         modEventBus.addListener(this::setup);
+
     }
 
     private void setup(final FMLCommonSetupEvent event) {
-        // 模组初始化完成
     }
 }
