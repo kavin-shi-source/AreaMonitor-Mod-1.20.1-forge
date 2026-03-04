@@ -11,9 +11,16 @@ public class ConfigManager {
     public static final Config CONFIG;
 
     static {
-        final Pair<Config, ForgeConfigSpec> specPair = new ForgeConfigSpec.Builder().configure(Config::new);
-        SPEC = specPair.getRight();
-        CONFIG = specPair.getLeft();
+        try {
+            final Pair<Config, ForgeConfigSpec> specPair = new ForgeConfigSpec.Builder().configure(Config::new);
+            SPEC = specPair.getRight();
+            CONFIG = specPair.getLeft();
+        } catch (Exception e) {
+            // 如果配置创建失败，记录错误并抛出
+            System.err.println("Failed to create config spec: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     public static class Config {
@@ -26,6 +33,9 @@ public class ConfigManager {
         public final ForgeConfigSpec.BooleanValue showMessages;
         public final ForgeConfigSpec.ConfigValue<String> enterGameMode;
         public final ForgeConfigSpec.ConfigValue<String> leaveGameMode;
+
+        // 缓存边界值以提高性能
+        private Integer cachedMinX, cachedMaxX, cachedMinZ, cachedMaxZ;
 
         public Config(ForgeConfigSpec.Builder builder) {
             builder.comment("区域监控设置").push("区域监控设置");
@@ -70,11 +80,24 @@ public class ConfigManager {
         }
 
         public boolean isInArea(int x, int z) {
-            int x1 = Math.min(minX.get(), maxX.get());
-            int x2 = Math.max(minX.get(), maxX.get());
-            int z1 = Math.min(minZ.get(), maxZ.get());
-            int z2 = Math.max(minZ.get(), maxZ.get());
-            return x >= x1 && x <= x2 && z >= z1 && z <= z2;
+            // 使用缓存的边界值
+            if (cachedMinX == null || cachedMaxX == null || cachedMinZ == null || cachedMaxZ == null) {
+                cachedMinX = Math.min(minX.get(), maxX.get());
+                cachedMaxX = Math.max(minX.get(), maxX.get());
+                cachedMinZ = Math.min(minZ.get(), maxZ.get());
+                cachedMaxZ = Math.max(minZ.get(), maxZ.get());
+            }
+            return x >= cachedMinX && x <= cachedMaxX && z >= cachedMinZ && z <= cachedMaxZ;
+        }
+
+        /**
+         * 清除缓存的边界值，在配置更改时调用
+         */
+        public void invalidateCache() {
+            cachedMinX = null;
+            cachedMaxX = null;
+            cachedMinZ = null;
+            cachedMaxZ = null;
         }
 
         public GameType getEnterGameMode() {
@@ -97,5 +120,46 @@ public class ConfigManager {
 
     public static void init() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SPEC);
+
+        AreaMonitorMod.LOGGER.info("区域监控配置已注册");
+    }
+
+    /**
+     * 验证配置完整性，应该在配置加载完成后调用
+     */
+    public static void validateConfig() {
+        try {
+            Config config = CONFIG;
+
+            // 检查区域坐标逻辑
+            if (config.minX.get() >= config.maxX.get()) {
+                AreaMonitorMod.LOGGER.warn("监控区域X坐标配置异常: minX({}) >= maxX({})，区域将无效",
+                    config.minX.get(), config.maxX.get());
+            }
+
+            if (config.minZ.get() >= config.maxZ.get()) {
+                AreaMonitorMod.LOGGER.warn("监控区域Z坐标配置异常: minZ({}) >= maxZ({})，区域将无效",
+                    config.minZ.get(), config.maxZ.get());
+            }
+
+            // 检查区域大小
+            int area = Math.abs(config.maxX.get() - config.minX.get()) *
+                       Math.abs(config.maxZ.get() - config.minZ.get());
+            if (area > 1000000) {
+                AreaMonitorMod.LOGGER.warn("监控区域过大 ({} 方块)，可能影响性能，建议减小区域大小", area);
+            }
+
+            // 验证游戏模式
+            try {
+                config.getEnterGameMode();
+                config.getLeaveGameMode();
+            } catch (Exception e) {
+                AreaMonitorMod.LOGGER.error("游戏模式配置无效", e);
+            }
+
+            AreaMonitorMod.LOGGER.info("区域监控配置验证完成");
+        } catch (Exception e) {
+            AreaMonitorMod.LOGGER.warn("配置验证失败，配置可能尚未完全加载: {}", e.getMessage());
+        }
     }
 }

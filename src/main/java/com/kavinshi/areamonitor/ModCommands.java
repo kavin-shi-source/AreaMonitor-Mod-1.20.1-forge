@@ -154,6 +154,23 @@ public class ModCommands {
 
     private static int setArea(int minX, int minZ, int maxX, int maxZ,
                                CommandContext<CommandSourceStack> context) {
+        // 验证区域大小合理性
+        int area = Math.abs(maxX - minX) * Math.abs(maxZ - minZ);
+        if (area > 1000000) { // 1000x1000
+            context.getSource().sendFailure(
+                Component.literal("§c监控区域过大，最大允许1000x1000方块 (当前: " + area + ")")
+            );
+            return 0;
+        }
+
+        // 验证坐标逻辑
+        if (minX == maxX || minZ == maxZ) {
+            context.getSource().sendFailure(
+                Component.literal("§c监控区域不能是一条线，请确保min和max坐标不相同")
+            );
+            return 0;
+        }
+
         ConfigManager.CONFIG.minX.set(minX);
         ConfigManager.CONFIG.minZ.set(minZ);
         ConfigManager.CONFIG.maxX.set(maxX);
@@ -164,10 +181,13 @@ public class ModCommands {
         ConfigManager.CONFIG.maxX.save();
         ConfigManager.CONFIG.maxZ.save();
 
+        // 清除缓存以强制重新计算边界
+        ConfigManager.CONFIG.invalidateCache();
+
         context.getSource().sendSuccess(
                 () -> Component.literal(String.format(
-                        "§a监控区域已设置为: X[%d ~ %d], Z[%d ~ %d]",
-                        minX, maxX, minZ, maxZ
+                        "§a监控区域已设置为: X[%d ~ %d], Z[%d ~ %d] (面积: %d 方块)",
+                        minX, maxX, minZ, maxZ, area
                 )),
                 true
         );
@@ -227,22 +247,38 @@ public class ModCommands {
     }
 
     private static int setEnterMode(String mode, CommandContext<CommandSourceStack> context) {
-        ConfigManager.CONFIG.enterGameMode.set(mode);
+        String modeLower = mode.toLowerCase();
+        if (!GAME_MODE_SUGGESTIONS.contains(modeLower)) {
+            context.getSource().sendFailure(
+                Component.literal("§c无效的游戏模式: " + mode + "。可用模式: " + String.join(", ", GAME_MODE_SUGGESTIONS))
+            );
+            return 0;
+        }
+
+        ConfigManager.CONFIG.enterGameMode.set(modeLower);
         ConfigManager.CONFIG.enterGameMode.save();
 
         context.getSource().sendSuccess(
-                () -> Component.literal("§a进入区域模式已设置为: " + mode),
+                () -> Component.literal("§a进入区域模式已设置为: " + modeLower),
                 true
         );
         return 1;
     }
 
     private static int setLeaveMode(String mode, CommandContext<CommandSourceStack> context) {
-        ConfigManager.CONFIG.leaveGameMode.set(mode);
+        String modeLower = mode.toLowerCase();
+        if (!GAME_MODE_SUGGESTIONS.contains(modeLower)) {
+            context.getSource().sendFailure(
+                Component.literal("§c无效的游戏模式: " + mode + "。可用模式: " + String.join(", ", GAME_MODE_SUGGESTIONS))
+            );
+            return 0;
+        }
+
+        ConfigManager.CONFIG.leaveGameMode.set(modeLower);
         ConfigManager.CONFIG.leaveGameMode.save();
 
         context.getSource().sendSuccess(
-                () -> Component.literal("§a离开区域模式已设置为: " + mode),
+                () -> Component.literal("§a离开区域模式已设置为: " + modeLower),
                 true
         );
         return 1;

@@ -82,12 +82,10 @@ public class WhitelistManager {
 
     public static void saveWhitelist() {
         try {
-            if (!whitelistFile.getParentFile().exists()) {
-                boolean dirsCreated = whitelistFile.getParentFile().mkdirs();
-                if (!dirsCreated) {
-                    AreaMonitorMod.LOGGER.error("无法创建配置目录: {}", whitelistFile.getParentFile().getAbsolutePath());
-                    return;
-                }
+            File parentDir = whitelistFile.getParentFile();
+            if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
+                AreaMonitorMod.LOGGER.error("无法创建配置目录: {}", parentDir.getAbsolutePath());
+                return;
             }
 
             try (FileWriter fileWriter = new FileWriter(whitelistFile);
@@ -104,7 +102,7 @@ public class WhitelistManager {
                 }
             }
         } catch (IOException e) {
-            AreaMonitorMod.LOGGER.error("无法保存白名单文件", e);
+            AreaMonitorMod.LOGGER.error("保存白名单文件失败: {}", whitelistFile.getAbsolutePath(), e);
         }
     }
 

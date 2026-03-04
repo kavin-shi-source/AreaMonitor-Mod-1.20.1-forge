@@ -16,16 +16,25 @@ import net.minecraftforge.fml.common.Mod;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * 区域监控核心类，负责监控玩家位置并自动切换游戏模式
+ *
+ * 主要功能：
+ * - 定期检查玩家在目标维度中的位置
+ * - 检测玩家进入/离开监控区域
+ * - 延迟切换游戏模式并显示提示
+ * - 管理白名单玩家
+ */
 @Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class AreaMonitor {
     private static final Map<UUID, PlayerState> playerStates = new ConcurrentHashMap<>();
     private static MinecraftServer minecraftServer;
     private static int tickCounter = 0;
-    private static final int CHECK_INTERVAL = 5;
-    private static final int TITLE_FADE_IN = 10;
-    private static final int TITLE_STAY = 30;
-    private static final int TITLE_FADE_OUT = 10;
-    private static final long MODE_SWITCH_DELAY = 1000L;
+    private static final int TICK_CHECK_INTERVAL = 5;
+    private static final int TITLE_FADE_IN_TICKS = 10;
+    private static final int TITLE_STAY_TICKS = 30;
+    private static final int TITLE_FADE_OUT_TICKS = 10;
+    private static final long GAME_MODE_SWITCH_DELAY_MS = 1000L;
 
     private static class PlayerState {
         boolean wasInArea = false;
@@ -38,12 +47,9 @@ public class AreaMonitor {
     }
 
     private record PendingAction(UUID playerId, Runnable action, long executeTime) {
-            private PendingAction(UUID playerId, Runnable action, long executeTime) {
-                this.playerId = playerId;
-                this.action = action;
-                this.executeTime = System.currentTimeMillis() + executeTime;
-            }
-        }
+        // record类自动生成构造函数
+        // executeTime应该是绝对时间戳（当前时间 + 延迟）
+    }
 
     private static final List<PendingAction> pendingActions = Collections.synchronizedList(new ArrayList<>());
 
@@ -59,7 +65,7 @@ public class AreaMonitor {
         processPendingActions();
 
         tickCounter++;
-        if (tickCounter < CHECK_INTERVAL) return;
+        if (tickCounter < TICK_CHECK_INTERVAL) return;
         tickCounter = 0;
 
         if (!ConfigManager.CONFIG.isEnabled.get()) return;
@@ -161,7 +167,7 @@ public class AreaMonitor {
                     player.displayClientMessage(Component.literal("§a已切换为" + getModeDisplayName(targetMode)), true);
                 }
             }
-        }, MODE_SWITCH_DELAY));
+        }, System.currentTimeMillis() + GAME_MODE_SWITCH_DELAY_MS));
     }
 
     private static void handleAreaLeave(ServerPlayer player, PlayerState state) {
@@ -180,7 +186,7 @@ public class AreaMonitor {
                     player.displayClientMessage(Component.literal("§c已切换为" + getModeDisplayName(targetMode)), true);
                 }
             }
-        }, MODE_SWITCH_DELAY));
+        }, System.currentTimeMillis() + GAME_MODE_SWITCH_DELAY_MS));
     }
 
     private static String getModeDisplayName(GameType gameMode) {
@@ -194,7 +200,7 @@ public class AreaMonitor {
 
     private static void showTitle(ServerPlayer player, Component title, Component subtitle) {
         try {
-            player.connection.send(new ClientboundSetTitlesAnimationPacket(TITLE_FADE_IN, TITLE_STAY, TITLE_FADE_OUT));
+            player.connection.send(new ClientboundSetTitlesAnimationPacket(TITLE_FADE_IN_TICKS, TITLE_STAY_TICKS, TITLE_FADE_OUT_TICKS));
 
             if (title != null) {
                 player.connection.send(new ClientboundSetTitleTextPacket(title));

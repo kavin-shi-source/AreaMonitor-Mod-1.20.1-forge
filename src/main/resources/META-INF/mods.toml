@@ -5,7 +5,7 @@ license="All rights reserved"
 
 [[mods]]
 modId="areamonitor"
-version="1.02"
+version="1.03"
 displayName="区域监控模组 (AreaMonitor Mod)"
 description='''一个功能强大的 Minecraft 服务器管理模组，用于监控特定区域并自动切换玩家游戏模式。客户端可选安装。'''
 authors="kavinshi"
