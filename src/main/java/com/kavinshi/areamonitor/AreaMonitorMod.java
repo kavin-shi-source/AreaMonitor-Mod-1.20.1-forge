@@ -42,6 +42,10 @@ public class AreaMonitorMod {
     public static void onModConfigLoaded(final ModConfigEvent.Loading configEvent) {
         if (configEvent.getConfig().getModId().equals(MOD_ID)) {
             AreaMonitorMod.LOGGER.info("Loading config for {}", MOD_ID);
+            // 在配置加载时验证并初始化配置文件
+            ConfigManager.ensureConfigFiles();
+            ConfigManager.loadAreasConfig();
+            ItemBlacklistManager.loadBlacklistConfig();
         }
     }
 

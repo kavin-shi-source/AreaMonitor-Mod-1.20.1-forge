@@ -12,10 +12,14 @@ A powerful Minecraft server management mod for monitoring specific areas and aut
 ## ✨ 功能特性 / Features
 
 ### 中文
-- **区域监控**：监控特定坐标区域内的玩家活动
+- **多区域监控**：支持创建和管理多个独立的监控区域
 - **游戏模式切换**：进入/离开区域时自动切换游戏模式
+- **高级触发系统**：物品持有触发、玩家数量触发、周期性触发
+- **可视化编辑器**：粒子效果显示区域边界，手持工具选择区域
 - **白名单系统**：可配置免监控玩家列表
+- **物品黑名单**：限制区域内使用传送类道具和命令
 - **多维度支持**：支持主世界、下界、末地等多个维度
+- **性能监控**：实时TPS监控、内存管理、智能优化
 - **高度可配置**：所有参数均可通过配置文件调整
 - **命令系统**：完整的服务器管理命令集
 - **性能优化**：高效的区域检查算法和缓存机制
@@ -52,6 +56,35 @@ A powerful Minecraft server management mod for monitoring specific areas and aut
 2. 将文件放入 Minecraft 的 `mods` 文件夹 / Place the file in your Minecraft `mods` folder
 3. 启动游戏并配置监控区域 / Start the game and configure monitoring areas
 
+### 快速入门 / Quick Start Guide
+
+1. **查看教程** / **View Tutorial**
+   ```
+   /areamonitor selection tutorial
+   ```
+
+2. **获取选择工具** / **Get Selection Tool**
+   ```
+   /areamonitor visual tool
+   ```
+
+3. **选择区域** / **Select Area**
+   - 手持工具右键点击两个对角方块 / Hold tool and right-click two diagonal blocks
+   - 你会看到详细的区域信息和创建提示 / You'll see detailed area info and creation hints
+
+4. **创建区域** / **Create Area**
+   ```
+   /areamonitor selection create my_area
+   ```
+
+5. **配置模式** / **Configure Modes**
+   ```
+   /areamonitor setEnterMode creative
+   /areamonitor setLeaveMode survival
+   ```
+
+详细使用指南请参考 [QUICK_START.md](QUICK_START.md)
+
 ## 📋 命令列表 / Commands
 
 ### 基本命令 / Basic Commands
@@ -59,13 +92,34 @@ A powerful Minecraft server management mod for monitoring specific areas and aut
 - `/areamonitor status` - 查看模组状态 / View mod status
 - `/areamonitor help` - 显示帮助信息 / Show help information
 
+### 区域管理 / Area Management
+- `/areamonitor area create <name>` - 创建新区域 / Create new area
+- `/areamonitor area delete <name>` - 删除区域 / Delete area
+- `/areamonitor area list` - 列出所有区域 / List all areas
+- `/areamonitor area info <name>` - 查看区域信息 / Show area info
+
 ### 区域设置 / Area Settings
 - `/areamonitor setArea <minX> <minZ> <maxX> <maxZ>` - 设置监控区域 / Set monitoring area
-- `/areamonitor setDimension <dimension>` - 设置目标维度 / Set target dimension
 
 ### 模式设置 / Mode Settings
 - `/areamonitor setEnterMode <mode>` - 设置进入区域时的游戏模式 / Set game mode when entering area
 - `/areamonitor setLeaveMode <mode>` - 设置离开区域时的游戏模式 / Set game mode when leaving area
+
+### 可视化编辑器 / Visual Editor
+- `/areamonitor visual tool` - 获取选择工具 / Get selection tool
+- `/areamonitor visual show <area>` - 显示区域边界 / Show area border
+- `/areamonitor visual hide` - 隐藏区域边界 / Hide area border
+- `/areamonitor selection create <name>` - 从选择创建区域 / Create area from selection
+
+### 性能监控 / Performance Monitoring
+- `/areamonitor performance` - 显示性能信息 / Show performance info
+
+### 黑名单管理 / Blacklist Management
+- `/areamonitor blacklist info` - 显示限制信息 / Show restriction info
+
+### 配置管理 / Config Management
+- `/areamonitor config reload` - 重新加载所有配置文件 / Reload all config files
+- `/areamonitor config generate` - 生成缺失的配置文件 / Generate missing config files
 
 ### 白名单管理 / Whitelist Management
 - `/areamonitor whitelist add <player>` - 添加白名单 / Add to whitelist
@@ -87,14 +141,32 @@ The mod configuration file is located at `config/area-monitor-common.toml` with 
 
 ## 🎮 使用示例 / Usage Examples
 
-### 创建活动区域 / Create a Creative Area
+### 创建活动区域（推荐使用选择工具）/ Create a Creative Area (Recommended: Use Selection Tool)
+
+#### 方法一：使用可视化选择工具（推荐）/ Method 1: Use Visual Selection Tool (Recommended)
+1. 获取教程帮助 / Get tutorial help
+   ```
+   /areamonitor selection tutorial
+   ```
+2. 获取选择工具 / Get selection tool
+   ```
+   /areamonitor visual tool
+   ```
+3. 手持工具右键点击两个对角方块 / Hold the tool and right-click two diagonal blocks
+4. 创建区域 / Create the area
+   ```
+   /areamonitor selection create creative_zone
+   ```
+5. 配置模式 / Configure modes
+   ```
+   /areamonitor setEnterMode creative
+   /areamonitor setLeaveMode survival
+   ```
+
+#### 方法二：使用坐标命令 / Method 2: Use Coordinate Commands
 - 设置监控区域（X:-100到100, Z:-100到100）/ Set monitoring area (X:-100 to 100, Z:-100 to 100)
   ```
   /areamonitor setArea -100 -100 100 100
-  ```
-- 设置目标维度为主世界 / Set target dimension to Overworld
-  ```
-  /areamonitor setDimension minecraft:overworld
   ```
 - 设置进入区域为冒险模式，离开为生存模式 / Set enter mode to creative, leave mode to survival
   ```

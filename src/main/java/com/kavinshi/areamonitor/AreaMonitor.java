@@ -11,6 +11,8 @@ import net.minecraft.world.level.GameType;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
+import java.io.File;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import java.util.*;
@@ -30,7 +32,6 @@ public class AreaMonitor {
     private static final Map<UUID, PlayerState> playerStates = new ConcurrentHashMap<>();
     private static MinecraftServer minecraftServer;
     private static int tickCounter = 0;
-    private static final int TICK_CHECK_INTERVAL = 5;
     private static final int TITLE_FADE_IN_TICKS = 10;
     private static final int TITLE_STAY_TICKS = 30;
     private static final int TITLE_FADE_OUT_TICKS = 10;
@@ -51,6 +52,13 @@ public class AreaMonitor {
         // executeTime应该是绝对时间戳（当前时间 + 延迟）
     }
 
+    /**
+     * 获取当前的Minecraft服务器实例
+     */
+    public static MinecraftServer getServer() {
+        return minecraftServer;
+    }
+
     private static final List<PendingAction> pendingActions = Collections.synchronizedList(new ArrayList<>());
 
     @SubscribeEvent
@@ -59,20 +67,50 @@ public class AreaMonitor {
     }
 
     @SubscribeEvent
+    public static void onServerStarted(ServerStartedEvent event) {
+        // 服务器启动完成后，确保配置文件正确初始化
+        AreaMonitorMod.LOGGER.info("服务器启动完成，初始化配置文件...");
+
+        // 确保配置目录存在
+        try {
+            File configDir = new File("config/areamonitor");
+            if (!configDir.exists()) {
+                configDir.mkdirs();
+                AreaMonitorMod.LOGGER.info("已创建配置目录: {}", configDir.getAbsolutePath());
+            }
+        } catch (Exception e) {
+            AreaMonitorMod.LOGGER.error("创建配置目录时出错", e);
+        }
+
+        // 加载或创建配置文件
+        ConfigManager.loadAreasConfig();
+        ItemBlacklistManager.loadBlacklistConfig();
+
+        AreaMonitorMod.LOGGER.info("配置文件初始化完成");
+    }
+
+    @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
 
         processPendingActions();
 
+        // 性能监控
+        PerformanceMonitor.onServerTick(minecraftServer);
+
+        // 更新区域可视化
+        AreaVisualizer.updatePersistentVisualizations();
+
         tickCounter++;
-        if (tickCounter < TICK_CHECK_INTERVAL) return;
+        if (tickCounter < PerformanceMonitor.getCurrentCheckInterval()) return;
         tickCounter = 0;
 
         if (!ConfigManager.CONFIG.isEnabled.get()) return;
         if (minecraftServer == null) return;
 
+        // 使用新的多区域系统检查玩家
         for (ServerPlayer player : minecraftServer.getPlayerList().getPlayers()) {
-            checkPlayer(player);
+            AreaManager.getInstance().checkPlayer(player);
         }
     }
 
@@ -94,100 +132,25 @@ public class AreaMonitor {
         }
     }
 
-    private static void checkPlayer(ServerPlayer player) {
-        if (WhitelistManager.isWhitelisted(player)) {
-            return;
-        }
-
-        UUID playerId = player.getUUID();
-        String playerDim = player.level().dimension().location().toString();
-        String targetDim = ConfigManager.CONFIG.targetDimension.get();
-
-        if (!playerDim.equals(targetDim)) {
-            playerStates.remove(playerId);
-            return;
-        }
-
-        int x = (int) player.getX();
-        int z = (int) player.getZ();
-
-        PlayerState state = playerStates.computeIfAbsent(playerId, k -> new PlayerState());
-
-        if (!state.isInitialized()) {
-            state.lastX = x;
-            state.lastZ = z;
-            checkPlayerArea(player, x, z, state);
-            return;
-        }
-
-        int dx = Math.abs(x - state.lastX);
-        int dz = Math.abs(z - state.lastZ);
-
-        if (dx > 2 || dz > 2) {
-            state.lastX = x;
-            state.lastZ = z;
-            checkPlayerArea(player, x, z, state);
-        }
-    }
-
-    private static void checkPlayerArea(ServerPlayer player, int x, int z, PlayerState state) {
-        boolean inArea = ConfigManager.CONFIG.isInArea(x, z);
-        GameType currentMode = player.gameMode.getGameModeForPlayer();
-        GameType targetEnterMode = ConfigManager.CONFIG.getEnterGameMode();
-        GameType targetLeaveMode = ConfigManager.CONFIG.getLeaveGameMode();
-
-        if (inArea) {
-            if (!state.wasInArea) {
-                handleAreaEnter(player, state);
-            } else if (currentMode != targetEnterMode) {
-                player.setGameMode(targetEnterMode);
-            }
-        } else {
-            if (state.wasInArea) {
-                handleAreaLeave(player, state);
-            } else if (currentMode != targetLeaveMode) {
-                player.setGameMode(targetLeaveMode);
-            }
-        }
-    }
-
-    private static void handleAreaEnter(ServerPlayer player, PlayerState state) {
-        state.wasInArea = true;
-        GameType targetMode = ConfigManager.CONFIG.getEnterGameMode();
-
-        showTitle(player,
-                Component.literal("进入活动区域").withStyle(ChatFormatting.BOLD, ChatFormatting.GREEN),
-                Component.literal("1秒后切换为" + getModeDisplayName(targetMode)).withStyle(ChatFormatting.GRAY)
-        );
-
+    /**
+     * 添加待处理的游戏模式切换
+     */
+    public static void addPendingGameModeChange(ServerPlayer player, GameType gameMode) {
         pendingActions.add(new PendingAction(player.getUUID(), () -> {
-            if (player.isAlive() && state.wasInArea) {
-                player.setGameMode(targetMode);
+            if (player.isAlive()) {
+                player.setGameMode(gameMode);
                 if (ConfigManager.CONFIG.showMessages.get()) {
-                    player.displayClientMessage(Component.literal("§a已切换为" + getModeDisplayName(targetMode)), true);
+                    player.displayClientMessage(
+                        Component.literal("§a已切换为" + getModeDisplayName(gameMode)),
+                        true
+                    );
                 }
             }
         }, System.currentTimeMillis() + GAME_MODE_SWITCH_DELAY_MS));
     }
 
-    private static void handleAreaLeave(ServerPlayer player, PlayerState state) {
-        state.wasInArea = false;
-        GameType targetMode = ConfigManager.CONFIG.getLeaveGameMode();
 
-        showTitle(player,
-                Component.literal("离开活动区域").withStyle(ChatFormatting.BOLD, ChatFormatting.RED),
-                Component.literal("1秒后切换为" + getModeDisplayName(targetMode)).withStyle(ChatFormatting.GRAY)
-        );
 
-        pendingActions.add(new PendingAction(player.getUUID(), () -> {
-            if (player.isAlive() && !state.wasInArea) {
-                player.setGameMode(targetMode);
-                if (ConfigManager.CONFIG.showMessages.get()) {
-                    player.displayClientMessage(Component.literal("§c已切换为" + getModeDisplayName(targetMode)), true);
-                }
-            }
-        }, System.currentTimeMillis() + GAME_MODE_SWITCH_DELAY_MS));
-    }
 
     private static String getModeDisplayName(GameType gameMode) {
         return switch (gameMode) {
@@ -220,6 +183,7 @@ public class AreaMonitor {
         if (event.getEntity() instanceof ServerPlayer player) {
             UUID playerId = player.getUUID();
             playerStates.remove(playerId);
+            AreaManager.getInstance().clearPlayerData(playerId);
 
             synchronized (pendingActions) {
                 pendingActions.removeIf(action -> action.playerId.equals(playerId));

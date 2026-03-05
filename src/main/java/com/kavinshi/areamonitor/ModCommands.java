@@ -18,15 +18,7 @@ import java.util.Set;
 @Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ModCommands {
 
-    private static final List<String> DIMENSION_SUGGESTIONS = Arrays.asList(
-            "minecraft:overworld",
-            "minecraft:the_nether",
-            "minecraft:the_end"
-    );
 
-    private static final List<String> GAME_MODE_SUGGESTIONS = Arrays.asList(
-            "survival", "creative", "adventure", "spectator"
-    );
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
@@ -39,67 +31,6 @@ public class ModCommands {
                         .executes(ModCommands::toggleMonitor)
                 )
 
-                .then(Commands.literal("setArea")
-                        .then(Commands.argument("minX", IntegerArgumentType.integer())
-                                .then(Commands.argument("minZ", IntegerArgumentType.integer())
-                                        .then(Commands.argument("maxX", IntegerArgumentType.integer())
-                                                .then(Commands.argument("maxZ", IntegerArgumentType.integer())
-                                                        .executes(context -> setArea(
-                                                                IntegerArgumentType.getInteger(context, "minX"),
-                                                                IntegerArgumentType.getInteger(context, "minZ"),
-                                                                IntegerArgumentType.getInteger(context, "maxX"),
-                                                                IntegerArgumentType.getInteger(context, "maxZ"),
-                                                                context
-                                                        ))))))
-                )
-
-                .then(Commands.literal("setDimension")
-                        .then(Commands.argument("dimension", StringArgumentType.greedyString())
-                                .suggests((context, builder) -> {
-                                    for (String dim : DIMENSION_SUGGESTIONS) {
-                                        if (dim.startsWith(builder.getRemaining().toLowerCase())) {
-                                            builder.suggest(dim);
-                                        }
-                                    }
-                                    return builder.buildFuture();
-                                })
-                                .executes(context -> setDimension(
-                                        StringArgumentType.getString(context, "dimension"),
-                                        context
-                                )))
-                )
-
-                .then(Commands.literal("setEnterMode")
-                        .then(Commands.argument("mode", StringArgumentType.string())
-                                .suggests((context, builder) -> {
-                                    for (String mode : GAME_MODE_SUGGESTIONS) {
-                                        if (mode.startsWith(builder.getRemaining().toLowerCase())) {
-                                            builder.suggest(mode);
-                                        }
-                                    }
-                                    return builder.buildFuture();
-                                })
-                                .executes(context -> setEnterMode(
-                                        StringArgumentType.getString(context, "mode"),
-                                        context
-                                )))
-                )
-
-                .then(Commands.literal("setLeaveMode")
-                        .then(Commands.argument("mode", StringArgumentType.string())
-                                .suggests((context, builder) -> {
-                                    for (String mode : GAME_MODE_SUGGESTIONS) {
-                                        if (mode.startsWith(builder.getRemaining().toLowerCase())) {
-                                            builder.suggest(mode);
-                                        }
-                                    }
-                                    return builder.buildFuture();
-                                })
-                                .executes(context -> setLeaveMode(
-                                        StringArgumentType.getString(context, "mode"),
-                                        context
-                                )))
-                )
 
                 .then(Commands.literal("whitelist")
                         .then(Commands.literal("add")
@@ -124,9 +55,6 @@ public class ModCommands {
                         )
                 )
 
-                .then(Commands.literal("status")
-                        .executes(ModCommands::showStatus)
-                )
                 .then(Commands.literal("help")
                         .executes(ModCommands::showHelp)
                 )
@@ -152,137 +80,6 @@ public class ModCommands {
         return 1;
     }
 
-    private static int setArea(int minX, int minZ, int maxX, int maxZ,
-                               CommandContext<CommandSourceStack> context) {
-        // 验证区域大小合理性
-        int area = Math.abs(maxX - minX) * Math.abs(maxZ - minZ);
-        if (area > 1000000) { // 1000x1000
-            context.getSource().sendFailure(
-                Component.literal("§c监控区域过大，最大允许1000x1000方块 (当前: " + area + ")")
-            );
-            return 0;
-        }
-
-        // 验证坐标逻辑
-        if (minX == maxX || minZ == maxZ) {
-            context.getSource().sendFailure(
-                Component.literal("§c监控区域不能是一条线，请确保min和max坐标不相同")
-            );
-            return 0;
-        }
-
-        ConfigManager.CONFIG.minX.set(minX);
-        ConfigManager.CONFIG.minZ.set(minZ);
-        ConfigManager.CONFIG.maxX.set(maxX);
-        ConfigManager.CONFIG.maxZ.set(maxZ);
-
-        ConfigManager.CONFIG.minX.save();
-        ConfigManager.CONFIG.minZ.save();
-        ConfigManager.CONFIG.maxX.save();
-        ConfigManager.CONFIG.maxZ.save();
-
-        // 清除缓存以强制重新计算边界
-        ConfigManager.CONFIG.invalidateCache();
-
-        context.getSource().sendSuccess(
-                () -> Component.literal(String.format(
-                        "§a监控区域已设置为: X[%d ~ %d], Z[%d ~ %d] (面积: %d 方块)",
-                        minX, maxX, minZ, maxZ, area
-                )),
-                true
-        );
-        return 1;
-    }
-
-    private static int setDimension(String dimension, CommandContext<CommandSourceStack> context) {
-        dimension = dimension.trim();
-
-        if (!isValidDimensionFormat(dimension)) {
-            String errorMessage = "§c维度格式错误！请使用完整的命名空间格式，例如：minecraft:overworld";
-
-            if (!dimension.contains(":") && !dimension.isEmpty()) {
-                String suggestedDimension = "minecraft:" + dimension;
-                if (DIMENSION_SUGGESTIONS.contains(suggestedDimension)) {
-                    errorMessage += "\n§e提示：您输入了 \"" + dimension + "\"，请尝试使用 \"" + suggestedDimension + "\"";
-                }
-            }
-
-            context.getSource().sendFailure(Component.literal(errorMessage));
-            return 0;
-        }
-
-        ConfigManager.CONFIG.targetDimension.set(dimension);
-        ConfigManager.CONFIG.targetDimension.save();
-
-        String displayDimension = getDimensionDisplayName(dimension);
-        context.getSource().sendSuccess(
-                () -> Component.literal("§a目标维度已设置为: " + displayDimension),
-                true
-        );
-        return 1;
-    }
-
-    private static boolean isValidDimensionFormat(String dimension) {
-        if (dimension == null || dimension.trim().isEmpty()) {
-            return false;
-        }
-
-        if (!dimension.startsWith("minecraft:")) {
-            return false;
-        }
-
-        String dimLower = dimension.toLowerCase();
-        return DIMENSION_SUGGESTIONS.contains(dimLower);
-    }
-
-    private static String getDimensionDisplayName(String dimension) {
-        if (dimension == null) return "未知维度";
-
-        return switch (dimension.toLowerCase()) {
-            case "minecraft:overworld" -> "主世界 (minecraft:overworld)";
-            case "minecraft:the_nether" -> "下界 (minecraft:the_nether)";
-            case "minecraft:the_end" -> "末地 (minecraft:the_end)";
-            default -> dimension;
-        };
-    }
-
-    private static int setEnterMode(String mode, CommandContext<CommandSourceStack> context) {
-        String modeLower = mode.toLowerCase();
-        if (!GAME_MODE_SUGGESTIONS.contains(modeLower)) {
-            context.getSource().sendFailure(
-                Component.literal("§c无效的游戏模式: " + mode + "。可用模式: " + String.join(", ", GAME_MODE_SUGGESTIONS))
-            );
-            return 0;
-        }
-
-        ConfigManager.CONFIG.enterGameMode.set(modeLower);
-        ConfigManager.CONFIG.enterGameMode.save();
-
-        context.getSource().sendSuccess(
-                () -> Component.literal("§a进入区域模式已设置为: " + modeLower),
-                true
-        );
-        return 1;
-    }
-
-    private static int setLeaveMode(String mode, CommandContext<CommandSourceStack> context) {
-        String modeLower = mode.toLowerCase();
-        if (!GAME_MODE_SUGGESTIONS.contains(modeLower)) {
-            context.getSource().sendFailure(
-                Component.literal("§c无效的游戏模式: " + mode + "。可用模式: " + String.join(", ", GAME_MODE_SUGGESTIONS))
-            );
-            return 0;
-        }
-
-        ConfigManager.CONFIG.leaveGameMode.set(modeLower);
-        ConfigManager.CONFIG.leaveGameMode.save();
-
-        context.getSource().sendSuccess(
-                () -> Component.literal("§a离开区域模式已设置为: " + modeLower),
-                true
-        );
-        return 1;
-    }
 
     private static int addToWhitelist(String player, CommandContext<CommandSourceStack> context) {
         if (WhitelistManager.addToWhitelist(player)) {
@@ -357,60 +154,82 @@ public class ModCommands {
         return 1;
     }
 
-    private static int showStatus(CommandContext<CommandSourceStack> context) {
-        ConfigManager.Config config = ConfigManager.CONFIG;
-
-        String status = config.isEnabled.get() ? "§a运行中" : "§c已停止";
-
-        context.getSource().sendSuccess(
-                () -> Component.literal("§6=== 区域监控模组状态 ==="), false
-        );
-        context.getSource().sendSuccess(
-                () -> Component.literal("§e状态: " + status), false
-        );
-        context.getSource().sendSuccess(
-                () -> Component.literal(String.format(
-                        "§e监控区域: X[%d ~ %d], Z[%d ~ %d]",
-                        config.minX.get(), config.maxX.get(),
-                        config.minZ.get(), config.maxZ.get()
-                )), false
-        );
-        context.getSource().sendSuccess(
-                () -> Component.literal("§e目标维度: " + getDimensionDisplayName(config.targetDimension.get())), false
-        );
-        context.getSource().sendSuccess(
-                () -> Component.literal("§e进入模式: " + config.enterGameMode.get()), false
-        );
-        context.getSource().sendSuccess(
-                () -> Component.literal("§e离开模式: " + config.leaveGameMode.get()), false
-        );
-
-        Set<String> whitelist = WhitelistManager.getWhitelist();
-        context.getSource().sendSuccess(
-                () -> Component.literal("§e白名单玩家: " + whitelist.size() + " 名"), false
-        );
-
-        return 1;
-    }
-
     private static int showHelp(CommandContext<CommandSourceStack> context) {
         context.getSource().sendSuccess(
-                () -> Component.literal("§6=== 区域监控模组命令 ==="), false
+                () -> Component.literal("§6=== AreaMonitor 区域监控模组命令 ==="), false
+        );
+
+        // 基础命令
+        context.getSource().sendSuccess(
+                () -> Component.literal("§e=== 基础命令 ==="), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor toggle §f- 切换监控状态"), false
+                () -> Component.literal("§b/areamonitor toggle §f- 切换全局监控状态"), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor setArea <minX> <minZ> <maxX> <maxZ> §f- 设置区域"), false
+                () -> Component.literal("§b/areamonitor help §f- 显示此帮助"), false
+        );
+
+        // 区域管理命令
+        context.getSource().sendSuccess(
+                () -> Component.literal("§e=== 区域管理 ==="), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor setDimension <维度ID> §f- 设置目标维度（必须使用完整格式，如：minecraft:overworld）"), false
+                () -> Component.literal("§b/areamonitor area create <名称> §f- 创建新区域"), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor setEnterMode <模式> §f- 设置进入区域模式"), false
+                () -> Component.literal("§b/areamonitor area delete <名称> §f- 删除区域"), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor setLeaveMode <模式> §f- 设置离开区域模式"), false
+                () -> Component.literal("§b/areamonitor area list §f- 列出所有区域（详细信息）"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor area toggle <名称> §f- 启用/禁用指定区域"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor area info <名称> §f- 显示区域详情"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor area setEnterMode <区域> <模式> §f- 设置进入模式"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor area setLeaveMode <区域> <模式> §f- 设置离开模式"), false
+        );
+
+        // 可视化工具命令
+        context.getSource().sendSuccess(
+                () -> Component.literal("§e=== 可视化工具 ==="), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor visual tool §f- 获取区域选择工具"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor visual show <区域> §f- 显示区域边界"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor visual hide §f- 隐藏区域边界"), false
+        );
+
+        // 选择工具命令
+        context.getSource().sendSuccess(
+                () -> Component.literal("§e=== 选择工具 ==="), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor selection create <名称> §f- 从选择创建区域"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor selection cancel §f- 取消当前选择"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor selection info §f- 显示选择信息"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor selection tutorial §f- 显示使用教程"), false
+        );
+
+        // 白名单命令
+        context.getSource().sendSuccess(
+                () -> Component.literal("§e=== 白名单管理 ==="), false
         );
         context.getSource().sendSuccess(
                 () -> Component.literal("§b/areamonitor whitelist add <玩家名> §f- 添加白名单"), false
@@ -424,11 +243,42 @@ public class ModCommands {
         context.getSource().sendSuccess(
                 () -> Component.literal("§b/areamonitor whitelist clear §f- 清空白名单"), false
         );
+
+        // 其他命令
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor status §f- 显示状态"), false
+                () -> Component.literal("§e=== 其他命令 ==="), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor help §f- 显示帮助"), false
+                () -> Component.literal("§b/areamonitor performance §f- 显示性能信息"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor blacklist info §f- 显示当前限制"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor blacklist area <区域> add <物品> §f- 添加物品到区域黑名单"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor blacklist area <区域> remove <物品> §f- 从区域黑名单移除物品"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor blacklist area <区域> list §f- 列出区域黑名单"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor blacklist area <区域> toggle §f- 切换区域黑名单"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor blacklist reload §f- 热加载黑名单配置"), false
+        );
+
+        // 配置管理命令
+        context.getSource().sendSuccess(
+                () -> Component.literal("§e=== 配置管理 ==="), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor config reload §f- 重新加载所有配置文件"), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal("§b/areamonitor config generate §f- 生成缺失的配置文件"), false
         );
 
         return 1;

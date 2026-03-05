@@ -38,7 +38,6 @@ A powerful Minecraft server management mod for monitoring specific areas and aut
 
 ### Area Settings
 - `/areamonitor setArea <minX> <minZ> <maxX> <maxZ>` - Set monitoring area
-- `/areamonitor setDimension <dimension>` - Set target dimension
 
 ### Mode Settings
 - `/areamonitor setEnterMode <mode>` - Set game mode when entering area
@@ -67,10 +66,6 @@ Mod configuration file is located at `config/area-monitor-common.toml` with the 
 - Set monitoring area (X:-100 to 100, Z:-100 to 100)
   ```
   /areamonitor setArea -100 -100 100 100
-  ```
-- Set target dimension to Overworld
-  ```
-  /areamonitor setDimension minecraft:overworld
   ```
 - Set enter mode to creative, leave mode to survival
   ```
