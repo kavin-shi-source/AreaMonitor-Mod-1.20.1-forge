@@ -58,6 +58,16 @@ public class ModCommands {
                 .then(Commands.literal("help")
                         .executes(ModCommands::showHelp)
                 )
+
+                .then(Commands.literal("language")
+                        .then(Commands.literal("en")
+                                .executes(ModCommands::setLanguageEnglish)
+                        )
+                        .then(Commands.literal("zh")
+                                .executes(ModCommands::setLanguageChinese)
+                        )
+                        .executes(ModCommands::showLanguageStatus)
+                )
         );
     }
 
@@ -68,12 +78,12 @@ public class ModCommands {
         ConfigManager.CONFIG.isEnabled.set(newState);
         ConfigManager.CONFIG.isEnabled.save();
 
-        String message = newState ?
-                "§6区域监控已§a启用§6，使用 /areamonitor status 查看状态" :
-                "§6区域监控已§c禁用§6，使用 /areamonitor toggle 重新启用";
+        String messageKey = newState ?
+                "command.areamonitor.toggle.enabled" :
+                "command.areamonitor.toggle.disabled";
 
         context.getSource().sendSuccess(
-                () -> Component.literal(message),
+                () -> Component.literal(LocalizationManager.translate(messageKey)),
                 true
         );
 
@@ -84,12 +94,12 @@ public class ModCommands {
     private static int addToWhitelist(String player, CommandContext<CommandSourceStack> context) {
         if (WhitelistManager.addToWhitelist(player)) {
             context.getSource().sendSuccess(
-                    () -> Component.literal("§a玩家 " + player + " 已添加到白名单"),
+                    () -> Component.literal(LocalizationManager.translate("command.areamonitor.whitelist.add.success", player)),
                     true
             );
         } else {
             context.getSource().sendSuccess(
-                    () -> Component.literal("§e玩家 " + player + " 已在白名单中"),
+                    () -> Component.literal(LocalizationManager.translate("command.areamonitor.whitelist.add.exists", player)),
                     true
             );
         }
@@ -99,12 +109,12 @@ public class ModCommands {
     private static int removeFromWhitelist(String player, CommandContext<CommandSourceStack> context) {
         if (WhitelistManager.removeFromWhitelist(player)) {
             context.getSource().sendSuccess(
-                    () -> Component.literal("§a玩家 " + player + " 已从白名单移除"),
+                    () -> Component.literal(LocalizationManager.translate("command.areamonitor.whitelist.remove.success", player)),
                     true
             );
         } else {
             context.getSource().sendSuccess(
-                    () -> Component.literal("§e玩家 " + player + " 不在白名单中"),
+                    () -> Component.literal(LocalizationManager.translate("command.areamonitor.whitelist.remove.not_found", player)),
                     true
             );
         }
@@ -116,12 +126,12 @@ public class ModCommands {
 
         if (whitelist.isEmpty()) {
             context.getSource().sendSuccess(
-                    () -> Component.literal("§e白名单为空"),
+                    () -> Component.literal(LocalizationManager.translate("command.areamonitor.whitelist.list.empty")),
                     false
             );
         } else {
             context.getSource().sendSuccess(
-                    () -> Component.literal("§6=== 白名单列表 ==="),
+                    () -> Component.literal(LocalizationManager.translate("command.areamonitor.whitelist.list.header")),
                     false
             );
 
@@ -138,7 +148,7 @@ public class ModCommands {
             }
 
             context.getSource().sendSuccess(
-                    () -> Component.literal(String.format("§e共 %d 名玩家", whitelist.size())),
+                    () -> Component.literal(LocalizationManager.translate("command.areamonitor.whitelist.list.count", whitelist.size())),
                     false
             );
         }
@@ -148,7 +158,7 @@ public class ModCommands {
     private static int clearWhitelist(CommandContext<CommandSourceStack> context) {
         WhitelistManager.clearWhitelist();
         context.getSource().sendSuccess(
-                () -> Component.literal("§a白名单已清空"),
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.whitelist.clear.success")),
                 true
         );
         return 1;
@@ -156,129 +166,200 @@ public class ModCommands {
 
     private static int showHelp(CommandContext<CommandSourceStack> context) {
         context.getSource().sendSuccess(
-                () -> Component.literal("§6=== AreaMonitor 区域监控模组命令 ==="), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.header")), false
         );
 
         // 基础命令
         context.getSource().sendSuccess(
-                () -> Component.literal("§e=== 基础命令 ==="), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.section.basic")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor toggle §f- 切换全局监控状态"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.toggle")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor help §f- 显示此帮助"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.area.list")), false
         );
 
         // 区域管理命令
         context.getSource().sendSuccess(
-                () -> Component.literal("§e=== 区域管理 ==="), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.section.area")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor area create <名称> §f- 创建新区域"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.area.create")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor area delete <名称> §f- 删除区域"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.area.delete")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor area list §f- 列出所有区域（详细信息）"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.area.list")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor area toggle <名称> §f- 启用/禁用指定区域"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.area.toggle")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor area info <名称> §f- 显示区域详情"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.area.info")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor area setEnterMode <区域> <模式> §f- 设置进入模式"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.area.set_enter_mode")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor area setLeaveMode <区域> <模式> §f- 设置离开模式"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.area.set_leave_mode")), false
         );
 
         // 可视化工具命令
         context.getSource().sendSuccess(
-                () -> Component.literal("§e=== 可视化工具 ==="), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.section.visual")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor visual tool §f- 获取区域选择工具"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.visual.tool")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor visual show <区域> §f- 显示区域边界"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.visual.show")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor visual hide §f- 隐藏区域边界"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.visual.hide")), false
         );
 
         // 选择工具命令
         context.getSource().sendSuccess(
-                () -> Component.literal("§e=== 选择工具 ==="), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.section.selection")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor selection create <名称> §f- 从选择创建区域"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.selection.create")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor selection cancel §f- 取消当前选择"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.selection.cancel")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor selection info §f- 显示选择信息"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.selection.info")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor selection tutorial §f- 显示使用教程"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.selection.tutorial")), false
         );
 
         // 白名单命令
         context.getSource().sendSuccess(
-                () -> Component.literal("§e=== 白名单管理 ==="), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.section.whitelist")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor whitelist add <玩家名> §f- 添加白名单"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.whitelist.add")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor whitelist remove <玩家名> §f- 移除白名单"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.whitelist.remove")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor whitelist list §f- 查看白名单"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.whitelist.list")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor whitelist clear §f- 清空白名单"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.whitelist.clear")), false
         );
 
         // 其他命令
         context.getSource().sendSuccess(
-                () -> Component.literal("§e=== 其他命令 ==="), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.section.other")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor performance §f- 显示性能信息"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.performance")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor blacklist info §f- 显示当前限制"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.blacklist.info")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor blacklist area <区域> add <物品> §f- 添加物品到区域黑名单"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.blacklist.add")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor blacklist area <区域> remove <物品> §f- 从区域黑名单移除物品"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.blacklist.remove")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor blacklist area <区域> list §f- 列出区域黑名单"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.blacklist.list")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor blacklist area <区域> toggle §f- 切换区域黑名单"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.blacklist.toggle")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor blacklist reload §f- 热加载黑名单配置"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.blacklist.reload")), false
         );
 
         // 配置管理命令
         context.getSource().sendSuccess(
-                () -> Component.literal("§e=== 配置管理 ==="), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.section.config")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor config reload §f- 重新加载所有配置文件"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.config.reload")), false
         );
         context.getSource().sendSuccess(
-                () -> Component.literal("§b/areamonitor config generate §f- 生成缺失的配置文件"), false
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.config.generate")), false
+        );
+
+        // 语言设置命令
+        context.getSource().sendSuccess(
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.section.language")), false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.language.show")),
+                false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.language.english")),
+                false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.language.chinese")),
+                false
+        );
+
+        return 1;
+    }
+
+    private static int setLanguageEnglish(CommandContext<CommandSourceStack> context) {
+        if (LocalizationManager.setLanguage(LocalizationManager.LANGUAGE_ENGLISH)) {
+            context.getSource().sendSuccess(
+                    () -> Component.literal("§aLanguage switched to English"),
+                    false
+            );
+        } else {
+            context.getSource().sendSuccess(
+                    () -> Component.literal("§cFailed to switch language"),
+                    false
+            );
+        }
+        return 1;
+    }
+
+    private static int setLanguageChinese(CommandContext<CommandSourceStack> context) {
+        if (LocalizationManager.setLanguage(LocalizationManager.LANGUAGE_CHINESE)) {
+            context.getSource().sendSuccess(
+                    () -> Component.literal(LocalizationManager.translate("command.areamonitor.language.chinese.success")),
+                    false
+            );
+        } else {
+            context.getSource().sendSuccess(
+                    () -> Component.literal(LocalizationManager.translate("command.areamonitor.language.failed")),
+                    false
+            );
+        }
+        return 1;
+    }
+
+    private static int showLanguageStatus(CommandContext<CommandSourceStack> context) {
+        String currentLang = LocalizationManager.getCurrentLanguage();
+        String displayName = LocalizationManager.getLanguageDisplayName(currentLang);
+
+        context.getSource().sendSuccess(
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.language.current", displayName)),
+                false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.language.usage")),
+                false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.language.english")),
+                false
+        );
+        context.getSource().sendSuccess(
+                () -> Component.literal(LocalizationManager.translate("command.areamonitor.help.language.chinese")),
+                false
         );
 
         return 1;

@@ -32,17 +32,8 @@ public class ConfigManager {
 
     public static class Config {
         public final ForgeConfigSpec.BooleanValue isEnabled;
-        public final ForgeConfigSpec.ConfigValue<String> targetDimension;
-        public final ForgeConfigSpec.IntValue minX;
-        public final ForgeConfigSpec.IntValue maxX;
-        public final ForgeConfigSpec.IntValue minZ;
-        public final ForgeConfigSpec.IntValue maxZ;
         public final ForgeConfigSpec.BooleanValue showMessages;
-        public final ForgeConfigSpec.ConfigValue<String> enterGameMode;
-        public final ForgeConfigSpec.ConfigValue<String> leaveGameMode;
-
-        // 缓存边界值以提高性能
-        private Integer cachedMinX, cachedMaxX, cachedMinZ, cachedMaxZ;
+        public final ForgeConfigSpec.BooleanValue debugMode;
 
         public Config(ForgeConfigSpec.Builder builder) {
             builder.comment("区域监控设置").push("区域监控设置");
@@ -51,83 +42,27 @@ public class ConfigManager {
                     .comment("是否启用监控")
                     .define("enabled", true);
 
-            targetDimension = builder
-                    .comment("目标维度ID（必须使用完整命名空间格式，如：minecraft:overworld）")
-                    .define("dimension", "minecraft:overworld");
-
-            minX = builder
-                    .comment("区域最小X坐标")
-                    .defineInRange("minX", -100, Integer.MIN_VALUE, Integer.MAX_VALUE);
-
-            maxX = builder
-                    .comment("区域最大X坐标")
-                    .defineInRange("maxX", 100, Integer.MIN_VALUE, Integer.MAX_VALUE);
-
-            minZ = builder
-                    .comment("区域最小Z坐标")
-                    .defineInRange("minZ", -100, Integer.MIN_VALUE, Integer.MAX_VALUE);
-
-            maxZ = builder
-                    .comment("区域最大Z坐标")
-                    .defineInRange("maxZ", 100, Integer.MIN_VALUE, Integer.MAX_VALUE);
-
             showMessages = builder
                     .comment("是否显示提示消息")
                     .define("showMessages", true);
 
-            enterGameMode = builder
-                    .comment("进入区域时的游戏模式 (survival, creative, adventure, spectator)")
-                    .define("enterGameMode", "adventure");
-
-            leaveGameMode = builder
-                    .comment("离开区域时的游戏模式 (survival, creative, adventure, spectator)")
-                    .define("leaveGameMode", "survival");
+            debugMode = builder
+                    .comment("是否启用调试模式（启用后会显示详细日志）")
+                    .define("debugMode", false);
 
             builder.pop();
 
-            // 区域独立配置（为向后兼容性保留）
-            builder.comment("区域独立配置 - 建议使用JSON配置文件进行详细设置").push("区域配置");
+            // 区域独立配置说明
+            builder.comment("区域详细配置 - 请在 config/areamonitor/areas.json 中进行设置")
+                  .comment("- 支持多个独立区域")
+                  .comment("- 每个区域可设置不同的游戏模式、维度、坐标范围")
+                  .comment("- 支持白名单、触发器等高级功能")
+                  .push("区域配置说明");
 
             builder.pop();
         }
 
-        public boolean isInArea(int x, int z) {
-            // 使用缓存的边界值
-            if (cachedMinX == null || cachedMaxX == null || cachedMinZ == null || cachedMaxZ == null) {
-                cachedMinX = Math.min(minX.get(), maxX.get());
-                cachedMaxX = Math.max(minX.get(), maxX.get());
-                cachedMinZ = Math.min(minZ.get(), maxZ.get());
-                cachedMaxZ = Math.max(minZ.get(), maxZ.get());
-            }
-            return x >= cachedMinX && x <= cachedMaxX && z >= cachedMinZ && z <= cachedMaxZ;
-        }
 
-        /**
-         * 清除缓存的边界值，在配置更改时调用
-         */
-        public void invalidateCache() {
-            cachedMinX = null;
-            cachedMaxX = null;
-            cachedMinZ = null;
-            cachedMaxZ = null;
-        }
-
-        public GameType getEnterGameMode() {
-            return parseGameMode(enterGameMode.get());
-        }
-
-        public GameType getLeaveGameMode() {
-            return parseGameMode(leaveGameMode.get());
-        }
-
-        private GameType parseGameMode(String mode) {
-            return switch (mode.toLowerCase()) {
-                case "creative" -> GameType.CREATIVE;
-                case "adventure" -> GameType.ADVENTURE;
-                case "spectator" -> GameType.SPECTATOR;
-                default -> GameType.SURVIVAL;
-            };
-        }
     }
 
     public static void init() {
@@ -169,7 +104,29 @@ public class ConfigManager {
 
         try (FileReader reader = new FileReader(areasConfigFile)) {
             AreaConfigData configData = GSON.fromJson(reader, AreaConfigData.class);
-            if (configData != null && configData.areas != null) {
+
+            // 配置文件完整性验证
+            if (configData == null) {
+                AreaMonitorMod.LOGGER.warn("区域配置文件为空，创建默认配置");
+                createDefaultAreasConfig();
+                return;
+            }
+
+            if (configData.areas == null) {
+                AreaMonitorMod.LOGGER.warn("区域配置中缺少areas字段，初始化为空");
+                configData.areas = new HashMap<>();
+            }
+
+            // 验证每个区域配置的完整性
+            for (Iterator<Map.Entry<String, AreaConfig>> it = configData.areas.entrySet().iterator(); it.hasNext();) {
+                Map.Entry<String, AreaConfig> entry = it.next();
+                if (!validateAreaConfig(entry.getKey(), entry.getValue())) {
+                    AreaMonitorMod.LOGGER.warn("区域配置验证失败，移除无效区域: {}", entry.getKey());
+                    it.remove();
+                }
+            }
+
+            if (!configData.areas.isEmpty()) {
                 AreaManager areaManager = AreaManager.getInstance();
                 areaManager.clearAllData();
 
@@ -215,13 +172,16 @@ public class ConfigManager {
             }
 
             AreaMonitorMod.LOGGER.info("区域配置已保存");
+
+            // 重建空间分区以优化性能
+            AreaManager.getInstance().rebuildSpatialPartition();
         } catch (Exception e) {
             AreaMonitorMod.LOGGER.error("保存区域配置文件失败", e);
         }
     }
 
     /**
-     * 创建默认区域配置文件（空的）
+     * 创建默认区域配置文件（包含示例区域）
      */
     private static void createDefaultAreasConfig() {
         // 确保文件路径已初始化
@@ -229,9 +189,25 @@ public class ConfigManager {
             areasConfigFile = new File("config/areamonitor/areas.json");
         }
 
-        // 创建一个空的配置文件，不添加任何默认区域
+        // 创建包含示例区域的配置文件
         AreaConfigData configData = new AreaConfigData();
         configData.areas = new HashMap<>();
+
+        // 添加一个示例区域
+        AreaConfig exampleArea = new AreaConfig();
+        exampleArea.displayName = "Protected Area Example";
+        exampleArea.dimension = "minecraft:overworld";
+        exampleArea.minX = -100;
+        exampleArea.minZ = -100;
+        exampleArea.maxX = 100;
+        exampleArea.maxZ = 100;
+        exampleArea.enterMode = "adventure";
+        exampleArea.leaveMode = "survival";
+        exampleArea.enabled = true;
+        exampleArea.whitelist = new ArrayList<>();
+        exampleArea.whitelist.add("Admin");
+
+        configData.areas.put("example_protected_area", exampleArea);
 
         try {
             File parentDir = areasConfigFile.getParentFile();
@@ -244,7 +220,7 @@ public class ConfigManager {
                 GSON.toJson(configData, writer);
             }
 
-            AreaMonitorMod.LOGGER.info("已创建空的区域配置文件");
+            AreaMonitorMod.LOGGER.info("已创建包含示例区域的配置文件");
         } catch (Exception e) {
             AreaMonitorMod.LOGGER.error("创建默认区域配置文件失败", e);
         }
@@ -273,6 +249,18 @@ public class ConfigManager {
         return area;
     }
 
+    /**
+     * 解析游戏模式字符串为GameType
+     */
+    private static GameType parseGameMode(String mode) {
+        return switch (mode.toLowerCase()) {
+            case "creative" -> GameType.CREATIVE;
+            case "adventure" -> GameType.ADVENTURE;
+            case "spectator" -> GameType.SPECTATOR;
+            default -> GameType.SURVIVAL;
+        };
+    }
+
     private static AreaConfig createConfigFromArea(MonitorArea area) {
         AreaConfig config = new AreaConfig();
         config.displayName = area.getDisplayName();
@@ -292,13 +280,41 @@ public class ConfigManager {
         return config;
     }
 
-    private static GameType parseGameMode(String mode) {
-        return switch (mode.toLowerCase()) {
-            case "creative" -> GameType.CREATIVE;
-            case "adventure" -> GameType.ADVENTURE;
-            case "spectator" -> GameType.SPECTATOR;
-            default -> GameType.SURVIVAL;
-        };
+    /**
+     * 验证区域配置完整性
+     */
+    private static boolean validateAreaConfig(String areaName, AreaConfig config) {
+        if (areaName == null || areaName.trim().isEmpty()) {
+            return false;
+        }
+
+        if (config == null) {
+            return false;
+        }
+
+        // 验证坐标范围
+        if (config.minX == null || config.maxX == null || config.minZ == null || config.maxZ == null) {
+            AreaMonitorMod.LOGGER.warn("区域 {} 缺少必要的坐标配置", areaName);
+            return false;
+        }
+
+        // 验证坐标逻辑
+        if (config.minX >= config.maxX || config.minZ >= config.maxZ) {
+            AreaMonitorMod.LOGGER.warn("区域 {} 坐标范围无效: minX={}, maxX={}, minZ={}, maxZ={}",
+                    areaName, config.minX, config.maxX, config.minZ, config.maxZ);
+            return false;
+        }
+
+        // 验证游戏模式
+        try {
+            parseGameMode(config.enterMode);
+            parseGameMode(config.leaveMode);
+        } catch (Exception e) {
+            AreaMonitorMod.LOGGER.warn("区域 {} 包含无效的游戏模式配置", areaName);
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -325,33 +341,8 @@ public class ConfigManager {
         try {
             Config config = CONFIG;
 
-            // 检查区域坐标逻辑
-            if (config.minX.get() >= config.maxX.get()) {
-                AreaMonitorMod.LOGGER.warn("监控区域X坐标配置异常: minX({}) >= maxX({})，区域将无效",
-                    config.minX.get(), config.maxX.get());
-            }
-
-            if (config.minZ.get() >= config.maxZ.get()) {
-                AreaMonitorMod.LOGGER.warn("监控区域Z坐标配置异常: minZ({}) >= maxZ({})，区域将无效",
-                    config.minZ.get(), config.maxZ.get());
-            }
-
-            // 检查区域大小
-            int area = Math.abs(config.maxX.get() - config.minX.get()) *
-                       Math.abs(config.maxZ.get() - config.minZ.get());
-            if (area > 1000000) {
-                AreaMonitorMod.LOGGER.warn("监控区域过大 ({} 方块)，可能影响性能，建议减小区域大小", area);
-            }
-
-            // 验证游戏模式
-            try {
-                config.getEnterGameMode();
-                config.getLeaveGameMode();
-            } catch (Exception e) {
-                AreaMonitorMod.LOGGER.error("游戏模式配置无效", e);
-            }
-
             AreaMonitorMod.LOGGER.info("区域监控配置验证完成");
+            AreaMonitorMod.LOGGER.info("请在 config/areamonitor/areas.json 中配置具体的监控区域");
         } catch (Exception e) {
             AreaMonitorMod.LOGGER.warn("配置验证失败，配置可能尚未完全加载: {}", e.getMessage());
         }

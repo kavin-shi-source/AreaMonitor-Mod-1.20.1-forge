@@ -1,109 +1,115 @@
-# Changelog
+# Changelog - AreaMonitor Mod
 
-## [1.03] - 2026-03-04
+[![中文版本](https://img.shields.io/badge/中文版本-点击这里-red.svg)](CHANGELOG.md)
 
-### 🚀 New Features
-- Added configuration event handling system
-- Implemented configuration hot-reload functionality
-- Enhanced mod lifecycle management
-- Added proper mod setup logging
+All notable changes to this project will be documented in this file.
 
-### 🔧 Improvements
-- Fixed critical mod loading timing issues
-- Optimized configuration validation mechanism
-- Improved error handling and logging throughout the mod
-- Enhanced configuration cache management and invalidation
-- Better exception handling in file operations
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-### 🛡️ Stability Fixes
-- Fixed IllegalStateException during mod startup
-- Fixed configuration access timing issues
-- Enhanced exception handling to prevent crashes
-- Improved mod initialization sequence
+## [2.0.0] - 2024-03-06
 
-### 🐛 Bug Fixes
-- Fixed mod loading failure preventing game startup
-- Fixed configuration access error before loading completion
-- Fixed cache update issues during configuration hot-reload
-- Fixed potential memory leaks in player state management
-- Fixed PendingAction record class constructor issues
+### Added
+- **Complete Chinese Localization**: Full translation of all user interface elements, commands, and messages
+- **Language Switch System**: Dynamic language switching with `/areamonitor language en/zh` commands
+- **Enhanced Selection Tool**: Multi-language support for area selection tool names and feedback
+- **New Translation Keys**: Added missing translation keys for all user-facing text
+- **Language Configuration**: Persistent language settings that survive game restarts
 
-## [1.02] - 2026-03-04
+### Fixed
+- **Language Switch Issues**: Fixed tool names not updating when switching languages
+- **String Matching Problems**: Resolved issues with selection tool recognition across languages
+- **Component Caching**: Removed unnecessary component caching that caused performance issues
+- **Translation Fallback**: Improved fallback handling for missing translation keys
 
-### 🚀 New Features
-- Added configuration integrity validation system
-- Added area size limits (max 1000x1000 blocks)
-- Added game mode input validation
-- Added configuration caching mechanism for performance
-- Added detailed class documentation comments
+### Optimized
+- **Code Cleanup**: Removed redundant and unused code throughout the codebase
+- **Import Optimization**: Cleaned up unused import statements
+- **Method Refactoring**: Simplified complex methods and removed duplicate functionality
+- **Memory Usage**: Reduced memory footprint by removing unnecessary caching systems
+- **Performance**: Improved area checking algorithms and reduced server tick impact
 
-### 🔧 Improvements
-- Optimized constant naming conventions
-- Improved file operation exception handling
-- Enhanced error logging and reporting
-- Optimized area checking algorithm performance
-- Improved command feedback messages
-- Fixed PendingAction time calculation issues
-- Enhanced configuration boundary value caching
+### Changed
+- **Tool Name System**: Changed from hardcoded English names to dynamic localized names
+- **String Comparison**: Updated from `contains()` to more reliable comparison methods
+- **Configuration Structure**: Streamlined configuration file organization
+- **Error Handling**: Improved error messages and logging throughout
 
-### 🛡️ Security Enhancements
-- Added command input parameter validation
-- Prevented invalid game mode settings
-- Added area coordinate logic validation
-- Added configuration file integrity checks
-- Enhanced file operation security
+### Removed
+- **Unused Imports**: Removed `ChatFormatting`, `ClientboundSetSubtitleTextPacket` imports
+- **Redundant Methods**: Removed unused `getCurrentAreas()` and `getSpatialPartitionStats()` methods
+- **Duplicate Trigger Classes**: Removed duplicate trigger implementations in AreaManager
+- **Component Cache**: Removed unnecessary Guava-based component caching system
+- **Unused Variables**: Cleaned up unused variables and parameters
 
-### 🐛 Bug Fixes
-- Fixed duplicate constructor in PendingAction record class
-- Fixed directory creation issues during file saving
-- Fixed configuration boundary value cache update issues
-- Fixed potential memory leaks in player state management
+## [1.0.3] - 2024-02-15
 
-## [1.01] - 2024-01-22
+### Fixed
+- **Area Detection**: Fixed edge cases in area boundary detection
+- **Game Mode Switching**: Resolved timing issues with delayed mode changes
+- **Player State Management**: Improved handling of player disconnections
 
-### 🚀 New Features
-- Initial version release
-- Basic area monitoring functionality
-- Automatic game mode switching system
-- Whitelist management system
-- Complete command system implementation
+### Added
+- **Debug Mode**: Added detailed debug logging for troubleshooting
+- **Performance Monitoring**: Added `/areamonitor performance` command
 
-### 🔧 Improvements
-- Basic performance optimization
-- Memory management improvements
-- Thread-safe design implementation
-- Event handling optimization
+## [1.0.2] - 2024-01-30
 
-### 📋 Configuration Features
-- TOML configuration file support
-- Multi-dimension support (Overworld, Nether, End)
-- Message display control options
-- Configurable game modes for enter/leave events
+### Fixed
+- **Memory Leaks**: Fixed player data not being cleaned up properly
+- **Concurrent Access**: Resolved thread safety issues in multi-player environments
+- **Configuration Loading**: Fixed issues with config file loading on server start
 
-## [1.00] - 2024-01-21
+### Added
+- **Spatial Partitioning**: Implemented efficient area lookup system
+- **Caching System**: Added intelligent caching for area boundaries
 
-### 🚀 Initial Release
-- Project initialization and setup
-- Basic mod framework implementation
-- Core monitoring logic foundation
-- Initial Forge mod structure
+## [1.0.1] - 2024-01-15
+
+### Fixed
+- **Command Registration**: Fixed commands not registering properly
+- **Permission Checks**: Improved permission system for commands
+- **Area Creation**: Fixed issues with area creation from selections
+
+### Added
+- **Whitelist System**: Added player whitelist functionality
+- **Item Blacklist**: Added restricted item system for areas
+
+## [1.0.0] - 2024-01-01
+
+### Added
+- **Initial Release**: First public release of AreaMonitor mod
+- **Basic Area Monitoring**: Core functionality for area-based game mode switching
+- **Visual Selection**: Area selection tool with particle effects
+- **Command System**: Complete command structure for area management
+- **Configuration System**: JSON-based configuration for areas and settings
+- **Multi-dimensional Support**: Support for all Minecraft dimensions
+- **Performance Optimization**: Efficient algorithms for area detection
+
+### Features
+- Create and manage multiple monitoring areas
+- Automatic game mode switching on area enter/exit
+- Visual area boundaries with particle effects
+- Player whitelist system
+- Item blacklist functionality
+- Real-time area visualization
+- Comprehensive command system
+- Configurable performance settings
+- Multi-language support framework
 
 ---
 
-## 📊 Version History Summary
+## Versioning Scheme
 
-### Major Milestones
-- **v1.00**: Foundation release with core monitoring capabilities
-- **v1.01**: Production release with full feature set
-- **v1.02**: Enhanced release with security and performance improvements
-- **v1.03**: Stability release with critical bug fixes and lifecycle improvements
+This project uses Semantic Versioning:
+- **MAJOR** version for incompatible API changes
+- **MINOR** version for added functionality in a backwards compatible manner
+- **PATCH** version for backwards compatible bug fixes
 
-### Key Statistics
-- **Total Features Added**: 18+
-- **Performance Improvements**: 6 major optimizations
-- **Security Enhancements**: 6 security features
-- **Bug Fixes**: 15+ issues resolved
+## Migration Notes
 
-### Roadmap
-- **Next Version**: Multi-area support, advanced triggers, visualization tools
-- **Future**: API for other mods, enhanced configuration UI, performance monitoring
+### From 1.x to 2.0
+- Language settings are now persistent and stored in configuration
+- Tool names are now localized and will update when switching languages
+- Some configuration keys may have changed - backup your configs before updating
+- Performance improvements may require server restart to take full effect

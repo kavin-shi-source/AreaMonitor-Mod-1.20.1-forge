@@ -48,7 +48,7 @@ public class SelectionEventHandler {
 
             if (lastHelpTime == null || currentTime - lastHelpTime > 5000) { // 5秒间隔
                 player.displayClientMessage(
-                    net.minecraft.network.chat.Component.literal("§e提示: 右键点击方块来设置选择点"),
+                    net.minecraft.network.chat.Component.translatable("command.areamonitor.selection.help"),
                     true
                 );
                 SelectionTool.setLastHelpTime(player.getUUID(), currentTime);

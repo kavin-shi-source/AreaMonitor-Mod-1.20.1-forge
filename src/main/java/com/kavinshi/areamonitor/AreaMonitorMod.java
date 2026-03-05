@@ -1,10 +1,24 @@
 package com.kavinshi.areamonitor;
 
+/*
+ * Area Monitor Mod - Minecraft mod for monitoring and managing protected areas
+ * Copyright (C) 2024 AreaMonitor Contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -21,6 +35,9 @@ public class AreaMonitorMod {
             AreaMonitorMod.LOGGER.info("Initializing AreaMonitor mod...");
 
             IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+
+            // 初始化多语言系统
+            LocalizationManager.getInstance();
 
             ConfigManager.init();
 
@@ -54,7 +71,6 @@ public class AreaMonitorMod {
         if (configEvent.getConfig().getModId().equals(MOD_ID)) {
             AreaMonitorMod.LOGGER.info("Reloading config for {}", MOD_ID);
             ConfigManager.validateConfig();
-            ConfigManager.CONFIG.invalidateCache();
         }
     }
 }

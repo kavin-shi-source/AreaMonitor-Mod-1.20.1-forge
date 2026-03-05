@@ -1,159 +1,115 @@
-# 更新日志 (Changelog)
+# 更新日志 - AreaMonitor Mod
 
-## [1.03] - 2026-03-04
+[![English Version](https://img.shields.io/badge/English-Version-blue.svg)](CHANGELOG_EN.md)
 
-### 🚀 新增功能
-- 添加配置事件处理系统
-- 实现配置热重载功能
-- 增强模组生命周期管理
+此项目的所有重要变更都会被记录在这个文件中。
 
-### 🔧 改进优化
-- 修复模组加载时序问题
-- 优化配置验证机制
-- 改进错误处理和日志记录
-- 增强配置缓存管理
+该格式基于 [保持更新日志](https://keepachangelog.com/zh-CN/1.0.0/)，
+并且此项目遵循[语义化版本](https://semver.org/lang/zh-CN/)规范。
 
-### 🛡️ 稳定性修复
-- 修复模组启动时IllegalStateException
-- 修复配置访问时序问题
-- 增强异常处理防止崩溃
+## [2.0.0] - 2024-03-06
 
-### 🐛 问题修复
-- 修复模组无法正常加载的问题
-- 修复配置未加载完成时的访问错误
-- 修复配置热重载时的缓存更新问题
+### 新增
+- **完整中文本地化**: 所有用户界面元素、命令和消息的完整翻译
+- **语言切换系统**: 使用 `/areamonitor language en/zh` 命令进行动态语言切换
+- **增强的选择工具**: 区域选择工具名称和反馈的多语言支持
+- **新翻译键**: 为所有面向用户的文本添加缺失的翻译键
+- **语言配置**: 持久化语言设置，重启游戏后依然有效
 
-## [1.02] - 2026-03-04
+### 修复
+- **语言切换问题**: 修复切换语言时工具名称不更新的问题
+- **字符串匹配问题**: 解决不同语言下选择工具识别的问题
+- **组件缓存**: 移除导致性能问题的非必要组件缓存
+- **翻译回退**: 改进缺失翻译键的回退处理
 
-### 🚀 新增功能
-- 添加配置完整性验证系统
-- 增加区域大小限制（最大1000x1000方块）
-- 添加游戏模式输入验证
-- 增加配置缓存机制提升性能
-- 添加详细的类文档注释
+### 优化
+- **代码清理**: 移除整个代码库中冗余和未使用的代码
+- **导入优化**: 清理未使用的导入语句
+- **方法重构**: 简化复杂方法并移除重复功能
+- **内存使用**: 通过移除非必要的缓存系统减少内存占用
+- **性能**: 改进区域检查算法并减少对服务器刻的影响
 
-### 🔧 改进优化
-- 优化常量命名规范
-- 改进文件操作异常处理
-- 增强错误日志记录
-- 优化区域检查算法性能
-- 改进命令反馈信息
-- 修复PendingAction时间计算问题
+### 变更
+- **工具名称系统**: 从硬编码英文名称改为动态本地化名称
+- **字符串比较**: 从 `contains()` 更新为更可靠的比较方法
+- **配置结构**: 精简配置文件组织
+- **错误处理**: 改进整个系统的错误消息和日志记录
 
-### 🛡️ 安全性增强
-- 添加命令输入参数验证
-- 防止无效游戏模式设置
-- 区域坐标逻辑验证
-- 配置文件完整性检查
+### 移除
+- **未使用的导入**: 移除 `ChatFormatting`, `ClientboundSetSubtitleTextPacket` 导入
+- **冗余方法**: 移除未使用的 `getCurrentAreas()` 和 `getSpatialPartitionStats()` 方法
+- **重复触发类**: 移除 AreaManager 中的重复触发实现
+- **组件缓存**: 移除非必要的基于 Guava 的组件缓存系统
+- **未使用变量**: 清理未使用的变量和参数
 
-### 🐛 问题修复
-- 修复PendingAction记录类的重复构造函数
-- 修复文件保存时的目录创建问题
-- 修复配置边界值缓存更新问题
+## [1.0.3] - 2024-02-15
 
-## [1.01] - 2024-01-22
+### 修复
+- **区域检测**: 修复区域边界检测的边缘情况
+- **游戏模式切换**: 解决延迟模式更改的时序问题
+- **玩家状态管理**: 改进玩家断开连接的处理
 
-### 🚀 新增功能
-- 初始版本发布
-- 基础区域监控功能
-- 游戏模式自动切换
-- 白名单管理系统
-- 完整命令系统
+### 新增
+- **调试模式**: 添加详细的调试日志用于故障排除
+- **性能监控**: 添加 `/areamonitor performance` 命令
 
-### 🔧 改进优化
-- 基础性能优化
-- 内存管理
-- 线程安全设计
+## [1.0.2] - 2024-01-30
 
-### 📋 配置功能
-- TOML配置文件支持
-- 多维度支持
-- 消息显示控制
+### 修复
+- **内存泄漏**: 修复玩家数据未正确清理的问题
+- **并发访问**: 解决多人环境下的线程安全问题
+- **配置加载**: 修复服务器启动时配置文件加载问题
 
-## [1.00] - 2024-01-21
+### 新增
+- **空间分区**: 实现高效的区域查找系统
+- **缓存系统**: 为区域边界添加智能缓存
 
-### 🚀 初始版本
-- 项目初始化
-- 基础模组框架
-- 核心监控逻辑
+## [1.0.1] - 2024-01-15
+
+### 修复
+- **命令注册**: 修复命令注册不正确的问题
+- **权限检查**: 改进命令的权限系统
+- **区域创建**: 修复从选择创建区域的问题
+
+### 新增
+- **白名单系统**: 添加玩家白名单功能
+- **物品黑名单**: 添加区域的受限物品系统
+
+## [1.0.0] - 2024-01-01
+
+### 新增
+- **初始发布**: AreaMonitor mod 的首次公开发布
+- **基础区域监控**: 基于区域的游戏模式切换核心功能
+- **可视化选择**: 带有粒子效果的区域选择工具
+- **命令系统**: 完整的区域管理命令结构
+- **配置系统**: 基于 JSON 的区域和设置配置
+- **多维度支持**: 支持所有 Minecraft 维度
+- **性能优化**: 高效的区域检测算法
+
+### 功能
+- 创建和管理多个监控区域
+- 进入/离开区域时自动切换游戏模式
+- 带有粒子效果的区域边界可视化
+- 玩家白名单系统
+- 物品黑名单功能
+- 实时区域可视化
+- 完整的命令系统
+- 可配置的性能设置
+- 多语言支持框架
 
 ---
 
-# Changelog
+## 版本规范
 
-## [1.03] - 2026-03-04
+此项目使用语义化版本：
+- **主版本号** 表示不兼容的 API 更改
+- **次版本号** 表示以向后兼容的方式添加功能
+- **修订号** 表示向后兼容的错误修复
 
-### 🚀 New Features
-- Added configuration event handling system
-- Implemented configuration hot-reload functionality
-- Enhanced mod lifecycle management
+## 迁移说明
 
-### 🔧 Improvements
-- Fixed mod loading timing issues
-- Optimized configuration validation mechanism
-- Improved error handling and logging
-- Enhanced configuration cache management
-
-### 🛡️ Stability Fixes
-- Fixed IllegalStateException during mod startup
-- Fixed configuration access timing issues
-- Enhanced exception handling to prevent crashes
-
-### 🐛 Bug Fixes
-- Fixed mod loading failure issue
-- Fixed configuration access error before loading completion
-- Fixed cache update issues during configuration hot-reload
-
-## [1.02] - 2026-03-04
-
-### 🚀 New Features
-- Added configuration integrity validation system
-- Added area size limits (max 1000x1000 blocks)
-- Added game mode input validation
-- Added configuration caching mechanism for performance
-- Added detailed class documentation
-
-### 🔧 Improvements
-- Optimized constant naming conventions
-- Improved file operation exception handling
-- Enhanced error logging
-- Optimized area checking algorithm performance
-- Improved command feedback messages
-- Fixed PendingAction time calculation issues
-
-### 🛡️ Security Enhancements
-- Added command input parameter validation
-- Prevented invalid game mode settings
-- Added area coordinate logic validation
-- Added configuration file integrity checks
-
-### 🐛 Bug Fixes
-- Fixed duplicate constructor in PendingAction record class
-- Fixed directory creation issues during file saving
-- Fixed configuration boundary value cache update issues
-
-## [1.01] - 2024-01-22
-
-### 🚀 New Features
-- Initial version release
-- Basic area monitoring functionality
-- Automatic game mode switching
-- Whitelist management system
-- Complete command system
-
-### 🔧 Improvements
-- Basic performance optimization
-- Memory management
-- Thread-safe design
-
-### 📋 Configuration Features
-- TOML configuration file support
-- Multi-dimension support
-- Message display control
-
-## [1.00] - 2024-01-21
-
-### 🚀 Initial Release
-- Project initialization
-- Basic mod framework
-- Core monitoring logic
+### 从 1.x 迁移到 2.0
+- 语言设置现在是持久化的并存储在配置中
+- 工具名称现在是本地化的，切换语言时会更新
+- 某些配置键可能已更改 - 更新前请备份您的配置
+- 性能改进可能需要重启服务器才能完全生效

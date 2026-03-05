@@ -21,6 +21,15 @@ import java.util.stream.Collectors;
 public class TriggerSystem {
 
     /**
+     * 基础触发器接口
+     */
+    public interface Trigger {
+        boolean check(ServerPlayer player);
+        void execute(ServerPlayer player, MonitorArea area);
+        AreaManager.TriggerType getType();
+    }
+
+    /**
      * 物品持有触发器
      */
     public static class ItemHoldTrigger implements Trigger {
@@ -269,7 +278,7 @@ public class TriggerSystem {
                     server.getCommands().performPrefixedCommand(sourceStack, processedCommand);
                 }
             } else {
-                player.sendSystemMessage(Component.literal("执行命令: " + processedCommand));
+                player.sendSystemMessage(Component.translatable("trigger.command.executing", processedCommand));
                 player.getServer().getCommands().performPrefixedCommand(
                     player.createCommandSourceStack(),
                     processedCommand

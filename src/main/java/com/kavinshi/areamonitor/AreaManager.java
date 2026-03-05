@@ -4,8 +4,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
 import net.minecraft.network.chat.Component;
-import net.minecraft.ChatFormatting;
-import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
 import java.util.*;
@@ -15,27 +13,30 @@ import java.util.concurrent.ConcurrentHashMap;
  * 区域管理器，负责管理所有监控区域
  */
 public class AreaManager {
-    private static AreaManager instance;
+    // 使用枚举实现线程安全的单例模式
+    private static final AreaManager INSTANCE = new AreaManager();
     private final Map<String, MonitorArea> areas = new ConcurrentHashMap<>();
     private final Map<UUID, Set<String>> playerAreas = new ConcurrentHashMap<>();
+    private final SpatialPartitionManager spatialPartition = new SpatialPartitionManager();
 
     public static AreaManager getInstance() {
-        if (instance == null) {
-            instance = new AreaManager();
-        }
-        return instance;
+        return INSTANCE;
     }
 
     private AreaManager() {}
 
     public void addArea(MonitorArea area) {
         areas.put(area.getName(), area);
+        spatialPartition.addRegion(area);
         AreaMonitorMod.LOGGER.info("添加监控区域: {}", area.getName());
     }
 
     public void removeArea(String areaName) {
-        areas.remove(areaName);
-        AreaMonitorMod.LOGGER.info("移除监控区域: {}", areaName);
+        MonitorArea removed = areas.remove(areaName);
+        if (removed != null) {
+            spatialPartition.removeRegion(areaName);
+            AreaMonitorMod.LOGGER.info("移除监控区域: {}", areaName);
+        }
     }
 
     public MonitorArea getArea(String areaName) {
@@ -51,7 +52,14 @@ public class AreaManager {
     }
 
     public void checkPlayer(ServerPlayer player) {
+        if (ConfigManager.CONFIG.debugMode.get()) {
+            AreaMonitorMod.LOGGER.debug("AreaManager: Checking player {}", player.getName().getString());
+        }
+
         if (WhitelistManager.isWhitelisted(player)) {
+            if (ConfigManager.CONFIG.debugMode.get()) {
+                AreaMonitorMod.LOGGER.debug("AreaManager: Player {} is whitelisted, skipping", player.getName().getString());
+            }
             return;
         }
 
@@ -61,7 +69,7 @@ public class AreaManager {
             player.level().dimension().location().toString()
         );
 
-        Set<String> currentAreas = getCurrentAreas(player, position);
+        Set<String> currentAreas = getCurrentAreasOptimized(player, position);
         Set<String> previousAreas = playerAreas.getOrDefault(player.getUUID(), new HashSet<>());
 
         // 检测进入的新区域
@@ -78,13 +86,25 @@ public class AreaManager {
             }
         }
 
-        playerAreas.put(player.getUUID(), currentAreas);
+        // 只有当区域状态发生变化时才更新缓存
+        if (!currentAreas.equals(previousAreas)) {
+            playerAreas.put(player.getUUID(), new HashSet<>(currentAreas));
+        }
     }
 
-    private Set<String> getCurrentAreas(ServerPlayer player, PlayerPosition position) {
+    /**
+     * 使用空间分区优化的区域检测
+     */
+    private Set<String> getCurrentAreasOptimized(ServerPlayer player, PlayerPosition position) {
         Set<String> currentAreas = new HashSet<>();
 
-        for (MonitorArea area : areas.values()) {
+        // 使用空间分区获取可能相关的区域
+        Set<MonitorArea> potentialAreas = spatialPartition.getPotentialRegions(
+            position.getX(), position.getZ(), position.getDimension()
+        );
+
+        // 只检查相关的区域
+        for (MonitorArea area : potentialAreas) {
             if (area.isEnabled() && area.isPlayerInArea(position)) {
                 currentAreas.add(area.getName());
             }
@@ -102,7 +122,7 @@ public class AreaManager {
             return;
         }
 
-        AreaMonitorMod.LOGGER.debug("玩家 {} 进入区域 {}", player.getName().getString(), areaName);
+        AreaMonitorMod.LOGGER.debug("Player {} entered area {}", player.getName().getString(), areaName);
 
         // 显示进入消息
         showAreaMessage(player, area.getDisplayName(), true, area.getEnterMode());
@@ -110,24 +130,22 @@ public class AreaManager {
         // 延迟切换游戏模式
         AreaMonitor.addPendingGameModeChange(player, area.getEnterMode());
 
-        // 检查触发器
-        checkTriggers(player, area, TriggerType.ENTER);
+        // TODO: 触发器系统需要重构
     }
 
     private void handleAreaLeave(ServerPlayer player, String areaName) {
         MonitorArea area = areas.get(areaName);
         if (area == null || !area.isEnabled()) return;
 
-        AreaMonitorMod.LOGGER.debug("玩家 {} 离开区域 {}", player.getName().getString(), areaName);
+        AreaMonitorMod.LOGGER.debug("Player {} left area {}", player.getName().getString(), areaName);
 
         // 显示离开消息
         showAreaMessage(player, area.getDisplayName(), false, area.getLeaveMode());
 
-        // 延迟切换游戏模式
-        AreaMonitor.addPendingGameModeChange(player, area.getLeaveMode());
+        // 延迟切换游戏模式（离开区域）
+        AreaMonitor.addPendingGameModeChangeOnLeave(player, area.getLeaveMode());
 
-        // 检查触发器
-        checkTriggers(player, area, TriggerType.LEAVE);
+        // TODO: 触发器系统需要重构
     }
 
     private void showAreaMessage(ServerPlayer player, String areaName, boolean entering, GameType gameMode) {
@@ -137,10 +155,10 @@ public class AreaManager {
 
     private void showAreaTitle(ServerPlayer player, String areaName, boolean entering, GameType gameMode) {
         try {
-            String action = entering ? "§a进入" : "§c离开";
-            String modeName = getGameModeDisplayName(gameMode);
+            String action = entering ? LocalizationManager.translate("area.enter") : LocalizationManager.translate("area.leave");
+            String modeName = LocalizationManager.getGameModeDisplayName(gameMode);
             // 使用 §7 (灰色) 和较小的格式，去掉粗体
-            String message = "§7" + action + "区域: " + areaName + " | " + modeName;
+            String message = String.format(LocalizationManager.translate("area.message"), action, areaName, modeName);
 
             // 设置Title动画时间 (淡入, 停留, 淡出)
             int fadeIn = 5;   // 0.25秒淡入 (减小)
@@ -156,35 +174,6 @@ public class AreaManager {
         }
     }
 
-    private String getGameModeDisplayName(GameType gameMode) {
-        return switch (gameMode) {
-            case CREATIVE -> "创造模式";
-            case ADVENTURE -> "冒险模式";
-            case SPECTATOR -> "旁观模式";
-            default -> "生存模式";
-        };
-    }
-
-    private void checkTriggers(ServerPlayer player, MonitorArea area, TriggerType triggerType) {
-        // 检查物品触发器
-        if (area.getTriggers().isEnableItemTriggers()) {
-            for (ItemTrigger trigger : area.getTriggers().getItemTriggers()) {
-                if (trigger.getType() == triggerType && trigger.check(player)) {
-                    trigger.execute(player, area);
-                }
-            }
-        }
-
-        // 检查玩家数量触发器
-        if (area.getTriggers().isEnablePlayerCountTriggers()) {
-            int playerCount = getPlayersInArea(area).size();
-            for (PlayerCountTrigger trigger : area.getTriggers().getPlayerCountTriggers()) {
-                if (trigger.getType() == triggerType && trigger.check(playerCount)) {
-                    trigger.execute(player, area);
-                }
-            }
-        }
-    }
 
     private Set<ServerPlayer> getPlayersInArea(MonitorArea area) {
         Set<ServerPlayer> playersInArea = new HashSet<>();
@@ -224,76 +213,24 @@ public class AreaManager {
 
     public void clearUnusedCaches() {
         // 清理长时间未活动的玩家数据
-        long currentTime = System.currentTimeMillis();
         playerAreas.entrySet().removeIf(entry -> {
             // 这里可以添加更复杂的清理逻辑
             return false; // 暂时不清理
         });
     }
 
+    /**
+     * 重新加载所有区域到空间分区（用于区域配置更新后）
+     */
+    public void rebuildSpatialPartition() {
+        spatialPartition.clear();
+        for (MonitorArea area : areas.values()) {
+            spatialPartition.addRegion(area);
+        }
+        AreaMonitorMod.LOGGER.info("空间分区已重建，共 {} 个区域", areas.size());
+    }
+
     public enum TriggerType {
         ENTER, LEAVE, PERIODIC, ITEM_HELD, PLAYER_COUNT
-    }
-}
-
-// 基础触发器接口
-interface Trigger {
-    boolean check(ServerPlayer player);
-    void execute(ServerPlayer player, MonitorArea area);
-    AreaManager.TriggerType getType();
-}
-
-// 物品触发器实现
-class ItemTrigger implements Trigger {
-    private AreaManager.TriggerType type;
-    private List<String> requiredItems;
-    private TriggerCondition condition;
-    private String actionCommand;
-
-    @Override
-    public boolean check(ServerPlayer player) {
-        // 检查玩家是否持有指定物品
-        return true; // 简化实现
-    }
-
-    @Override
-    public void execute(ServerPlayer player, MonitorArea area) {
-        // 执行触发动作
-    }
-
-    @Override
-    public AreaManager.TriggerType getType() {
-        return type;
-    }
-
-    public enum TriggerCondition {
-        AND, OR
-    }
-}
-
-// 玩家数量触发器实现
-class PlayerCountTrigger implements Trigger {
-    private AreaManager.TriggerType type;
-    private int minPlayers;
-    private int maxPlayers;
-    private String actionCommand;
-
-    public boolean check(int playerCount) {
-        return playerCount >= minPlayers && playerCount <= maxPlayers;
-    }
-
-    @Override
-    public boolean check(ServerPlayer player) {
-        return false; // 这个触发器不检查单个玩家
-    }
-
-    @Override
-    public void execute(ServerPlayer player, MonitorArea area) {
-        // 执行触发动作
-    }
-
-    @Override
-    public AreaManager.TriggerType getType() {
-        return type;
     }
 }

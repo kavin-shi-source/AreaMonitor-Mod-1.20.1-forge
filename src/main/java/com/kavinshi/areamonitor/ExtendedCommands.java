@@ -272,7 +272,7 @@ public class ExtendedCommands {
     private static int createArea(String areaName, CommandContext<CommandSourceStack> context) {
         if (AreaManager.getInstance().getArea(areaName) != null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 已存在")
+                Component.translatable("command.areamonitor.area.exists", areaName)
             );
             return 0;
         }
@@ -282,7 +282,7 @@ public class ExtendedCommands {
         ConfigManager.saveAreasConfig();
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§a区域 '" + areaName + "' 创建成功"),
+            () -> Component.translatable("command.areamonitor.area.created", areaName),
             true
         );
         return 1;
@@ -293,7 +293,7 @@ public class ExtendedCommands {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 不存在")
+                Component.translatable("command.areamonitor.area.not_found", areaName)
             );
             return 0;
         }
@@ -302,7 +302,7 @@ public class ExtendedCommands {
         ConfigManager.saveAreasConfig();
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§a区域 '" + areaName + "' 已删除"),
+            () -> Component.translatable("command.areamonitor.area.deleted", areaName),
             true
         );
         return 1;
@@ -314,14 +314,14 @@ public class ExtendedCommands {
 
         if (areaNames.isEmpty()) {
             context.getSource().sendSuccess(
-                () -> Component.literal("§e没有已配置的区域"),
+                () -> Component.translatable("command.areamonitor.area.list.empty"),
                 false
             );
             return 1;
         }
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§6=== 监控区域列表 ==="),
+            () -> Component.translatable("command.areamonitor.area.list.header"),
             false
         );
 
@@ -330,14 +330,14 @@ public class ExtendedCommands {
             MonitorArea area = AreaManager.getInstance().getArea(areaName);
             if (area == null) continue;
 
-            String status = area.isEnabled() ? "§a启用" : "§c禁用";
-            String coordinates = "未设置";
+            String status = area.isEnabled() ? "area.enabled" : "area.disabled";
+            String coordinates = "Not set";
 
             if (area.getBounds() instanceof MonitorArea.RectangleBounds rect) {
                 coordinates = String.format("X[%d ~ %d], Z[%d ~ %d]",
                     rect.getMinX(), rect.getMaxX(), rect.getMinZ(), rect.getMaxZ());
             } else if (area.getBounds() instanceof MonitorArea.CircleBounds circle) {
-                coordinates = String.format("中心(%d, %d), 半径%d",
+                coordinates = String.format("Center(%d, %d), Radius %d",
                     circle.getCenterX(), circle.getCenterZ(), circle.getRadius());
             }
 
@@ -353,22 +353,22 @@ public class ExtendedCommands {
 
             // 显示详细信息
             context.getSource().sendSuccess(
-                () -> Component.literal("   §7区域: " + finalCoordinates),
+                () -> Component.translatable("area.coordinates_format", finalCoordinates),
                 false
             );
 
             context.getSource().sendSuccess(
-                () -> Component.literal("   §7维度: " + area.getDimension()),
+                () -> Component.translatable("area.dimension", area.getDimension()),
                 false
             );
 
             context.getSource().sendSuccess(
-                () -> Component.literal("   §7进入模式: §b" + area.getEnterMode().getName()),
+                () -> Component.translatable("area.enter_mode", area.getEnterMode().getName()),
                 false
             );
 
             context.getSource().sendSuccess(
-                () -> Component.literal("   §7离开模式: §b" + area.getLeaveMode().getName()),
+                () -> Component.translatable("area.leave_mode", area.getLeaveMode().getName()),
                 false
             );
 
@@ -380,7 +380,7 @@ public class ExtendedCommands {
         }
 
         context.getSource().sendSuccess(
-            () -> Component.literal(String.format("§e共 %d 个区域", areaNames.size())),
+            () -> Component.translatable("area.count", areaNames.size()),
             false
         );
 
@@ -392,7 +392,7 @@ public class ExtendedCommands {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 不存在")
+                Component.translatable("command.areamonitor.area.not_found", areaName)
             );
             return 0;
         }
@@ -401,11 +401,11 @@ public class ExtendedCommands {
         area.setEnabled(!currentState);
         ConfigManager.saveAreasConfig();
 
-        String newState = !currentState ? "§a已启用" : "§c已禁用";
+        String newState = !currentState ? "area.enabled" : "area.disabled";
         String message = String.format("§6区域 '%s' %s", area.getDisplayName(), newState);
 
         context.getSource().sendSuccess(
-            () -> Component.literal(message),
+            () -> Component.translatable("command.areamonitor.area.toggled", area.getDisplayName(), newState),
             true
         );
 
@@ -417,42 +417,42 @@ public class ExtendedCommands {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 不存在")
+                Component.translatable("command.areamonitor.area.not_found", areaName)
             );
             return 0;
         }
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§6=== 区域信息: " + area.getDisplayName() + " ==="),
+            () -> Component.translatable("command.areamonitor.area.info.header", area.getDisplayName()),
             false
         );
 
-        String status = area.isEnabled() ? "§a启用" : "§c禁用";
+        String status = area.isEnabled() ? "area.enabled" : "area.disabled";
         context.getSource().sendSuccess(
-            () -> Component.literal("§e状态: " + status),
+            () -> Component.translatable("area.status", status),
             false
         );
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§e维度: " + area.getDimension()),
+            () -> Component.translatable("area.dimension", area.getDimension()),
             false
         );
 
         if (area.getBounds() instanceof MonitorArea.RectangleBounds rect) {
             context.getSource().sendSuccess(
-                () -> Component.literal(String.format("§e区域: X[%d ~ %d], Z[%d ~ %d]",
-                    rect.getMinX(), rect.getMaxX(), rect.getMinZ(), rect.getMaxZ())),
+                () -> Component.translatable("area.coordinates_format",
+                    rect.getMinX(), rect.getMaxX(), rect.getMinZ(), rect.getMaxZ()),
                 false
             );
         }
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§e进入模式: " + area.getEnterMode().getName()),
+            () -> Component.translatable("area.enter_mode", area.getEnterMode().getName()),
             false
         );
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§e离开模式: " + area.getLeaveMode().getName()),
+            () -> Component.translatable("area.leave_mode", area.getLeaveMode().getName()),
             false
         );
 
@@ -463,7 +463,7 @@ public class ExtendedCommands {
     private static int giveVisualTool(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
             context.getSource().sendFailure(
-                Component.literal("§c该命令只能由玩家执行")
+                Component.translatable("player.only_command")
             );
             return 0;
         }
@@ -476,7 +476,7 @@ public class ExtendedCommands {
     private static int showAreaVisual(String areaName, CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
             context.getSource().sendFailure(
-                Component.literal("§c该命令只能由玩家执行")
+                Component.translatable("player.only_command")
             );
             return 0;
         }
@@ -484,14 +484,14 @@ public class ExtendedCommands {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 不存在")
+                Component.translatable("command.areamonitor.area.not_found", areaName)
             );
             return 0;
         }
 
         AreaVisualizer.startPersistentVisualization(player, area);
         context.getSource().sendSuccess(
-            () -> Component.literal("§a开始显示区域 '" + area.getDisplayName() + "' 的边界"),
+            () -> Component.translatable("area.start_showing_boundary", area.getDisplayName()),
             true
         );
         return 1;
@@ -501,14 +501,14 @@ public class ExtendedCommands {
     private static int hideAreaVisual(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
             context.getSource().sendFailure(
-                Component.literal("§c该命令只能由玩家执行")
+                Component.translatable("player.only_command")
             );
             return 0;
         }
 
         AreaVisualizer.stopPersistentVisualization(player);
         context.getSource().sendSuccess(
-            () -> Component.literal("§a已停止显示区域边界"),
+            () -> Component.translatable("area.stop_showing_boundary"),
             true
         );
         return 1;
@@ -519,7 +519,7 @@ public class ExtendedCommands {
         Map<String, String> stats = PerformanceMonitor.getPerformanceStats();
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§6=== 性能监控信息 ==="),
+            () -> Component.translatable("performance.header"),
             false
         );
 
@@ -537,7 +537,7 @@ public class ExtendedCommands {
     private static int showBlacklistInfo(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
             context.getSource().sendFailure(
-                Component.literal("§c该命令只能由玩家执行")
+                Component.translatable("player.only_command")
             );
             return 0;
         }
@@ -551,7 +551,7 @@ public class ExtendedCommands {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 不存在")
+                Component.translatable("command.areamonitor.area.not_found", areaName)
             );
             return 0;
         }
@@ -560,7 +560,7 @@ public class ExtendedCommands {
         Item item = parseItem(itemName);
         if (item == null) {
             context.getSource().sendFailure(
-                Component.literal("§c无效的物品: " + itemName + "。请使用格式如 minecraft:bread")
+                Component.translatable("blacklist.invalid_item", itemName)
             );
             return 0;
         }
@@ -573,7 +573,7 @@ public class ExtendedCommands {
 
         if (areaBlacklist.contains(item)) {
             context.getSource().sendSuccess(
-                () -> Component.literal("§e物品 " + getItemDisplayName(item) + " 已在区域黑名单中"),
+                () -> Component.translatable("blacklist.item_already_blacklisted", getItemDisplayName(item)),
                 true
             );
         } else {
@@ -582,7 +582,7 @@ public class ExtendedCommands {
             ItemBlacklistManager.saveBlacklistConfig();
 
             context.getSource().sendSuccess(
-                () -> Component.literal("§a已将 " + getItemDisplayName(item) + " 添加到区域 '" + areaName + "' 的黑名单"),
+                () -> Component.translatable("blacklist.item_added", getItemDisplayName(item), areaName),
                 true
             );
         }
@@ -594,7 +594,7 @@ public class ExtendedCommands {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 不存在")
+                Component.translatable("command.areamonitor.area.not_found", areaName)
             );
             return 0;
         }
@@ -602,7 +602,7 @@ public class ExtendedCommands {
         Item item = parseItem(itemName);
         if (item == null) {
             context.getSource().sendFailure(
-                Component.literal("§c无效的物品: " + itemName)
+                Component.translatable("blacklist.invalid_item", itemName)
             );
             return 0;
         }
@@ -617,12 +617,12 @@ public class ExtendedCommands {
             ItemBlacklistManager.saveBlacklistConfig();
 
             context.getSource().sendSuccess(
-                () -> Component.literal("§a已将 " + getItemDisplayName(item) + " 从区域 '" + areaName + "' 的黑名单移除"),
+                () -> Component.translatable("blacklist.item_removed", getItemDisplayName(item), areaName),
                 true
             );
         } else {
             context.getSource().sendSuccess(
-                () -> Component.literal("§e物品 " + getItemDisplayName(item) + " 不在区域黑名单中"),
+                () -> Component.translatable("blacklist.item_not_found", getItemDisplayName(item)),
                 true
             );
         }
@@ -634,7 +634,7 @@ public class ExtendedCommands {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 不存在")
+                Component.translatable("command.areamonitor.area.not_found", areaName)
             );
             return 0;
         }
@@ -642,13 +642,13 @@ public class ExtendedCommands {
         Set<Item> areaBlacklist = ItemBlacklistManager.getAreaBlacklist(areaName);
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§6=== 区域 '" + areaName + "' 黑名单 ==="),
+            () -> Component.translatable("blacklist.area_header", areaName),
             false
         );
 
         if (areaBlacklist.isEmpty()) {
             context.getSource().sendSuccess(
-                () -> Component.literal("§e该区域没有自定义黑名单物品"),
+                () -> Component.translatable("blacklist.area_empty"),
                 false
             );
         } else {
@@ -664,7 +664,7 @@ public class ExtendedCommands {
         Set<Item> globalBlacklist = ItemBlacklistManager.getGlobalBlacklist();
         if (!globalBlacklist.isEmpty()) {
             context.getSource().sendSuccess(
-                () -> Component.literal("§e全局黑名单物品:"),
+                () -> Component.translatable("blacklist.global_items"),
                 false
             );
             for (Item item : globalBlacklist) {
@@ -683,7 +683,7 @@ public class ExtendedCommands {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 不存在")
+                Component.translatable("command.areamonitor.area.not_found", areaName)
             );
             return 0;
         }
@@ -692,9 +692,9 @@ public class ExtendedCommands {
         area.getRestrictions().setEnableItemBlacklist(!currentState);
         ConfigManager.saveAreasConfig();
 
-        String newState = !currentState ? "§a已启用" : "§c已禁用";
+        String newState = !currentState ? "area.enabled" : "area.disabled";
         context.getSource().sendSuccess(
-            () -> Component.literal("§6区域 '" + areaName + "' 的物品黑名单" + newState),
+            () -> Component.translatable("blacklist.area_toggle", areaName, newState),
             true
         );
 
@@ -706,12 +706,12 @@ public class ExtendedCommands {
         try {
             ItemBlacklistManager.loadBlacklistConfig();
             context.getSource().sendSuccess(
-                () -> Component.literal("§a黑名单配置已重新加载"),
+                () -> Component.translatable("blacklist.reloaded"),
                 true
             );
         } catch (Exception e) {
             context.getSource().sendFailure(
-                Component.literal("§c重新加载黑名单配置失败: " + e.getMessage())
+                Component.translatable("blacklist.reload_failed", e.getMessage())
             );
         }
         return 1;
@@ -767,7 +767,7 @@ public class ExtendedCommands {
     private static int addToBlacklist(String itemName, CommandContext<CommandSourceStack> context) {
         // 这里需要解析物品名称并添加到黑名单
         context.getSource().sendSuccess(
-            () -> Component.literal("§a功能开发中..."),
+            () -> Component.translatable("feature.development"),
             true
         );
         return 1;
@@ -777,7 +777,7 @@ public class ExtendedCommands {
     private static int removeFromBlacklist(String itemName, CommandContext<CommandSourceStack> context) {
         // 这里需要解析物品名称并从黑名单移除
         context.getSource().sendSuccess(
-            () -> Component.literal("§a功能开发中..."),
+            () -> Component.translatable("feature.development"),
             true
         );
         return 1;
@@ -787,7 +787,7 @@ public class ExtendedCommands {
     private static int createAreaFromSelection(String areaName, CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
             context.getSource().sendFailure(
-                Component.literal("§c该命令只能由玩家执行")
+                Component.translatable("player.only_command")
             );
             return 0;
         }
@@ -800,7 +800,7 @@ public class ExtendedCommands {
     private static int cancelSelection(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
             context.getSource().sendFailure(
-                Component.literal("§c该命令只能由玩家执行")
+                Component.translatable("player.only_command")
             );
             return 0;
         }
@@ -813,7 +813,7 @@ public class ExtendedCommands {
     private static int showSelectionInfo(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
             context.getSource().sendFailure(
-                Component.literal("§c该命令只能由玩家执行")
+                Component.translatable("player.only_command")
             );
             return 0;
         }
@@ -826,7 +826,7 @@ public class ExtendedCommands {
     private static int showTutorial(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
             context.getSource().sendFailure(
-                Component.literal("§c该命令只能由玩家执行")
+                Component.translatable("player.only_command")
             );
             return 0;
         }
@@ -837,94 +837,94 @@ public class ExtendedCommands {
 
     private static void showTutorialMessage(ServerPlayer player) {
         player.displayClientMessage(
-            Component.literal("§6=== AreaMonitor 区域选择教程 ===").withStyle(net.minecraft.ChatFormatting.BOLD),
+            Component.translatable("selection.tutorial.header").withStyle(net.minecraft.ChatFormatting.BOLD),
             false
         );
 
         player.displayClientMessage(
-            Component.literal("§e第1步: 获取选择工具"),
+            Component.translatable("selection.tutorial.step1"),
             false
         );
         player.displayClientMessage(
-            Component.literal("§b  输入命令: /areamonitor visual tool"),
+            Component.translatable("selection.tutorial.step1.command"),
             false
         );
         player.displayClientMessage(
-            Component.literal("§7  你会获得一个木斧，这就是选择工具"),
-            false
-        );
-
-        player.displayClientMessage(
-            Component.literal("§e第2步: 选择第一个点"),
-            false
-        );
-        player.displayClientMessage(
-            Component.literal("§b  手持木斧，右键点击你想要作为区域一个角的方块"),
-            false
-        );
-        player.displayClientMessage(
-            Component.literal("§7  你会看到绿色消息提示第一个点已设置"),
+            Component.translatable("selection.tutorial.step1.description"),
             false
         );
 
         player.displayClientMessage(
-            Component.literal("§e第3步: 选择第二个点"),
+            Component.translatable("selection.tutorial.step2"),
             false
         );
         player.displayClientMessage(
-            Component.literal("§b  继续手持木斧，右键点击对角位置的方块"),
+            Component.translatable("selection.tutorial.step2.action"),
             false
         );
         player.displayClientMessage(
-            Component.literal("§7  你会看到详细的区域信息和创建提示"),
-            false
-        );
-
-        player.displayClientMessage(
-            Component.literal("§e第4步: 创建区域"),
-            false
-        );
-        player.displayClientMessage(
-            Component.literal("§b  输入命令: /areamonitor selection create 区域名称"),
-            false
-        );
-        player.displayClientMessage(
-            Component.literal("§7  例如: /areamonitor selection create my_creative_zone"),
+            Component.translatable("selection.tutorial.step2.feedback"),
             false
         );
 
         player.displayClientMessage(
-            Component.literal("§e第5步: 配置区域模式（创建后会自动提示）"),
+            Component.translatable("selection.tutorial.step3"),
             false
         );
         player.displayClientMessage(
-            Component.literal("§b  设置进入模式: /areamonitor area setEnterMode 区域名 creative"),
+            Component.translatable("selection.tutorial.step3.action"),
             false
         );
         player.displayClientMessage(
-            Component.literal("§b  设置离开模式: /areamonitor area setLeaveMode 区域名 survival"),
-            false
-        );
-
-        player.displayClientMessage(
-            Component.literal("§e其他有用命令:"),
-            false
-        );
-        player.displayClientMessage(
-            Component.literal("§b  查看区域: /areamonitor area info 区域名称"),
-            false
-        );
-        player.displayClientMessage(
-            Component.literal("§b  显示边界: /areamonitor visual show 区域名称"),
-            false
-        );
-        player.displayClientMessage(
-            Component.literal("§b  取消选择: /areamonitor selection cancel"),
+            Component.translatable("selection.tutorial.step3.feedback"),
             false
         );
 
         player.displayClientMessage(
-            Component.literal("§a✓ 教程结束！现在试试创建你的第一个区域吧！"),
+            Component.translatable("selection.tutorial.step4"),
+            false
+        );
+        player.displayClientMessage(
+            Component.translatable("selection.tutorial.step4.command"),
+            false
+        );
+        player.displayClientMessage(
+            Component.translatable("selection.tutorial.step4.example"),
+            false
+        );
+
+        player.displayClientMessage(
+            Component.translatable("selection.tutorial.step5"),
+            false
+        );
+        player.displayClientMessage(
+            Component.translatable("selection.tutorial.set_enter_mode"),
+            false
+        );
+        player.displayClientMessage(
+            Component.translatable("selection.tutorial.set_leave_mode"),
+            false
+        );
+
+        player.displayClientMessage(
+            Component.translatable("selection.tutorial.other_commands"),
+            false
+        );
+        player.displayClientMessage(
+            Component.translatable("selection.tutorial.view_area"),
+            false
+        );
+        player.displayClientMessage(
+            Component.translatable("selection.tutorial.show_boundary"),
+            false
+        );
+        player.displayClientMessage(
+            Component.translatable("selection.tutorial.cancel_selection"),
+            false
+        );
+
+        player.displayClientMessage(
+            Component.translatable("selection.tutorial.end"),
             false
         );
     }
@@ -934,7 +934,7 @@ public class ExtendedCommands {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 不存在")
+                Component.translatable("command.areamonitor.area.not_found", areaName)
             );
             return 0;
         }
@@ -942,7 +942,7 @@ public class ExtendedCommands {
         String modeLower = mode.toLowerCase();
         if (!ModConstants.GAME_MODE_SUGGESTIONS.contains(modeLower)) {
             context.getSource().sendFailure(
-                Component.literal("§c无效的游戏模式: " + mode + "。可用模式: " + String.join(", ", ModConstants.GAME_MODE_SUGGESTIONS))
+                Component.translatable("area.invalid_gamemode", mode, String.join(", ", ModConstants.GAME_MODE_SUGGESTIONS))
             );
             return 0;
         }
@@ -958,7 +958,7 @@ public class ExtendedCommands {
         ConfigManager.saveAreasConfig();
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§a区域 '" + areaName + "' 的进入模式已设置为: " + modeLower),
+            () -> Component.translatable("area.enter_mode_set", areaName, modeLower),
             true
         );
 
@@ -970,7 +970,7 @@ public class ExtendedCommands {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
             context.getSource().sendFailure(
-                Component.literal("§c区域 '" + areaName + "' 不存在")
+                Component.translatable("command.areamonitor.area.not_found", areaName)
             );
             return 0;
         }
@@ -978,7 +978,7 @@ public class ExtendedCommands {
         String modeLower = mode.toLowerCase();
         if (!ModConstants.GAME_MODE_SUGGESTIONS.contains(modeLower)) {
             context.getSource().sendFailure(
-                Component.literal("§c无效的游戏模式: " + mode + "。可用模式: " + String.join(", ", ModConstants.GAME_MODE_SUGGESTIONS))
+                Component.translatable("area.invalid_gamemode", mode, String.join(", ", ModConstants.GAME_MODE_SUGGESTIONS))
             );
             return 0;
         }
@@ -994,7 +994,7 @@ public class ExtendedCommands {
         ConfigManager.saveAreasConfig();
 
         context.getSource().sendSuccess(
-            () -> Component.literal("§a区域 '" + areaName + "' 的离开模式已设置为: " + modeLower),
+            () -> Component.translatable("area.leave_mode_set", areaName, modeLower),
             true
         );
 
@@ -1009,12 +1009,12 @@ public class ExtendedCommands {
             ConfigManager.validateConfig();
 
             context.getSource().sendSuccess(
-                () -> Component.literal("§a所有配置文件已重新加载"),
+                () -> Component.translatable("config.reloaded"),
                 true
             );
         } catch (Exception e) {
             context.getSource().sendFailure(
-                Component.literal("§c重新加载配置文件失败: " + e.getMessage())
+                Component.translatable("config.reload_failed", e.getMessage())
             );
         }
         return 1;
@@ -1026,27 +1026,27 @@ public class ExtendedCommands {
             ConfigManager.ensureConfigFiles();
 
             context.getSource().sendSuccess(
-                () -> Component.literal("§a配置文件已生成或验证完成"),
+                () -> Component.translatable("config.generated"),
                 true
             );
 
             // 显示配置文件路径信息
             context.getSource().sendSuccess(
-                () -> Component.literal("§e配置文件位置:"),
+                () -> Component.translatable("config.path_info"),
                 false
             );
             context.getSource().sendSuccess(
-                () -> Component.literal("§e- 区域配置: config/areamonitor/areas.json"),
+                () -> Component.translatable("config.areas_path"),
                 false
             );
             context.getSource().sendSuccess(
-                () -> Component.literal("§e- 黑名单配置: config/areamonitor/blacklist.json"),
+                () -> Component.translatable("config.blacklist_path"),
                 false
             );
 
         } catch (Exception e) {
             context.getSource().sendFailure(
-                Component.literal("§c生成配置文件失败: " + e.getMessage())
+                Component.translatable("config.regenerate_failed", e.getMessage())
             );
         }
         return 1;

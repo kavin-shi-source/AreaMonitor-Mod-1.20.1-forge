@@ -11,20 +11,23 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 /**
- * 性能监控和优化系统
+ * Performance monitoring and optimization system
+ *
+ * Monitors server TPS, memory usage, and automatically adjusts check intervals
+ * to maintain optimal performance while providing area monitoring functionality.
  */
 public class PerformanceMonitor {
-    private static final int MONITOR_INTERVAL = 100; // 每100tick检查一次
+    private static final int MONITOR_INTERVAL = 100; // Check every 100 ticks
     private static final double TPS_THRESHOLD_LOW = 18.0;
     private static final double TPS_THRESHOLD_CRITICAL = 15.0;
-    private static final long MEMORY_THRESHOLD = 85; // 85%内存使用率
-    private static final int MAX_CHECK_INTERVAL = 20; // 最大检查间隔(1秒)
-    private static final int MIN_CHECK_INTERVAL = 1; // 最小检查间隔(50ms)
+    private static final long MEMORY_THRESHOLD = 85; // 85% memory usage threshold
+    private static final int MAX_CHECK_INTERVAL = 20; // Maximum check interval (1 second)
+    private static final int MIN_CHECK_INTERVAL = 1; // Minimum check interval (50ms)
 
     private static int currentCheckInterval = 5; // 当前检查间隔
     private static long lastCheck = 0;
     private static long lastOptimization = 0;
-    private static final long OPTIMIZATION_COOLDOWN = 30000; // 30秒冷却
+    private static final long OPTIMIZATION_COOLDOWN = 30000; // 30 second cooldown
 
     // 性能统计数据
     private static final AtomicLong totalChecks = new AtomicLong(0);

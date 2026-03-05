@@ -171,7 +171,7 @@ public class ItemBlacklistManager {
 
             // 发送拒绝消息
             player.displayClientMessage(
-                Component.literal("§c当前区域内禁止使用该物品").withStyle(ChatFormatting.RED),
+                Component.translatable("command.areamonitor.item.use_denied", BuiltInRegistries.ITEM.getKey(itemStack.getItem()).getPath()).withStyle(ChatFormatting.RED),
                 true
             );
 
@@ -205,7 +205,7 @@ public class ItemBlacklistManager {
 
             // 发送拒绝消息
             player.displayClientMessage(
-                Component.literal("§c当前区域内禁止使用" + getItemName(item)).withStyle(ChatFormatting.RED),
+                Component.translatable("command.areamonitor.item.use_denied", getItemName(item)).withStyle(ChatFormatting.RED),
                 true
             );
 
@@ -218,9 +218,7 @@ public class ItemBlacklistManager {
     }
 
     private static String getItemName(Item item) {
-        if (item == Items.ENDER_PEARL) return "末影珍珠";
-        if (item == Items.CHORUS_FRUIT) return "紫颂果";
-        return item.toString();
+        return BuiltInRegistries.ITEM.getKey(item).getPath();
     }
 
     /**
@@ -238,7 +236,7 @@ public class ItemBlacklistManager {
 
             // 发送拒绝消息
             player.displayClientMessage(
-                Component.literal("§c当前区域内禁止使用传送命令").withStyle(ChatFormatting.RED),
+                Component.translatable("command.areamonitor.teleport.use_denied").withStyle(ChatFormatting.RED),
                 true
             );
 
@@ -275,14 +273,14 @@ public class ItemBlacklistManager {
         Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
         if (currentAreas.isEmpty()) {
             player.displayClientMessage(
-                Component.literal("§a当前不在任何限制区域内"),
+                Component.translatable("command.areamonitor.blacklist.not_in_restricted_area"),
                 true
             );
             return;
         }
 
         player.displayClientMessage(
-            Component.literal("§6=== 当前区域限制 ==="),
+            Component.translatable("command.areamonitor.blacklist.restrictions_header"),
             false
         );
 
@@ -291,20 +289,20 @@ public class ItemBlacklistManager {
             if (area == null) continue;
 
             player.displayClientMessage(
-                Component.literal("§e区域: " + area.getDisplayName()),
+                Component.translatable("command.areamonitor.blacklist.area_info", area.getDisplayName()),
                 false
             );
 
             RestrictionSettings restrictions = area.getRestrictions();
             if (restrictions.isEnableItemBlacklist()) {
                 player.displayClientMessage(
-                    Component.literal("§c- 物品黑名单已启用"),
+                    Component.translatable("command.areamonitor.blacklist.item_blacklist_enabled"),
                     false
                 );
             }
             if (restrictions.isBlockTeleportCommands()) {
                 player.displayClientMessage(
-                    Component.literal("§c- 传送命令已禁用"),
+                    Component.translatable("command.areamonitor.blacklist.teleport_disabled"),
                     false
                 );
             }
@@ -466,7 +464,7 @@ public class ItemBlacklistManager {
                 GSON.toJson(configData, writer);
             }
 
-            AreaMonitorMod.LOGGER.info("黑名单配置已保存 Intellectual Property");
+            AreaMonitorMod.LOGGER.info("黑名单配置已保存");
         } catch (Exception e) {
             AreaMonitorMod.LOGGER.error("保存黑名单配置文件失败", e);
         }

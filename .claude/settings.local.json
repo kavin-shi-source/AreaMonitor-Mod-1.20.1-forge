@@ -3,7 +3,13 @@
     "allow": [
       "Bash(./gradlew clean:*)",
       "Bash(./gradlew compileJava:*)",
-      "Bash(./gradlew build:*)"
+      "Bash(./gradlew build:*)",
+      "Bash(grep:*)",
+      "Bash(./gradlew test:*)",
+      "Bash(ls -la \"F:/java-xuexi/AreaMonitor-Mod-1.20.1-forge\"/*.md)",
+      "Bash(xargs -I {} basename {} .md)",
+      "Bash(python3:*)",
+      "Bash(gradlew compileJava:*)"
     ]
   }
 }

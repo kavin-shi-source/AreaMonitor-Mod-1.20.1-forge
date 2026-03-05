@@ -16,7 +16,6 @@ public class MonitorArea {
     private GameType leaveMode;
     private boolean enabled;
     private List<String> whitelist;
-    private TriggerSettings triggers;
     private RestrictionSettings restrictions;
 
     public MonitorArea(String name) {
@@ -28,7 +27,6 @@ public class MonitorArea {
         this.leaveMode = GameType.SURVIVAL;
         this.enabled = true;
         this.whitelist = new ArrayList<>();
-        this.triggers = new TriggerSettings();
         this.restrictions = new RestrictionSettings();
     }
 
@@ -53,9 +51,6 @@ public class MonitorArea {
 
     public List<String> getWhitelist() { return whitelist; }
     public void setWhitelist(List<String> whitelist) { this.whitelist = whitelist; }
-
-    public TriggerSettings getTriggers() { return triggers; }
-    public void setTriggers(TriggerSettings triggers) { this.triggers = triggers; }
 
     public RestrictionSettings getRestrictions() { return restrictions; }
     public void setRestrictions(RestrictionSettings restrictions) { this.restrictions = restrictions; }
@@ -160,24 +155,6 @@ class PlayerPosition {
     public String getDimension() { return dimension; }
 }
 
-class TriggerSettings {
-    private boolean enableItemTriggers = false;
-    private boolean enablePlayerCountTriggers = false;
-    private List<ItemTrigger> itemTriggers = new ArrayList<>();
-    private List<PlayerCountTrigger> playerCountTriggers = new ArrayList<>();
-
-    public boolean isEnableItemTriggers() { return enableItemTriggers; }
-    public void setEnableItemTriggers(boolean enableItemTriggers) { this.enableItemTriggers = enableItemTriggers; }
-
-    public boolean isEnablePlayerCountTriggers() { return enablePlayerCountTriggers; }
-    public void setEnablePlayerCountTriggers(boolean enablePlayerCountTriggers) { this.enablePlayerCountTriggers = enablePlayerCountTriggers; }
-
-    public List<ItemTrigger> getItemTriggers() { return itemTriggers; }
-    public void setItemTriggers(List<ItemTrigger> itemTriggers) { this.itemTriggers = itemTriggers; }
-
-    public List<PlayerCountTrigger> getPlayerCountTriggers() { return playerCountTriggers; }
-    public void setPlayerCountTriggers(List<PlayerCountTrigger> playerCountTriggers) { this.playerCountTriggers = playerCountTriggers; }
-}
 
 class RestrictionSettings {
     private boolean enableItemBlacklist = true;  // 默认启用物品黑名单

@@ -5,15 +5,11 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.Level;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.particles.ParticleOptions;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 import net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.network.chat.Component;
-import net.minecraftforge.items.ItemHandlerHelper;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -24,6 +20,7 @@ public class AreaVisualizer {
     private static final double PARTICLE_SPACING = 1.0;
     private static final int VISUALIZATION_DURATION = 100; // ticks
     private static final Map<UUID, VisualizationData> activeVisualizations = new ConcurrentHashMap<>();
+
 
     /**
      * 显示区域边界
@@ -198,10 +195,6 @@ public class AreaVisualizer {
             this.playerId = playerId;
         }
 
-        ServerPlayer getPlayer() {
-            // 通过UUID获取玩家 - 这里需要外部传入服务器实例
-            return null; // 暂时返回null，将在updatePersistentVisualizations中处理
-        }
     }
 }
 
@@ -211,7 +204,9 @@ public class AreaVisualizer {
 class SelectionTool {
     private static final Map<UUID, SelectionPoints> playerSelections = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> lastHelpTimes = new ConcurrentHashMap<>();
-    private static final String SELECTION_TOOL_NAME = "§a区域选择工具";
+    private static String getSelectionToolName() {
+        return "§a" + LocalizationManager.translate("area.selection.tool_name") + " Tool";
+    }
 
     /**
      * 检查玩家是否持有选择工具
@@ -225,7 +220,12 @@ class SelectionTool {
         if (name == null) return false;
 
         String nameString = name.getString();
-        return nameString != null && nameString.contains("区域选择");
+        if (nameString == null) return false;
+
+        // 支持多语言的工具名称检查
+        return nameString.contains("Area Selection") ||
+               nameString.contains("区域选择") ||
+               nameString.contains(LocalizationManager.translate("area.selection.tool_name"));
     }
 
     /**
@@ -233,27 +233,23 @@ class SelectionTool {
      */
     public static void giveSelectionTool(ServerPlayer player) {
         ItemStack tool = new ItemStack(Items.WOODEN_AXE); // 使用木斧作为选择工具
-        tool.setHoverName(net.minecraft.network.chat.Component.literal(SELECTION_TOOL_NAME));
+        tool.setHoverName(net.minecraft.network.chat.Component.literal(getSelectionToolName()));
 
         // 尝试添加到主手
         if (player.getInventory().getFreeSlot() != -1) {
             if (player.addItem(tool)) {
                 player.displayClientMessage(
-                    net.minecraft.network.chat.Component.literal("§a已获得区域选择工具"),
+                    net.minecraft.network.chat.Component.translatable("selection.tool.obtained"),
                     false
                 );
                 player.displayClientMessage(
-                    net.minecraft.network.chat.Component.literal("§e使用方法: 手持工具右键点击方块设置选择点"),
-                    false
-                );
-                player.displayClientMessage(
-                    net.minecraft.network.chat.Component.literal("§e选择两个点后使用: §b/areamonitor selection create <名称>"),
+                    net.minecraft.network.chat.Component.translatable("selection.tool.instructions"),
                     false
                 );
             }
         } else {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§c背包已满，无法获得选择工具"),
+                net.minecraft.network.chat.Component.translatable("selection.tool.inventory_full"),
                 true
             );
         }
@@ -270,7 +266,7 @@ class SelectionTool {
         // 检查权限
         if (!player.hasPermissions(2)) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§c你没有权限使用选择工具"),
+                net.minecraft.network.chat.Component.translatable("selection.tool.no_permission"),
                 true
             );
             return;
@@ -287,15 +283,15 @@ class SelectionTool {
 
             // 显示详细信息
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§6=== 区域选择模式 ===").withStyle(net.minecraft.ChatFormatting.BOLD),
+                net.minecraft.network.chat.Component.translatable("selection.mode.header").withStyle(net.minecraft.ChatFormatting.BOLD),
                 false
             );
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§a第一个点已设置: [" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + "]"),
+                net.minecraft.network.chat.Component.translatable("selection.first_point_set", pos.getX(), pos.getY(), pos.getZ()),
                 false
             );
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§e现在请设置对角点（右键点击另一个方块）"),
+                net.minecraft.network.chat.Component.translatable("selection.set_second_point"),
                 false
             );
 
@@ -316,7 +312,7 @@ class SelectionTool {
 
             if (distance > 1000) {
                 player.displayClientMessage(
-                    net.minecraft.network.chat.Component.literal("§c选择的点距离太远（最大1000格），请重新选择"),
+                    net.minecraft.network.chat.Component.translatable("selection.distance_too_far"),
                     true
                 );
                 return;
@@ -326,7 +322,7 @@ class SelectionTool {
             long area = Math.abs((long)(pos.getX() - firstPos.getX()) * (pos.getZ() - firstPos.getZ()));
             if (area > 1000000) {
                 player.displayClientMessage(
-                    net.minecraft.network.chat.Component.literal("§c区域过大（" + area + "方块），最大允许1000x1000"),
+                    net.minecraft.network.chat.Component.literal(LocalizationManager.translate("area.error.too_large", area)),
                     true
                 );
                 return;
@@ -385,62 +381,54 @@ class SelectionTool {
         int height = maxZ - minZ + 1;
 
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§6=== 选择完成！区域信息 ===").withStyle(net.minecraft.ChatFormatting.BOLD),
+            net.minecraft.network.chat.Component.translatable("selection.complete.header").withStyle(net.minecraft.ChatFormatting.BOLD),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§e第一个点: [" + pos1.getX() + ", " + pos1.getY() + ", " + pos1.getZ() + "]"),
+            net.minecraft.network.chat.Component.translatable("selection.point.first", pos1.getX(), pos1.getY(), pos1.getZ()),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§e第二个点: [" + pos2.getX() + ", " + pos2.getY() + ", " + pos2.getZ() + "]"),
+            net.minecraft.network.chat.Component.translatable("selection.point.second", pos2.getX(), pos2.getY(), pos2.getZ()),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§e区域范围: X[" + minX + " ~ " + maxX + "], Z[" + minZ + " ~ " + maxZ + "]"),
+            net.minecraft.network.chat.Component.translatable("selection.area.bounds", minX, maxX, minZ, maxZ),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§e尺寸: " + width + " × " + height + " = §b" + area + " 方块"),
+            net.minecraft.network.chat.Component.translatable("selection.area.size", width, height, area),
             false
         );
 
         // 根据区域大小给出不同提示
         if (area > 1000000) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§c⚠ 警告: 区域过大，可能影响服务器性能"),
+                net.minecraft.network.chat.Component.translatable("selection.warning.area_too_large"),
                 false
             );
         } else if (area > 100000) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§e⚠ 注意: 区域较大，建议适当减小范围"),
+                net.minecraft.network.chat.Component.translatable("selection.note.area_large"),
                 false
             );
         } else {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§a✓ 区域大小合适"),
+                net.minecraft.network.chat.Component.translatable("selection.area.size_ok"),
                 false
             );
         }
 
         // 显示创建命令提示
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§6使用方法:"),
-            false
-        );
-        player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§b/areamonitor selection create <区域名称> §e- 创建区域"),
-            false
-        );
-        player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§b/areamonitor selection cancel §e- 取消选择"),
+            net.minecraft.network.chat.Component.translatable("selection.instructions.create_or_cancel"),
             false
         );
 
         // 显示当前维度信息
         String currentDimension = player.level().dimension().location().toString();
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§e当前维度: §b" + getDimensionDisplayName(currentDimension)),
+            net.minecraft.network.chat.Component.translatable("selection.dimension.current", getDimensionDisplayName(currentDimension)),
             false
         );
     }
@@ -450,9 +438,9 @@ class SelectionTool {
      */
     private static String getDimensionDisplayName(String dimension) {
         return switch (dimension.toLowerCase()) {
-            case "minecraft:overworld" -> "主世界";
-            case "minecraft:the_nether" -> "下界";
-            case "minecraft:the_end" -> "末地";
+            case "minecraft:overworld" -> LocalizationManager.translate("dimension.minecraft.overworld");
+            case "minecraft:the_nether" -> LocalizationManager.translate("dimension.minecraft.the_nether");
+            case "minecraft:the_end" -> LocalizationManager.translate("dimension.minecraft.the_end");
             default -> dimension;
         };
     }
@@ -464,7 +452,7 @@ class SelectionTool {
         SelectionPoints selection = playerSelections.get(player.getUUID());
         if (selection == null || !selection.isComplete()) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§c请先选择两个点"),
+                net.minecraft.network.chat.Component.translatable("selection.error.no_points"),
                 true
             );
             return;
@@ -488,24 +476,24 @@ class SelectionTool {
 
         // 显示成功消息
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§a✓ 区域 '" + areaName + "' 创建成功!").withStyle(net.minecraft.ChatFormatting.BOLD),
+            net.minecraft.network.chat.Component.translatable("selection.area.created", areaName).withStyle(net.minecraft.ChatFormatting.BOLD),
             false
         );
 
         // 显示区域信息
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§e维度: §b" + getDimensionDisplayName(currentDimension)),
+            net.minecraft.network.chat.Component.translatable("selection.area.dimension", getDimensionDisplayName(currentDimension)),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§e范围: §b[" +
+            net.minecraft.network.chat.Component.translatable("selection.area.range",
                 Math.min(pos1.getX(), pos2.getX()) + ", " + Math.max(pos1.getX(), pos2.getX()) + "] × [" +
                 Math.min(pos1.getZ(), pos2.getZ()) + ", " + Math.max(pos1.getZ(), pos2.getZ()) + "]"),
             false
         );
 
         // 引导设置进出模式
-        showModeSetupGuide(player, areaName);
+        showModeSetupGuide(player);
 
         // 保存配置
         ConfigManager.saveAreasConfig();
@@ -521,17 +509,17 @@ class SelectionTool {
     /**
      * 显示模式设置引导
      */
-    private static void showModeSetupGuide(ServerPlayer player, String areaName) {
+    private static void showModeSetupGuide(ServerPlayer player) {
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§6=== 设置区域模式 ===").withStyle(net.minecraft.ChatFormatting.BOLD),
+            net.minecraft.network.chat.Component.translatable("selection.mode.setup_header").withStyle(net.minecraft.ChatFormatting.BOLD),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§e现在请设置玩家进入和离开该区域时的游戏模式:"),
+            net.minecraft.network.chat.Component.translatable("selection.mode.setup_instructions"),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§b可用模式: §asurvival§b, §acreative§b, §adventure§b, §bspectator"),
+            net.minecraft.network.chat.Component.translatable("selection.mode.available_modes"),
             false
         );
         player.displayClientMessage(
@@ -539,39 +527,7 @@ class SelectionTool {
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§6设置进入模式 (玩家进入区域时的模式):"),
-            false
-        );
-        player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§b/areamonitor area setEnterMode " + areaName + " <模式>"),
-            false
-        );
-        player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§e例如: §b/areamonitor area setEnterMode " + areaName + " creative"),
-            false
-        );
-        player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal(" "),
-            false
-        );
-        player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§6设置离开模式 (玩家离开区域时的模式):"),
-            false
-        );
-        player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§b/areamonitor area setLeaveMode " + areaName + " <模式>"),
-            false
-        );
-        player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§e例如: §b/areamonitor area setLeaveMode " + areaName + " survival"),
-            false
-        );
-        player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal(" "),
-            false
-        );
-        player.displayClientMessage(
-            net.minecraft.network.chat.Component.literal("§a💡 小贴士: 创意区域通常设置为进入创造模式，离开生存模式"),
+            net.minecraft.network.chat.Component.translatable("selection.mode.setup_complete"),
             false
         );
     }
@@ -583,7 +539,7 @@ class SelectionTool {
         SelectionPoints selection = playerSelections.remove(player.getUUID());
         if (selection != null) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§e选择已取消"),
+                net.minecraft.network.chat.Component.translatable("selection.cancelled"),
                 true
             );
         }
@@ -610,7 +566,7 @@ class SelectionTool {
         SelectionPoints selection = playerSelections.get(player.getUUID());
         if (selection == null) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§e当前没有进行中的选择"),
+                net.minecraft.network.chat.Component.translatable("selection.no_active_selection"),
                 true
             );
             return;
@@ -619,8 +575,8 @@ class SelectionTool {
         if (selection.hasFirstPoint()) {
             BlockPos pos1 = selection.getFirstPoint();
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal(String.format("§e第一个点: [%d, %d, %d]",
-                    pos1.getX(), pos1.getY(), pos1.getZ())),
+                net.minecraft.network.chat.Component.translatable("selection.current.first_point",
+                    pos1.getX(), pos1.getY(), pos1.getZ()),
                 false
             );
         }
@@ -628,13 +584,13 @@ class SelectionTool {
         if (selection.hasSecondPoint()) {
             BlockPos pos2 = selection.getSecondPoint();
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal(String.format("§e第二个点: [%d, %d, %d]",
-                    pos2.getX(), pos2.getY(), pos2.getZ())),
+                net.minecraft.network.chat.Component.translatable("selection.current.second_point",
+                    pos2.getX(), pos2.getY(), pos2.getZ()),
                 false
             );
         } else {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal("§e请设置第二个点"),
+                net.minecraft.network.chat.Component.translatable("selection.need_second_point"),
                 false
             );
         }
