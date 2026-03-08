@@ -1,10 +1,10 @@
 package com.kavinshi.areamonitor;
 
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
+
+import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
-import java.lang.management.GarbageCollectorMXBean;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;

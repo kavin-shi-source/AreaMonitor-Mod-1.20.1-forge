@@ -1,19 +1,18 @@
 package com.kavinshi.areamonitor;
 
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
-import net.minecraft.network.chat.Component;
-import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
-import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.registries.ForgeRegistries;
-import java.util.*;
-import java.util.stream.Collectors;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 高级触发系统，处理各种触发条件和动作
