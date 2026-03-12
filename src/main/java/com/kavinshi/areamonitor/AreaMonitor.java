@@ -11,26 +11,25 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * 区域监控核心类，负责监控玩家位置并自动切换游戏模式
- * 主要功能：
- * - 定期检查玩家在目标维度中的位置
- * - 检测玩家进入/离开监控区域
- * - 延迟切换游戏模式并显示提示
- * - 管理白名单玩家
+ * Area monitoring core class responsible for monitoring player positions
+ * and automatically switching game modes.
  */
 @Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class AreaMonitor {
     private static final Map<UUID, PlayerState> playerStates = new ConcurrentHashMap<>();
-    private static MinecraftServer minecraftServer;
-    private static int tickCounter = 0;
+    private static volatile MinecraftServer minecraftServer;
+    private static final AtomicInteger tickCounter = new AtomicInteger(0);
     private static final int TITLE_FADE_IN_TICKS = 10;
     private static final int TITLE_STAY_TICKS = 30;
     private static final int TITLE_FADE_OUT_TICKS = 10;
@@ -58,7 +57,7 @@ public class AreaMonitor {
         return minecraftServer;
     }
 
-    private static final List<PendingAction> pendingActions = Collections.synchronizedList(new ArrayList<>());
+    private static final Queue<PendingAction> pendingActions = new ConcurrentLinkedQueue<>();
 
     @SubscribeEvent
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
@@ -66,33 +65,16 @@ public class AreaMonitor {
     }
 
     @SubscribeEvent
-    public static void onServerStarted(ServerStartedEvent event) {
-        // 服务器启动完成后，确保配置文件正确初始化
-        AreaMonitorMod.LOGGER.info("Server started, initializing configuration files...");
-
-        // 确保配置目录存在
-        try {
-            File configDir = new File("config/areamonitor");
-            if (!configDir.exists()) {
-                configDir.mkdirs();
-                AreaMonitorMod.LOGGER.info("Created configuration directory: {}", configDir.getAbsolutePath());
-            }
-        } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("Error creating configuration directory", e);
-        }
-
-        // 加载或创建配置文件
-        ConfigManager.loadAreasConfig();
-        ItemBlacklistManager.loadBlacklistConfig();
-
-        // 调试信息：显示加载的区域
-        var areas = AreaManager.getInstance().getAllAreas();
-        AreaMonitorMod.LOGGER.info("Loaded {} areas:", areas.size());
-        for (var area : areas) {
-            AreaMonitorMod.LOGGER.info("  - {} ({}): {}", area.getName(), area.getDimension(), area.getDisplayName());
-        }
-
-        AreaMonitorMod.LOGGER.info("Configuration files initialization completed");
+    public static void onServerStopping(ServerStoppingEvent event) {
+        AreaMonitorMod.LOGGER.info("Server stopping, cleaning up resources...");
+        
+        pendingActions.clear();
+        playerStates.clear();
+        tickCounter.set(0);
+        
+        minecraftServer = null;
+        
+        AreaMonitorMod.LOGGER.info("AreaMonitor cleanup completed");
     }
 
     @SubscribeEvent
@@ -101,15 +83,13 @@ public class AreaMonitor {
 
         processPendingActions();
 
-        // 性能监控
         PerformanceMonitor.onServerTick(minecraftServer);
 
-        // 更新区域可视化
         AreaVisualizer.updatePersistentVisualizations();
 
-        tickCounter++;
-        if (tickCounter < PerformanceMonitor.getCurrentCheckInterval()) return;
-        tickCounter = 0;
+        int currentTick = tickCounter.incrementAndGet();
+        if (currentTick < PerformanceMonitor.getCurrentCheckInterval()) return;
+        tickCounter.set(0);
 
         if (!ConfigManager.CONFIG.isEnabled.get()) {
             AreaMonitorMod.LOGGER.debug("AreaMonitor: Mod is disabled, skipping player checks");
@@ -120,7 +100,6 @@ public class AreaMonitor {
             return;
         }
 
-        // 使用新的多区域系统检查玩家
         var players = minecraftServer.getPlayerList().getPlayers();
         if (ConfigManager.CONFIG.debugMode.get()) {
             AreaMonitorMod.LOGGER.debug("AreaMonitor: Checking {} players", players.size());
@@ -140,7 +119,7 @@ public class AreaMonitor {
                 try {
                     action.action.run();
                 } catch (Exception e) {
-                    AreaMonitorMod.LOGGER.error("执行延迟动作时出错", e);
+                    AreaMonitorMod.LOGGER.error("Error executing pending action for player {}", action.playerId, e);
                 }
                 iterator.remove();
             }
@@ -149,45 +128,51 @@ public class AreaMonitor {
 
     /**
      * 添加待处理的游戏模式切换（进入区域）
+     * 注意：使用 playerId 而非 player 引用，避免玩家下线后访问无效对象
      */
     public static void addPendingGameModeChange(ServerPlayer player, GameType gameMode) {
         UUID playerId = player.getUUID();
+        GameType targetMode = gameMode;
+        
         pendingActions.add(new PendingAction(playerId, () -> {
-            // 检查玩家是否仍然存活且在线
-            if (player.isAlive() && minecraftServer != null) {
-                // 获取玩家当前位置并检查区域
-                Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
+            if (minecraftServer == null) return;
+            
+            ServerPlayer currentPlayer = minecraftServer.getPlayerList().getPlayer(playerId);
+            if (currentPlayer == null || !currentPlayer.isAlive()) return;
+            
+            Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(currentPlayer);
+            
+            if (!currentAreas.isEmpty()) {
+                if (ConfigManager.CONFIG.debugMode.get()) {
+                    AreaMonitorMod.LOGGER.debug("AreaMonitor: Switching game mode for player {} to {}", 
+                        currentPlayer.getName().getString(), targetMode);
+                }
+                currentPlayer.setGameMode(targetMode);
 
-                // 只有在玩家仍在区域内时才切换模式
-                if (!currentAreas.isEmpty()) {
-                    if (ConfigManager.CONFIG.debugMode.get()) {
-                        AreaMonitorMod.LOGGER.debug("AreaMonitor: Switching game mode for player {} to {}", player.getName().getString(), gameMode);
-                    }
-                    player.setGameMode(gameMode);
+                boolean showMessages = ConfigManager.CONFIG.showMessages.get();
+                if (ConfigManager.CONFIG.debugMode.get()) {
+                    AreaMonitorMod.LOGGER.debug("AreaMonitor: showMessages config = {}", showMessages);
+                }
 
-                    // 调试消息发送逻辑
-                    boolean showMessages = ConfigManager.CONFIG.showMessages.get();
-                    if (ConfigManager.CONFIG.debugMode.get()) {
-                        AreaMonitorMod.LOGGER.debug("AreaMonitor: showMessages config = {}", showMessages);
-                    }
+                if (showMessages) {
+                    try {
+                        String finalMessage = LocalizationManager.translate("area.gamemode_changed", 
+                            LocalizationManager.getGameModeDisplayName(targetMode));
 
-                    if (showMessages) {
-                        try {
-                            String finalMessage = LocalizationManager.translate("area.gamemode_changed", LocalizationManager.getGameModeDisplayName(gameMode));
-
-                            if (ConfigManager.CONFIG.debugMode.get()) {
-                                AreaMonitorMod.LOGGER.debug("AreaMonitor: Sending message to player {}: {}", player.getName().getString(), finalMessage);
-                            }
-                            player.displayClientMessage(
-                                Component.literal(finalMessage),
-                                true
-                            );
-                            if (ConfigManager.CONFIG.debugMode.get()) {
-                                AreaMonitorMod.LOGGER.debug("AreaMonitor: Message sent successfully");
-                            }
-                        } catch (Exception e) {
-                            AreaMonitorMod.LOGGER.error("AreaMonitor: Error sending message to player {}", player.getName().getString(), e);
+                        if (ConfigManager.CONFIG.debugMode.get()) {
+                            AreaMonitorMod.LOGGER.debug("AreaMonitor: Sending message to player {}: {}", 
+                                currentPlayer.getName().getString(), finalMessage);
                         }
+                        currentPlayer.displayClientMessage(
+                            Component.literal(finalMessage),
+                            true
+                        );
+                        if (ConfigManager.CONFIG.debugMode.get()) {
+                            AreaMonitorMod.LOGGER.debug("AreaMonitor: Message sent successfully");
+                        }
+                    } catch (Exception e) {
+                        AreaMonitorMod.LOGGER.error("AreaMonitor: Error sending message to player {}", 
+                            currentPlayer.getName().getString(), e);
                     }
                 }
             }
@@ -196,24 +181,30 @@ public class AreaMonitor {
 
     /**
      * 添加待处理的游戏模式切换（离开区域）
+     * 注意：使用 playerId 而非 player 引用，避免玩家下线后访问无效对象
      */
     public static void addPendingGameModeChangeOnLeave(ServerPlayer player, GameType gameMode) {
         UUID playerId = player.getUUID();
+        GameType targetMode = gameMode;
+        
         pendingActions.add(new PendingAction(playerId, () -> {
-            // 检查玩家是否仍然存活且在线
-            if (player.isAlive() && minecraftServer != null) {
-                // 离开区域的模式切换不需要验证位置
-                player.setGameMode(gameMode);
-                if (ConfigManager.CONFIG.showMessages.get()) {
-                    try {
-                        String finalMessage = LocalizationManager.translate("area.gamemode_changed", LocalizationManager.getGameModeDisplayName(gameMode));
-                        player.displayClientMessage(
-                            Component.literal(finalMessage),
-                            true
-                        );
-                    } catch (Exception e) {
-                        AreaMonitorMod.LOGGER.error("AreaMonitor: Error sending leave message to player {}", player.getName().getString(), e);
-                    }
+            if (minecraftServer == null) return;
+            
+            ServerPlayer currentPlayer = minecraftServer.getPlayerList().getPlayer(playerId);
+            if (currentPlayer == null) return;
+            
+            currentPlayer.setGameMode(targetMode);
+            if (ConfigManager.CONFIG.showMessages.get()) {
+                try {
+                    String finalMessage = LocalizationManager.translate("area.gamemode_changed", 
+                        LocalizationManager.getGameModeDisplayName(targetMode));
+                    currentPlayer.displayClientMessage(
+                        Component.literal(finalMessage),
+                        true
+                    );
+                } catch (Exception e) {
+                    AreaMonitorMod.LOGGER.error("AreaMonitor: Error sending leave message to player {}", 
+                        currentPlayer.getName().getString(), e);
                 }
             }
         }, System.currentTimeMillis() + GAME_MODE_SWITCH_DELAY_MS));
@@ -231,8 +222,8 @@ public class AreaMonitor {
                 player.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));
             }
         } catch (Exception e) {
-            // 静默处理标题发送错误，避免影响游戏体验
-            // 常见原因：玩家断开连接、网络问题等
+            AreaMonitorMod.LOGGER.debug("Failed to show title to player {}: {}", 
+                player.getName().getString(), e.getMessage());
         }
     }
 
@@ -242,10 +233,12 @@ public class AreaMonitor {
             UUID playerId = player.getUUID();
             playerStates.remove(playerId);
             AreaManager.getInstance().clearPlayerData(playerId);
-
-            synchronized (pendingActions) {
-                pendingActions.removeIf(action -> action.playerId.equals(playerId));
-            }
+            
+            pendingActions.removeIf(action -> action.playerId.equals(playerId));
+            
+            // Clean up visualization data
+            AreaVisualizer.stopPersistentVisualization(player);
+            SelectionTool.cleanupPlayerData(playerId);
         }
     }
 }

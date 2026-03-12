@@ -1,5 +1,7 @@
 package com.kavinshi.areamonitor;
 
+import com.kavinshi.areamonitor.util.GameModeUtils;
+import com.kavinshi.areamonitor.util.MessageUtils;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -18,27 +20,73 @@ import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 扩展命令系统，支持多区域管理、可视化编辑等功能
+ * Extended command system supporting multi-area management, visual editing, and more.
  */
 @Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ExtendedCommands {
-
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
 
-        // 区域管理命令
+        // Register all commands under /areamonitor
         dispatcher.register(Commands.literal("areamonitor")
             .requires(source -> source.hasPermission(2))
 
-            // 区域管理子命令
+            // Toggle monitoring (from ModCommands)
+            .then(Commands.literal("toggle")
+                .executes(ExtendedCommands::toggleMonitor)
+            )
+
+            // Whitelist management (from ModCommands)
+            .then(Commands.literal("whitelist")
+                .then(Commands.literal("add")
+                    .then(Commands.argument("player", StringArgumentType.string())
+                        .executes(context -> addToWhitelist(
+                            StringArgumentType.getString(context, "player"),
+                            context
+                        )))
+                )
+                .then(Commands.literal("remove")
+                    .then(Commands.argument("player", StringArgumentType.string())
+                        .executes(context -> removeFromWhitelist(
+                            StringArgumentType.getString(context, "player"),
+                            context
+                        )))
+                )
+                .then(Commands.literal("list")
+                    .executes(ExtendedCommands::listWhitelist)
+                )
+                .then(Commands.literal("clear")
+                    .executes(ExtendedCommands::clearWhitelist)
+                )
+            )
+
+            // Help command (from ModCommands)
+            .then(Commands.literal("help")
+                .executes(ExtendedCommands::showHelp)
+            )
+
+            // Language settings (from ModCommands)
+            .then(Commands.literal("language")
+                .then(Commands.literal("en")
+                    .executes(ExtendedCommands::setLanguageEnglish)
+                )
+                .then(Commands.literal("zh")
+                    .executes(ExtendedCommands::setLanguageChinese)
+                )
+                .executes(ExtendedCommands::showLanguageStatus)
+            )
+
+            // Area management commands
             .then(Commands.literal("area")
                 .then(Commands.literal("create")
                     .then(Commands.argument("name", StringArgumentType.string())
@@ -267,9 +315,7 @@ public class ExtendedCommands {
     // 区域创建命令
     private static int createArea(String areaName, CommandContext<CommandSourceStack> context) {
         if (AreaManager.getInstance().getArea(areaName) != null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.exists", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.exists", areaName);
             return 0;
         }
 
@@ -277,10 +323,7 @@ public class ExtendedCommands {
         AreaManager.getInstance().addArea(area);
         ConfigManager.saveAreasConfig();
 
-        context.getSource().sendSuccess(
-            () -> Component.translatable("command.areamonitor.area.created", areaName),
-            true
-        );
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.area.created", true, areaName);
         return 1;
     }
 
@@ -288,19 +331,14 @@ public class ExtendedCommands {
     private static int deleteArea(String areaName, CommandContext<CommandSourceStack> context) {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.not_found", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
             return 0;
         }
 
         AreaManager.getInstance().removeArea(areaName);
         ConfigManager.saveAreasConfig();
 
-        context.getSource().sendSuccess(
-            () -> Component.translatable("command.areamonitor.area.deleted", areaName),
-            true
-        );
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.area.deleted", true, areaName);
         return 1;
     }
 
@@ -309,17 +347,11 @@ public class ExtendedCommands {
         Set<String> areaNames = AreaManager.getInstance().getAreaNames();
 
         if (areaNames.isEmpty()) {
-            context.getSource().sendSuccess(
-                () -> Component.translatable("command.areamonitor.area.list.empty"),
-                false
-            );
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.area.list.empty", false);
             return 1;
         }
 
-        context.getSource().sendSuccess(
-            () -> Component.translatable("command.areamonitor.area.list.header"),
-            false
-        );
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.area.list.header", false);
 
         int index = 1;
         for (String areaName : areaNames) {
@@ -339,46 +371,26 @@ public class ExtendedCommands {
 
             final int currentIndex = index++;
             final String finalCoordinates = coordinates;
+            final String finalStatus = status;
 
-            // 显示区域基本信息
             context.getSource().sendSuccess(
-                () -> Component.literal(String.format("§e%d. §f%s §7(%s)",
-                    currentIndex, area.getDisplayName(), status)),
+                () -> MessageUtils.smartComponent(context.getSource(), "area.status", 
+                    String.format("§e%d. §f%s", currentIndex, area.getDisplayName()) + " " + finalStatus),
                 false
             );
 
-            // 显示详细信息
-            context.getSource().sendSuccess(
-                () -> Component.translatable("area.coordinates_format", finalCoordinates),
-                false
-            );
+            MessageUtils.sendSuccess(context.getSource(), "area.coordinates_format", false, finalCoordinates);
+            MessageUtils.sendSuccess(context.getSource(), "area.dimension", false, area.getDimension());
+            MessageUtils.sendSuccess(context.getSource(), "area.enter_mode", false, area.getEnterMode().getName());
+            MessageUtils.sendSuccess(context.getSource(), "area.leave_mode", false, area.getLeaveMode().getName());
 
-            context.getSource().sendSuccess(
-                () -> Component.translatable("area.dimension", area.getDimension()),
-                false
-            );
-
-            context.getSource().sendSuccess(
-                () -> Component.translatable("area.enter_mode", area.getEnterMode().getName()),
-                false
-            );
-
-            context.getSource().sendSuccess(
-                () -> Component.translatable("area.leave_mode", area.getLeaveMode().getName()),
-                false
-            );
-
-            // 分隔线
             context.getSource().sendSuccess(
                 () -> Component.literal("   §7────────────────"),
                 false
             );
         }
 
-        context.getSource().sendSuccess(
-            () -> Component.translatable("area.count", areaNames.size()),
-            false
-        );
+        MessageUtils.sendSuccess(context.getSource(), "area.count", false, areaNames.size());
 
         return 1;
     }
@@ -387,9 +399,7 @@ public class ExtendedCommands {
     private static int toggleArea(String areaName, CommandContext<CommandSourceStack> context) {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.not_found", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
             return 0;
         }
 
@@ -398,12 +408,7 @@ public class ExtendedCommands {
         ConfigManager.saveAreasConfig();
 
         String newState = !currentState ? "area.enabled" : "area.disabled";
-        String message = String.format("§6区域 '%s' %s", area.getDisplayName(), newState);
-
-        context.getSource().sendSuccess(
-            () -> Component.translatable("command.areamonitor.area.toggled", area.getDisplayName(), newState),
-            true
-        );
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.area.toggled", true, area.getDisplayName(), newState);
 
         return 1;
     }
@@ -412,45 +417,31 @@ public class ExtendedCommands {
     private static int showAreaInfo(String areaName, CommandContext<CommandSourceStack> context) {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.not_found", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
             return 0;
         }
 
-        context.getSource().sendSuccess(
-            () -> Component.translatable("command.areamonitor.area.info.header", area.getDisplayName()),
-            false
-        );
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.area.info.header", false, area.getDisplayName());
 
-        String status = area.isEnabled() ? "area.enabled" : "area.disabled";
-        context.getSource().sendSuccess(
-            () -> Component.translatable("area.status", status),
-            false
-        );
-
-        context.getSource().sendSuccess(
-            () -> Component.translatable("area.dimension", area.getDimension()),
-            false
-        );
+        String statusKey = area.isEnabled() ? "area.enabled" : "area.disabled";
+        String status = LocalizationManager.translate(statusKey);
+        MessageUtils.sendSuccess(context.getSource(), "area.status", false, status);
+        MessageUtils.sendSuccess(context.getSource(), "area.dimension", false, area.getDimension());
 
         if (area.getBounds() instanceof MonitorArea.RectangleBounds rect) {
-            context.getSource().sendSuccess(
-                () -> Component.translatable("area.coordinates_format",
-                    rect.getMinX(), rect.getMaxX(), rect.getMinZ(), rect.getMaxZ()),
-                false
-            );
+            String coords = String.format("X[%d ~ %d], Z[%d ~ %d]",
+                rect.getMinX(), rect.getMaxX(), rect.getMinZ(), rect.getMaxZ());
+            MessageUtils.sendSuccess(context.getSource(), "area.coordinates_format", false, coords);
+        } else if (area.getBounds() instanceof MonitorArea.CircleBounds circle) {
+            String coords = String.format("Center(%d, %d), Radius %d",
+                circle.getCenterX(), circle.getCenterZ(), circle.getRadius());
+            MessageUtils.sendSuccess(context.getSource(), "area.coordinates_format", false, coords);
         }
 
-        context.getSource().sendSuccess(
-            () -> Component.translatable("area.enter_mode", area.getEnterMode().getName()),
-            false
-        );
-
-        context.getSource().sendSuccess(
-            () -> Component.translatable("area.leave_mode", area.getLeaveMode().getName()),
-            false
-        );
+        String enterMode = LocalizationManager.getGameModeDisplayName(area.getEnterMode());
+        String leaveMode = LocalizationManager.getGameModeDisplayName(area.getLeaveMode());
+        MessageUtils.sendSuccess(context.getSource(), "area.enter_mode", false, enterMode);
+        MessageUtils.sendSuccess(context.getSource(), "area.leave_mode", false, leaveMode);
 
         return 1;
     }
@@ -458,9 +449,7 @@ public class ExtendedCommands {
     // 给予可视化工具
     private static int giveVisualTool(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
-            context.getSource().sendFailure(
-                Component.translatable("player.only_command")
-            );
+            MessageUtils.sendFailure(context.getSource(), "player.only_command");
             return 0;
         }
 
@@ -471,42 +460,30 @@ public class ExtendedCommands {
     // 显示区域可视化
     private static int showAreaVisual(String areaName, CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
-            context.getSource().sendFailure(
-                Component.translatable("player.only_command")
-            );
+            MessageUtils.sendFailure(context.getSource(), "player.only_command");
             return 0;
         }
 
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.not_found", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
             return 0;
         }
 
         AreaVisualizer.startPersistentVisualization(player, area);
-        context.getSource().sendSuccess(
-            () -> Component.translatable("area.start_showing_boundary", area.getDisplayName()),
-            true
-        );
+        MessageUtils.sendSuccess(context.getSource(), "area.start_showing_boundary", true, area.getDisplayName());
         return 1;
     }
 
     // 隐藏区域可视化
     private static int hideAreaVisual(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
-            context.getSource().sendFailure(
-                Component.translatable("player.only_command")
-            );
+            MessageUtils.sendFailure(context.getSource(), "player.only_command");
             return 0;
         }
 
         AreaVisualizer.stopPersistentVisualization(player);
-        context.getSource().sendSuccess(
-            () -> Component.translatable("area.stop_showing_boundary"),
-            true
-        );
+        MessageUtils.sendSuccess(context.getSource(), "area.stop_showing_boundary", true);
         return 1;
     }
 
@@ -514,14 +491,13 @@ public class ExtendedCommands {
     private static int showPerformance(CommandContext<CommandSourceStack> context) {
         Map<String, String> stats = PerformanceMonitor.getPerformanceStats();
 
-        context.getSource().sendSuccess(
-            () -> Component.translatable("performance.header"),
-            false
-        );
+        MessageUtils.sendSuccess(context.getSource(), "performance.header", false);
 
         for (Map.Entry<String, String> entry : stats.entrySet()) {
+            String key = "performance." + entry.getKey();
+            String label = LocalizationManager.translate(key);
             context.getSource().sendSuccess(
-                () -> Component.literal("§e" + entry.getKey() + ": §f" + entry.getValue()),
+                () -> Component.literal(label + ": §f" + entry.getValue()),
                 false
             );
         }
@@ -532,9 +508,7 @@ public class ExtendedCommands {
     // 黑名单信息显示
     private static int showBlacklistInfo(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
-            context.getSource().sendFailure(
-                Component.translatable("player.only_command")
-            );
+            MessageUtils.sendFailure(context.getSource(), "player.only_command");
             return 0;
         }
 
@@ -546,41 +520,29 @@ public class ExtendedCommands {
     private static int addItemToAreaBlacklist(String areaName, String itemName, CommandContext<CommandSourceStack> context) {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.not_found", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
             return 0;
         }
 
-        // 解析物品
         Item item = parseItem(itemName);
         if (item == null) {
-            context.getSource().sendFailure(
-                Component.translatable("blacklist.invalid_item", itemName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "blacklist.invalid_item", itemName);
             return 0;
         }
 
-        // 获取或创建区域黑名单
         Set<Item> areaBlacklist = ItemBlacklistManager.getAreaBlacklist(areaName);
         if (areaBlacklist.isEmpty()) {
             areaBlacklist = new HashSet<>();
         }
 
         if (areaBlacklist.contains(item)) {
-            context.getSource().sendSuccess(
-                () -> Component.translatable("blacklist.item_already_blacklisted", getItemDisplayName(item)),
-                true
-            );
+            MessageUtils.sendSuccess(context.getSource(), "blacklist.item_already_blacklisted", true, getItemDisplayName(item));
         } else {
             areaBlacklist.add(item);
             ItemBlacklistManager.addAreaBlacklist(areaName, areaBlacklist);
             ItemBlacklistManager.saveBlacklistConfig();
 
-            context.getSource().sendSuccess(
-                () -> Component.translatable("blacklist.item_added", getItemDisplayName(item), areaName),
-                true
-            );
+            MessageUtils.sendSuccess(context.getSource(), "blacklist.item_added", true, getItemDisplayName(item), areaName);
         }
         return 1;
     }
@@ -589,17 +551,13 @@ public class ExtendedCommands {
     private static int removeItemFromAreaBlacklist(String areaName, String itemName, CommandContext<CommandSourceStack> context) {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.not_found", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
             return 0;
         }
 
         Item item = parseItem(itemName);
         if (item == null) {
-            context.getSource().sendFailure(
-                Component.translatable("blacklist.invalid_item", itemName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "blacklist.invalid_item", itemName);
             return 0;
         }
 
@@ -612,15 +570,9 @@ public class ExtendedCommands {
             }
             ItemBlacklistManager.saveBlacklistConfig();
 
-            context.getSource().sendSuccess(
-                () -> Component.translatable("blacklist.item_removed", getItemDisplayName(item), areaName),
-                true
-            );
+            MessageUtils.sendSuccess(context.getSource(), "blacklist.item_removed", true, getItemDisplayName(item), areaName);
         } else {
-            context.getSource().sendSuccess(
-                () -> Component.translatable("blacklist.item_not_found", getItemDisplayName(item)),
-                true
-            );
+            MessageUtils.sendSuccess(context.getSource(), "blacklist.item_not_found", true, getItemDisplayName(item));
         }
         return 1;
     }
@@ -629,24 +581,16 @@ public class ExtendedCommands {
     private static int listAreaBlacklist(String areaName, CommandContext<CommandSourceStack> context) {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.not_found", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
             return 0;
         }
 
         Set<Item> areaBlacklist = ItemBlacklistManager.getAreaBlacklist(areaName);
 
-        context.getSource().sendSuccess(
-            () -> Component.translatable("blacklist.area_header", areaName),
-            false
-        );
+        MessageUtils.sendSuccess(context.getSource(), "blacklist.area_header", false, areaName);
 
         if (areaBlacklist.isEmpty()) {
-            context.getSource().sendSuccess(
-                () -> Component.translatable("blacklist.area_empty"),
-                false
-            );
+            MessageUtils.sendSuccess(context.getSource(), "blacklist.area_empty", false);
         } else {
             for (Item item : areaBlacklist) {
                 context.getSource().sendSuccess(
@@ -656,13 +600,9 @@ public class ExtendedCommands {
             }
         }
 
-        // 显示全局黑名单
         Set<Item> globalBlacklist = ItemBlacklistManager.getGlobalBlacklist();
         if (!globalBlacklist.isEmpty()) {
-            context.getSource().sendSuccess(
-                () -> Component.translatable("blacklist.global_items"),
-                false
-            );
+            MessageUtils.sendSuccess(context.getSource(), "blacklist.global_items", false);
             for (Item item : globalBlacklist) {
                 context.getSource().sendSuccess(
                     () -> Component.literal("§7- " + getItemDisplayName(item)),
@@ -678,9 +618,7 @@ public class ExtendedCommands {
     private static int toggleAreaBlacklist(String areaName, CommandContext<CommandSourceStack> context) {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.not_found", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
             return 0;
         }
 
@@ -689,10 +627,7 @@ public class ExtendedCommands {
         ConfigManager.saveAreasConfig();
 
         String newState = !currentState ? "area.enabled" : "area.disabled";
-        context.getSource().sendSuccess(
-            () -> Component.translatable("blacklist.area_toggle", areaName, newState),
-            true
-        );
+        MessageUtils.sendSuccess(context.getSource(), "blacklist.area_toggle", true, areaName, newState);
 
         return 1;
     }
@@ -701,14 +636,9 @@ public class ExtendedCommands {
     private static int reloadBlacklistConfig(CommandContext<CommandSourceStack> context) {
         try {
             ItemBlacklistManager.loadBlacklistConfig();
-            context.getSource().sendSuccess(
-                () -> Component.translatable("blacklist.reloaded"),
-                true
-            );
+            MessageUtils.sendSuccess(context.getSource(), "blacklist.reloaded", true);
         } catch (Exception e) {
-            context.getSource().sendFailure(
-                Component.translatable("blacklist.reload_failed", e.getMessage())
-            );
+            MessageUtils.sendFailure(context.getSource(), "blacklist.reload_failed", e.getMessage());
         }
         return 1;
     }
@@ -728,6 +658,7 @@ public class ExtendedCommands {
             }
             return item;
         } catch (Exception e) {
+            AreaMonitorMod.LOGGER.debug("Failed to parse item name: {}", itemName);
             return null;
         }
     }
@@ -771,20 +702,14 @@ public class ExtendedCommands {
 
     // 从黑名单移除物品
     private static int removeFromBlacklist(String itemName, CommandContext<CommandSourceStack> context) {
-        // 这里需要解析物品名称并从黑名单移除
-        context.getSource().sendSuccess(
-            () -> Component.translatable("feature.development"),
-            true
-        );
+        MessageUtils.sendSuccess(context.getSource(), "feature.development", true);
         return 1;
     }
 
     // 从选择创建区域
     private static int createAreaFromSelection(String areaName, CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
-            context.getSource().sendFailure(
-                Component.translatable("player.only_command")
-            );
+            MessageUtils.sendFailure(context.getSource(), "player.only_command");
             return 0;
         }
 
@@ -795,9 +720,7 @@ public class ExtendedCommands {
     // 取消选择
     private static int cancelSelection(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
-            context.getSource().sendFailure(
-                Component.translatable("player.only_command")
-            );
+            MessageUtils.sendFailure(context.getSource(), "player.only_command");
             return 0;
         }
 
@@ -808,9 +731,7 @@ public class ExtendedCommands {
     // 显示选择信息
     private static int showSelectionInfo(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
-            context.getSource().sendFailure(
-                Component.translatable("player.only_command")
-            );
+            MessageUtils.sendFailure(context.getSource(), "player.only_command");
             return 0;
         }
 
@@ -821,9 +742,7 @@ public class ExtendedCommands {
     // 显示教程
     private static int showTutorial(CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
-            context.getSource().sendFailure(
-                Component.translatable("player.only_command")
-            );
+            MessageUtils.sendFailure(context.getSource(), "player.only_command");
             return 0;
         }
 
@@ -833,130 +752,58 @@ public class ExtendedCommands {
 
     private static void showTutorialMessage(ServerPlayer player) {
         player.displayClientMessage(
-            Component.translatable("selection.tutorial.header").withStyle(net.minecraft.ChatFormatting.BOLD),
+            MessageUtils.smartComponent(player, "selection.tutorial.header").withStyle(net.minecraft.ChatFormatting.BOLD),
             false
         );
 
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step1"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step1.command"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step1.description"),
-            false
-        );
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step1"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step1.command"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step1.description"), false);
 
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step2"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step2.action"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step2.feedback"),
-            false
-        );
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step2"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step2.action"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step2.feedback"), false);
 
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step3"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step3.action"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step3.feedback"),
-            false
-        );
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step3"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step3.action"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step3.feedback"), false);
 
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step4"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step4.command"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step4.example"),
-            false
-        );
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step4"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step4.command"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step4.example"), false);
 
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.step5"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.set_enter_mode"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.set_leave_mode"),
-            false
-        );
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.step5"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.set_enter_mode"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.set_leave_mode"), false);
 
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.other_commands"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.view_area"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.show_boundary"),
-            false
-        );
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.cancel_selection"),
-            false
-        );
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.other_commands"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.view_area"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.show_boundary"), false);
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.cancel_selection"), false);
 
-        player.displayClientMessage(
-            Component.translatable("selection.tutorial.end"),
-            false
-        );
+        player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.end"), false);
     }
 
     // 设置区域进入模式
     private static int setAreaEnterMode(String areaName, String mode, CommandContext<CommandSourceStack> context) {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.not_found", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
             return 0;
         }
 
         String modeLower = mode.toLowerCase();
         if (!ModConstants.GAME_MODE_SUGGESTIONS.contains(modeLower)) {
-            context.getSource().sendFailure(
-                Component.translatable("area.invalid_gamemode", mode, String.join(", ", ModConstants.GAME_MODE_SUGGESTIONS))
-            );
+            MessageUtils.sendFailure(context.getSource(), "area.invalid_gamemode", mode, String.join(", ", ModConstants.GAME_MODE_SUGGESTIONS));
             return 0;
         }
 
-        GameType gameMode = switch (modeLower) {
-            case "creative" -> GameType.CREATIVE;
-            case "adventure" -> GameType.ADVENTURE;
-            case "spectator" -> GameType.SPECTATOR;
-            default -> GameType.SURVIVAL;
-        };
+        GameType gameMode = GameModeUtils.fromName(modeLower);
 
         area.setEnterMode(gameMode);
         ConfigManager.saveAreasConfig();
 
-        context.getSource().sendSuccess(
-            () -> Component.translatable("area.enter_mode_set", areaName, modeLower),
-            true
-        );
+        MessageUtils.sendSuccess(context.getSource(), "area.enter_mode_set", true, areaName, modeLower);
 
         return 1;
     }
@@ -965,34 +812,22 @@ public class ExtendedCommands {
     private static int setAreaLeaveMode(String areaName, String mode, CommandContext<CommandSourceStack> context) {
         MonitorArea area = AreaManager.getInstance().getArea(areaName);
         if (area == null) {
-            context.getSource().sendFailure(
-                Component.translatable("command.areamonitor.area.not_found", areaName)
-            );
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
             return 0;
         }
 
         String modeLower = mode.toLowerCase();
         if (!ModConstants.GAME_MODE_SUGGESTIONS.contains(modeLower)) {
-            context.getSource().sendFailure(
-                Component.translatable("area.invalid_gamemode", mode, String.join(", ", ModConstants.GAME_MODE_SUGGESTIONS))
-            );
+            MessageUtils.sendFailure(context.getSource(), "area.invalid_gamemode", mode, String.join(", ", ModConstants.GAME_MODE_SUGGESTIONS));
             return 0;
         }
 
-        GameType gameMode = switch (modeLower) {
-            case "creative" -> GameType.CREATIVE;
-            case "adventure" -> GameType.ADVENTURE;
-            case "spectator" -> GameType.SPECTATOR;
-            default -> GameType.SURVIVAL;
-        };
+        GameType gameMode = GameModeUtils.fromName(modeLower);
 
         area.setLeaveMode(gameMode);
         ConfigManager.saveAreasConfig();
 
-        context.getSource().sendSuccess(
-            () -> Component.translatable("area.leave_mode_set", areaName, modeLower),
-            true
-        );
+        MessageUtils.sendSuccess(context.getSource(), "area.leave_mode_set", true, areaName, modeLower);
 
         return 1;
     }
@@ -1004,14 +839,9 @@ public class ExtendedCommands {
             ItemBlacklistManager.loadBlacklistConfig();
             ConfigManager.validateConfig();
 
-            context.getSource().sendSuccess(
-                () -> Component.translatable("config.reloaded"),
-                true
-            );
+            MessageUtils.sendSuccess(context.getSource(), "config.reloaded", true);
         } catch (Exception e) {
-            context.getSource().sendFailure(
-                Component.translatable("config.reload_failed", e.getMessage())
-            );
+            MessageUtils.sendFailure(context.getSource(), "config.reload_failed", e.getMessage());
         }
         return 1;
     }
@@ -1021,30 +851,165 @@ public class ExtendedCommands {
         try {
             ConfigManager.ensureConfigFiles();
 
-            context.getSource().sendSuccess(
-                () -> Component.translatable("config.generated"),
-                true
-            );
-
-            // 显示配置文件路径信息
-            context.getSource().sendSuccess(
-                () -> Component.translatable("config.path_info"),
-                false
-            );
-            context.getSource().sendSuccess(
-                () -> Component.translatable("config.areas_path"),
-                false
-            );
-            context.getSource().sendSuccess(
-                () -> Component.translatable("config.blacklist_path"),
-                false
-            );
+            MessageUtils.sendSuccess(context.getSource(), "config.generated", true);
+            MessageUtils.sendSuccess(context.getSource(), "config.path_info", false);
+            MessageUtils.sendSuccess(context.getSource(), "config.areas_path", false);
+            MessageUtils.sendSuccess(context.getSource(), "config.blacklist_path", false);
 
         } catch (Exception e) {
-            context.getSource().sendFailure(
-                Component.translatable("config.regenerate_failed", e.getMessage())
-            );
+            MessageUtils.sendFailure(context.getSource(), "config.regenerate_failed", e.getMessage());
         }
+        return 1;
+    }
+
+    // === Methods from ModCommands ===
+
+    private static int toggleMonitor(CommandContext<CommandSourceStack> context) {
+        boolean current = ConfigManager.CONFIG.isEnabled.get();
+        boolean newState = !current;
+
+        ConfigManager.CONFIG.isEnabled.set(newState);
+        ConfigManager.CONFIG.isEnabled.save();
+
+        String messageKey = newState ?
+                "command.areamonitor.toggle.enabled" :
+                "command.areamonitor.toggle.disabled";
+
+        MessageUtils.sendSuccess(context.getSource(), messageKey, true);
+
+        return 1;
+    }
+
+    private static int addToWhitelist(String player, CommandContext<CommandSourceStack> context) {
+        if (WhitelistManager.addToWhitelist(player)) {
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.add.success", true, player);
+        } else {
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.add.exists", true, player);
+        }
+        return 1;
+    }
+
+    private static int removeFromWhitelist(String player, CommandContext<CommandSourceStack> context) {
+        if (WhitelistManager.removeFromWhitelist(player)) {
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.remove.success", true, player);
+        } else {
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.remove.not_found", true, player);
+        }
+        return 1;
+    }
+
+    private static int listWhitelist(CommandContext<CommandSourceStack> context) {
+        Set<String> whitelist = WhitelistManager.getWhitelist();
+
+        if (whitelist.isEmpty()) {
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.list.empty", false);
+        } else {
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.list.header", false);
+
+            List<String> whitelistArray = new ArrayList<>(whitelist);
+
+            for (int i = 0; i < whitelistArray.size(); i++) {
+                final int index = i + 1;
+                final String player = whitelistArray.get(i);
+
+                context.getSource().sendSuccess(
+                        () -> Component.literal(String.format("§e%d. §f%s", index, player)),
+                        false
+                );
+            }
+
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.list.count", false, whitelist.size());
+        }
+        return 1;
+    }
+
+    private static int clearWhitelist(CommandContext<CommandSourceStack> context) {
+        WhitelistManager.clearWhitelist();
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.clear.success", true);
+        return 1;
+    }
+
+    private static int showHelp(CommandContext<CommandSourceStack> context) {
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.header", false);
+
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.section.basic", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.toggle", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.area.list", false);
+
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.section.area", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.area.create", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.area.delete", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.area.list", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.area.toggle", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.area.info", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.area.set_enter_mode", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.area.set_leave_mode", false);
+
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.section.visual", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.visual.tool", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.visual.show", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.visual.hide", false);
+
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.section.selection", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.selection.create", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.selection.cancel", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.selection.info", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.selection.tutorial", false);
+
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.section.whitelist", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.whitelist.add", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.whitelist.remove", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.whitelist.list", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.whitelist.clear", false);
+
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.section.other", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.performance", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.blacklist.info", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.blacklist.add", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.blacklist.remove", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.blacklist.list", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.blacklist.toggle", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.blacklist.reload", false);
+
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.section.config", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.config.reload", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.config.generate", false);
+
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.section.language", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.language.show", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.language.english", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.language.chinese", false);
+
+        return 1;
+    }
+
+    private static int setLanguageEnglish(CommandContext<CommandSourceStack> context) {
+        if (LocalizationManager.setLanguage(LocalizationManager.LANGUAGE_ENGLISH)) {
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.english.success", false);
+        } else {
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.failed", false);
+        }
+        return 1;
+    }
+
+    private static int setLanguageChinese(CommandContext<CommandSourceStack> context) {
+        if (LocalizationManager.setLanguage(LocalizationManager.LANGUAGE_CHINESE)) {
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.chinese.success", false);
+        } else {
+            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.failed", false);
+        }
+        return 1;
+    }
+
+    private static int showLanguageStatus(CommandContext<CommandSourceStack> context) {
+        String currentLang = LocalizationManager.getCurrentLanguage();
+        String displayName = LocalizationManager.getLanguageDisplayName(currentLang);
+
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.current", false, displayName);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.usage", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.language.english", false);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.language.chinese", false);
+
         return 1;
     }
 }

@@ -2,15 +2,21 @@ package com.kavinshi.areamonitor;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
+import com.kavinshi.areamonitor.util.GameModeUtils;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 
 public class ConfigManager {
@@ -26,9 +32,7 @@ public class ConfigManager {
             SPEC = specPair.getRight();
             CONFIG = specPair.getLeft();
         } catch (Exception e) {
-            // 如果配置创建失败，记录错误并抛出
-            System.err.println("Failed to create config spec: " + e.getMessage());
-            AreaMonitorMod.LOGGER.error("创建配置规范时发生错误", e);
+            AreaMonitorMod.LOGGER.error("Error creating config spec", e);
             throw e;
         }
     }
@@ -39,65 +43,70 @@ public class ConfigManager {
         public final ForgeConfigSpec.BooleanValue debugMode;
 
         public Config(ForgeConfigSpec.Builder builder) {
-            builder.comment("区域监控设置").push("区域监控设置");
+            builder.comment("Area Monitor Settings").push("area_monitor");
 
             isEnabled = builder
-                    .comment("是否启用监控")
+                    .comment("Enable monitoring")
                     .define("enabled", true);
 
             showMessages = builder
-                    .comment("是否显示提示消息")
+                    .comment("Show notification messages")
                     .define("showMessages", true);
 
             debugMode = builder
-                    .comment("是否启用调试模式（启用后会显示详细日志）")
+                    .comment("Enable debug mode (shows detailed logs)")
                     .define("debugMode", false);
 
             builder.pop();
 
-            // 区域独立配置说明
-            builder.comment("区域详细配置 - 请在 config/areamonitor/areas.json 中进行设置")
-                  .comment("- 支持多个独立区域")
-                  .comment("- 每个区域可设置不同的游戏模式、维度、坐标范围")
-                  .comment("- 支持白名单、触发器等高级功能")
-                  .push("区域配置说明");
+            // Area configuration instructions
+            builder.comment("Area Configuration - Configure in config/areamonitor/areas.json")
+                  .comment("- Supports multiple independent areas")
+                  .comment("- Each area can have different game modes, dimensions, coordinate ranges")
+                  .comment("- Supports advanced features like whitelist, triggers, etc.")
+                  .push("area_config_info");
 
             builder.pop();
         }
-
-
     }
 
     public static void init() {
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SPEC);
 
-        // 初始化配置文件路径
+        // Initialize config file paths
         initConfigFiles();
 
-        // 初始化黑名单配置
+        // Initialize blacklist config
         ItemBlacklistManager.initBlacklistConfig();
 
-        AreaMonitorMod.LOGGER.info("区域监控配置已注册");
+        AreaMonitorMod.LOGGER.info("Area monitor config registered");
     }
 
     /**
-     * 初始化配置文件路径
+     * Initialize config file paths using FMLPaths
      */
     private static void initConfigFiles() {
-        // 延迟初始化文件路径，确保服务器目录已设置
-        areasConfigFile = new File("config/areamonitor/areas.json");
-        blacklistConfigFile = new File("config/areamonitor/blacklist.json");
+        Path configDir = FMLPaths.CONFIGDIR.get().resolve("areamonitor");
+        areasConfigFile = configDir.resolve("areas.json").toFile();
+        blacklistConfigFile = configDir.resolve("blacklist.json").toFile();
 
-        AreaMonitorMod.LOGGER.info("配置文件路径初始化完成");
+        AreaMonitorMod.LOGGER.info("Config file paths initialized: {}", configDir.toAbsolutePath());
     }
 
     /**
-     * 加载区域配置
+     * Get config directory path
+     */
+    private static Path getConfigDir() {
+        return FMLPaths.CONFIGDIR.get().resolve("areamonitor");
+    }
+
+    /**
+     * Load area configuration
      */
     public static void loadAreasConfig() {
-        // 确保文件路径已初始化
+        // Ensure file path is initialized
         if (areasConfigFile == null) {
-            areasConfigFile = new File("config/areamonitor/areas.json");
+            areasConfigFile = getConfigDir().resolve("areas.json").toFile();
         }
 
         if (areasConfigFile == null || !areasConfigFile.exists()) {
@@ -108,23 +117,23 @@ public class ConfigManager {
         try (FileReader reader = new FileReader(areasConfigFile)) {
             AreaConfigData configData = GSON.fromJson(reader, AreaConfigData.class);
 
-            // 配置文件完整性验证
+            // Config file integrity validation
             if (configData == null) {
-                AreaMonitorMod.LOGGER.warn("区域配置文件为空，创建默认配置");
+                AreaMonitorMod.LOGGER.warn("Area config file is empty, creating default config");
                 createDefaultAreasConfig();
                 return;
             }
 
             if (configData.areas == null) {
-                AreaMonitorMod.LOGGER.warn("区域配置中缺少areas字段，初始化为空");
+                AreaMonitorMod.LOGGER.warn("Area config missing 'areas' field, initializing as empty");
                 configData.areas = new HashMap<>();
             }
 
-            // 验证每个区域配置的完整性
+            // Validate each area config integrity
             for (Iterator<Map.Entry<String, AreaConfig>> it = configData.areas.entrySet().iterator(); it.hasNext();) {
                 Map.Entry<String, AreaConfig> entry = it.next();
                 if (!validateAreaConfig(entry.getKey(), entry.getValue())) {
-                    AreaMonitorMod.LOGGER.warn("区域配置验证失败，移除无效区域: {}", entry.getKey());
+                    AreaMonitorMod.LOGGER.warn("Area config validation failed, removing invalid area: {}", entry.getKey());
                     it.remove();
                 }
             }
@@ -140,18 +149,23 @@ public class ConfigManager {
                     }
                 }
             }
-        } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("加载区域配置文件失败", e);
+        } catch (FileNotFoundException e) {
+            AreaMonitorMod.LOGGER.warn("Area config file not found: {}", areasConfigFile.getAbsolutePath());
+            createDefaultAreasConfig();
+        } catch (JsonSyntaxException e) {
+            AreaMonitorMod.LOGGER.error("Area config JSON syntax error: {}", areasConfigFile.getAbsolutePath(), e);
+        } catch (IOException e) {
+            AreaMonitorMod.LOGGER.error("Failed to read area config: {}", areasConfigFile.getAbsolutePath(), e);
         }
     }
 
     /**
-     * 保存区域配置
+     * Save area configuration
      */
     public static void saveAreasConfig() {
-        // 确保文件路径已初始化
+        // Ensure file path is initialized
         if (areasConfigFile == null) {
-            areasConfigFile = new File("config/areamonitor/areas.json");
+            areasConfigFile = getConfigDir().resolve("areas.json").toFile();
         }
 
         if (areasConfigFile == null) return;
@@ -159,7 +173,7 @@ public class ConfigManager {
         try {
             File parentDir = areasConfigFile.getParentFile();
             if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
-                AreaMonitorMod.LOGGER.error("无法创建配置目录: {}", parentDir.getAbsolutePath());
+                AreaMonitorMod.LOGGER.error("Failed to create config directory: {}", parentDir.getAbsolutePath());
                 return;
             }
 
@@ -174,29 +188,29 @@ public class ConfigManager {
                 GSON.toJson(configData, writer);
             }
 
-            AreaMonitorMod.LOGGER.info("区域配置已保存");
+            AreaMonitorMod.LOGGER.info("Area config saved");
 
-            // 重建空间分区以优化性能
+            // Rebuild spatial partition for performance optimization
             AreaManager.getInstance().rebuildSpatialPartition();
-        } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("保存区域配置文件失败", e);
+        } catch (IOException e) {
+            AreaMonitorMod.LOGGER.error("Failed to save area config: {}", areasConfigFile.getAbsolutePath(), e);
         }
     }
 
     /**
-     * 创建默认区域配置文件（包含示例区域）
+     * Create default area config file (with example area)
      */
     private static void createDefaultAreasConfig() {
-        // 确保文件路径已初始化
+        // Ensure file path is initialized
         if (areasConfigFile == null) {
-            areasConfigFile = new File("config/areamonitor/areas.json");
+            areasConfigFile = getConfigDir().resolve("areas.json").toFile();
         }
 
-        // 创建包含示例区域的配置文件
+        // Create config file with example area
         AreaConfigData configData = new AreaConfigData();
         configData.areas = new HashMap<>();
 
-        // 添加一个示例区域
+        // Add an example area
         AreaConfig exampleArea = new AreaConfig();
         exampleArea.displayName = "Protected Area Example";
         exampleArea.dimension = "minecraft:overworld";
@@ -215,7 +229,7 @@ public class ConfigManager {
         try {
             File parentDir = areasConfigFile.getParentFile();
             if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
-                AreaMonitorMod.LOGGER.error("无法创建配置目录: {}", parentDir.getAbsolutePath());
+                AreaMonitorMod.LOGGER.error("Failed to create config directory: {}", parentDir.getAbsolutePath());
                 return;
             }
 
@@ -223,9 +237,9 @@ public class ConfigManager {
                 GSON.toJson(configData, writer);
             }
 
-            AreaMonitorMod.LOGGER.info("已创建包含示例区域的配置文件");
+            AreaMonitorMod.LOGGER.info("Created config file with example area");
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("创建默认区域配置文件失败", e);
+            AreaMonitorMod.LOGGER.error("Failed to create default area config", e);
         }
     }
 
@@ -237,14 +251,14 @@ public class ConfigManager {
         area.setLeaveMode(parseGameMode(config.leaveMode));
         area.setEnabled(config.enabled);
 
-        // 设置边界
+        // Set bounds
         if (config.minX != null && config.maxX != null && config.minZ != null && config.maxZ != null) {
             area.setBounds(new MonitorArea.RectangleBounds(
                 config.minX, config.minZ, config.maxX, config.maxZ
             ));
         }
 
-        // 设置白名单
+        // Set whitelist
         if (config.whitelist != null) {
             area.setWhitelist(new ArrayList<>(config.whitelist));
         }
@@ -253,15 +267,10 @@ public class ConfigManager {
     }
 
     /**
-     * 解析游戏模式字符串为GameType
+     * Parse game mode string to GameType
      */
     private static GameType parseGameMode(String mode) {
-        return switch (mode.toLowerCase()) {
-            case "creative" -> GameType.CREATIVE;
-            case "adventure" -> GameType.ADVENTURE;
-            case "spectator" -> GameType.SPECTATOR;
-            default -> GameType.SURVIVAL;
-        };
+        return GameModeUtils.fromName(mode);
     }
 
     private static AreaConfig createConfigFromArea(MonitorArea area) {
@@ -284,7 +293,7 @@ public class ConfigManager {
     }
 
     /**
-     * 验证区域配置完整性
+     * Validate area config integrity
      */
     private static boolean validateAreaConfig(String areaName, AreaConfig config) {
         if (areaName == null || areaName.trim().isEmpty()) {
@@ -295,25 +304,25 @@ public class ConfigManager {
             return false;
         }
 
-        // 验证坐标范围
+        // Validate coordinate range
         if (config.minX == null || config.maxX == null || config.minZ == null || config.maxZ == null) {
-            AreaMonitorMod.LOGGER.warn("区域 {} 缺少必要的坐标配置", areaName);
+            AreaMonitorMod.LOGGER.warn("Area {} missing required coordinate config", areaName);
             return false;
         }
 
-        // 验证坐标逻辑
+        // Validate coordinate logic
         if (config.minX >= config.maxX || config.minZ >= config.maxZ) {
-            AreaMonitorMod.LOGGER.warn("区域 {} 坐标范围无效: minX={}, maxX={}, minZ={}, maxZ={}",
+            AreaMonitorMod.LOGGER.warn("Area {} has invalid coordinate range: minX={}, maxX={}, minZ={}, maxZ={}",
                     areaName, config.minX, config.maxX, config.minZ, config.maxZ);
             return false;
         }
 
-        // 验证游戏模式
+        // Validate game mode
         try {
             parseGameMode(config.enterMode);
             parseGameMode(config.leaveMode);
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.warn("区域 {} 包含无效的游戏模式配置", areaName);
+            AreaMonitorMod.LOGGER.warn("Area {} contains invalid game mode config", areaName);
             return false;
         }
 
@@ -321,7 +330,7 @@ public class ConfigManager {
     }
 
     /**
-     * 区域配置数据类
+     * Area config data class
      */
     public static class AreaConfigData {
         public Map<String, AreaConfig> areas = new HashMap<>();
@@ -338,57 +347,58 @@ public class ConfigManager {
     }
 
     /**
-     * 验证配置完整性，应该在配置加载完成后调用
+     * Validate config integrity, should be called after config is loaded
      */
     public static void validateConfig() {
         try {
             Config config = CONFIG;
 
-            AreaMonitorMod.LOGGER.info("区域监控配置验证完成");
-            AreaMonitorMod.LOGGER.info("请在 config/areamonitor/areas.json 中配置具体的监控区域");
+            AreaMonitorMod.LOGGER.info("Area monitor config validation complete");
+            AreaMonitorMod.LOGGER.info("Configure specific monitoring areas in config/areamonitor/areas.json");
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.warn("配置验证失败，配置可能尚未完全加载: {}", e.getMessage());
+            AreaMonitorMod.LOGGER.warn("Config validation failed, config may not be fully loaded: {}", e.getMessage());
         }
     }
 
     /**
-     * 验证配置文件完整性并确保正确生成
+     * Validate config file integrity and ensure proper generation
      */
     public static void ensureConfigFiles() {
         try {
-            AreaMonitorMod.LOGGER.info("验证配置文件完整性...");
+            AreaMonitorMod.LOGGER.info("Validating config file integrity...");
 
-            // 确保配置目录存在
-            File configDir = new File("config/areamonitor");
-            if (!configDir.exists() && !configDir.mkdirs()) {
-                AreaMonitorMod.LOGGER.error("无法创建配置目录: {}", configDir.getAbsolutePath());
+            // Ensure config directory exists
+            Path configDir = getConfigDir();
+            File configDirFile = configDir.toFile();
+            if (!configDirFile.exists() && !configDirFile.mkdirs()) {
+                AreaMonitorMod.LOGGER.error("Failed to create config directory: {}", configDirFile.getAbsolutePath());
                 return;
             }
 
-            // 确保区域配置文件存在
+            // Ensure area config file exists
             if (areasConfigFile == null) {
-                areasConfigFile = new File("config/areamonitor/areas.json");
+                areasConfigFile = configDir.resolve("areas.json").toFile();
             }
 
             if (!areasConfigFile.exists()) {
-                AreaMonitorMod.LOGGER.info("区域配置文件不存在，创建默认配置...");
+                AreaMonitorMod.LOGGER.info("Area config file not found, creating default config...");
                 createDefaultAreasConfig();
             }
 
-            // 确保黑名单配置文件存在
+            // Ensure blacklist config file exists
             if (blacklistConfigFile == null) {
-                blacklistConfigFile = new File("config/areamonitor/blacklist.json");
+                blacklistConfigFile = configDir.resolve("blacklist.json").toFile();
             }
 
             if (!blacklistConfigFile.exists()) {
-                AreaMonitorMod.LOGGER.info("黑名单配置文件不存在，创建默认配置...");
-                // 调用ItemBlacklistManager的创建方法
+                AreaMonitorMod.LOGGER.info("Blacklist config file not found, creating default config...");
+                // Call ItemBlacklistManager's create method
                 ItemBlacklistManager.createDefaultBlacklistConfig();
             }
 
-            AreaMonitorMod.LOGGER.info("配置文件完整性验证完成");
+            AreaMonitorMod.LOGGER.info("Config file integrity validation complete");
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("配置文件完整性验证失败", e);
+            AreaMonitorMod.LOGGER.error("Config file integrity validation failed", e);
         }
     }
 }

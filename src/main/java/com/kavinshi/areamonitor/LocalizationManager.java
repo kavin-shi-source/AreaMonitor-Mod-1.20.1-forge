@@ -10,23 +10,22 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 多语言管理器
- * 负责加载和管理模组的语言文件
+ * Localization manager for handling multi-language support.
+ * Thread-safe implementation using ConcurrentHashMap.
  */
 public class LocalizationManager {
-    // 使用静态内部类实现线程安全的单例模式
     private static class InstanceHolder {
         private static final LocalizationManager INSTANCE = new LocalizationManager();
     }
 
-    private final Map<String, String> translations = new HashMap<>();
-    private final Map<String, String> formattedCache = new HashMap<>(); // Formatted result cache
+    private final Map<String, String> translations = new ConcurrentHashMap<>();
+    private final Map<String, String> formattedCache = new ConcurrentHashMap<>();
     private final Gson gson = new Gson();
-    private String currentLanguage = DEFAULT_LANGUAGE;
+    private volatile String currentLanguage = DEFAULT_LANGUAGE;
 
     /**
      * 支持的语言列表
@@ -148,12 +147,10 @@ public class LocalizationManager {
     public static String translate(String key, Object... args) {
         String template = InstanceHolder.INSTANCE.translations.getOrDefault(key, key);
 
-        // 如果没有参数，直接返回模板
         if (args.length == 0) {
             return template;
         }
 
-        // 创建缓存键
         String cacheKey = key + Arrays.toString(args);
         String cachedResult = InstanceHolder.INSTANCE.formattedCache.get(cacheKey);
         if (cachedResult != null) {
@@ -162,16 +159,14 @@ public class LocalizationManager {
 
         try {
             String result = String.format(template, args);
-            // 缓存结果（限制缓存大小）
             if (InstanceHolder.INSTANCE.formattedCache.size() < 100) {
                 InstanceHolder.INSTANCE.formattedCache.put(cacheKey, result);
             }
             return result;
         } catch (Exception e) {
-            // 如果出现格式化错误，记录错误并返回未格式化的模板
             AreaMonitorMod.LOGGER.error("Localization format error for key '{}': {}", key, e.getMessage());
             AreaMonitorMod.LOGGER.error("Template: '{}', Args: {}", template, java.util.Arrays.toString(args));
-            return template; // 返回未格式化的模板作为降级方案
+            return template;
         }
     }
 
@@ -206,9 +201,7 @@ public class LocalizationManager {
      */
     private String getMinecraftLanguage() {
         try {
-            // 在客户端环境中尝试获取Minecraft语言设置
             if (net.minecraftforge.fml.loading.FMLLoader.getDist().isClient()) {
-                // 使用反射来避免在服务器端编译错误
                 Class<?> languageClass = Class.forName("net.minecraft.locale.Language");
                 java.lang.reflect.Method getInstanceMethod = languageClass.getMethod("getInstance");
                 Object languageInstance = getInstanceMethod.invoke(null);
@@ -216,7 +209,7 @@ public class LocalizationManager {
                 return (String) getCodeMethod.invoke(languageInstance);
             }
         } catch (Exception e) {
-            // 忽略错误，使用备选方案
+            AreaMonitorMod.LOGGER.debug("Could not get Minecraft client language: {}", e.getMessage());
         }
         return null;
     }

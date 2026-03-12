@@ -1,24 +1,18 @@
-# 这是 Forge 模组配置文件
 modLoader="javafml"
-loaderVersion="[47,)"  # 匹配您的 Forge 版本 47.0.35
-license="All rights reserved"
+loaderVersion="[47,)"
+license="GPL-3.0"
 
 [[mods]]
 modId="areamonitor"
-version="2.0.1"
-displayName="区域监控模组 (AreaMonitor Mod)"
-description='''一个功能强大的 Minecraft 服务器管理模组，用于监控特定区域并自动切换玩家游戏模式。支持多语言（中文/英文），客户端可选安装。'''
-authors="kavinshi"
-displayURL="https://github.com/kavin-shi-source/AreaMonitor-Mod"
-logoFile= "icon.png"
-
-# 依赖配置
-[[dependencies.areamonitor]]
-modId="forge"
-mandatory=true
-versionRange="[47.0.35,)"
-ordering="NONE"
-side="BOTH"
+version="2.0.2"
+displayName="Area Monitor"
+authors="Kavinshi"
+displayURL="https://github.com/kavin-shi-source/AreaMonitor-Mod-1.20.1-forge"
+logoFile="icon.png"
+description='''
+Area Monitor - Monitor player areas and automatically switch game modes.
+Supports multiple areas, whitelist, item blacklist, and multi-language.
+'''
 
 [[dependencies.areamonitor]]
 modId="minecraft"
@@ -26,6 +20,3 @@ mandatory=true
 versionRange="[1.20.1]"
 ordering="NONE"
 side="BOTH"
-
-[metadata]
-clientSideOptional = true

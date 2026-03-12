@@ -46,7 +46,7 @@ public class SelectionEventHandler {
             long currentTime = System.currentTimeMillis();
             Long lastHelpTime = SelectionTool.getLastHelpTime(player.getUUID());
 
-            if (lastHelpTime == null || currentTime - lastHelpTime > 5000) { // 5秒间隔
+            if (lastHelpTime == null || currentTime - lastHelpTime > SelectionTool.HELP_MESSAGE_COOLDOWN_MS) {
                 player.displayClientMessage(
                     net.minecraft.network.chat.Component.translatable("command.areamonitor.selection.help"),
                     true

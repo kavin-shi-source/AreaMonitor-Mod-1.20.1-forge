@@ -2,6 +2,8 @@ package com.kavinshi.areamonitor;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
+import com.kavinshi.areamonitor.model.RestrictionSettings;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -17,40 +19,31 @@ import net.minecraftforge.event.CommandEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 物品黑名单管理器，限制特定区域内使用传送类道具
+ * Item blacklist manager that restricts the use of teleportation items in specific areas.
  */
 @Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ItemBlacklistManager {
-    private static final Set<Item> GLOBAL_BLACKLISTED_ITEMS = new HashSet<>();
+    private static final Set<Item> GLOBAL_BLACKLISTED_ITEMS = ConcurrentHashMap.newKeySet();
     private static final Map<String, Set<Item>> AREA_BLACKLISTS = new ConcurrentHashMap<>();
-    private static final Set<String> TELEPORT_COMMANDS = new HashSet<>();
+    private static final Set<String> TELEPORT_COMMANDS = ConcurrentHashMap.newKeySet();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static File blacklistConfigFile;
 
-    // 初始化全局黑名单物品
+    private static volatile boolean initialized = false;
+
     static {
-        // 传送类物品
-        GLOBAL_BLACKLISTED_ITEMS.add(Items.ENDER_PEARL); // 末影珍珠
-        GLOBAL_BLACKLISTED_ITEMS.add(Items.CHORUS_FRUIT); // 紫颂果
-        GLOBAL_BLACKLISTED_ITEMS.add(Items.RECOVERY_COMPASS); // 定位指南针 (1.19+)
-
-        // 指南针类物品
-        GLOBAL_BLACKLISTED_ITEMS.add(Items.COMPASS); // 指南针
-        GLOBAL_BLACKLISTED_ITEMS.add(Items.RECOVERY_COMPASS); // 恢复指南针
-
-        // 时钟
-        GLOBAL_BLACKLISTED_ITEMS.add(Items.CLOCK); // 时钟
-
-
-        // 传送命令
         TELEPORT_COMMANDS.add("/tp");
         TELEPORT_COMMANDS.add("/teleport");
         TELEPORT_COMMANDS.add("/home");
@@ -62,49 +55,63 @@ public class ItemBlacklistManager {
         TELEPORT_COMMANDS.add("/tpdeny");
     }
 
-    /**
-     * 为玩家区域添加自定义黑名单
-     */
-    public static void addAreaBlacklist(String areaName, Set<Item> blacklistedItems) {
-        AREA_BLACKLISTS.put(areaName, new HashSet<>(blacklistedItems));
+    public static void initializeDefaultBlacklist() {
+        if (initialized) return;
+        initialized = true;
+        
+        GLOBAL_BLACKLISTED_ITEMS.add(Items.ENDER_PEARL);
+        GLOBAL_BLACKLISTED_ITEMS.add(Items.CHORUS_FRUIT);
+        GLOBAL_BLACKLISTED_ITEMS.add(Items.RECOVERY_COMPASS);
+        GLOBAL_BLACKLISTED_ITEMS.add(Items.COMPASS);
+        GLOBAL_BLACKLISTED_ITEMS.add(Items.CLOCK);
+        
+        AreaMonitorMod.LOGGER.info("Default item blacklist initialized");
     }
 
     /**
-     * 移除区域黑名单
+     * Add custom blacklist for a player area.
+     */
+    public static void addAreaBlacklist(String areaName, Set<Item> blacklistedItems) {
+        AREA_BLACKLISTS.put(areaName, ConcurrentHashMap.newKeySet());
+        AREA_BLACKLISTS.get(areaName).addAll(blacklistedItems);
+    }
+
+    /**
+     * Remove area blacklist.
      */
     public static void removeAreaBlacklist(String areaName) {
         AREA_BLACKLISTS.remove(areaName);
     }
 
     /**
-     * 获取区域的黑名单物品
+     * Get blacklist items for an area.
      */
     public static Set<Item> getAreaBlacklist(String areaName) {
         return AREA_BLACKLISTS.getOrDefault(areaName, Collections.emptySet());
     }
 
     /**
-     * 检查物品是否被禁止
+     * Check if an item is blacklisted.
      */
     public static boolean isItemBlacklisted(Item item, ServerPlayer player) {
         Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
 
-        // 如果没有在任何区域，直接返回false
+        // If not in any area, return false
         if (currentAreas.isEmpty()) {
             return false;
         }
 
-        // 检查全局黑名单 - 如果在任何启用了黑名单的区域中
+        // Check global blacklist - if in any area with blacklist enabled
         if (GLOBAL_BLACKLISTED_ITEMS.contains(item)) {
             for (String areaName : currentAreas) {
                 MonitorArea area = AreaManager.getInstance().getArea(areaName);
                 if (area != null && area.getRestrictions().isEnableItemBlacklist()) {
-                    return true; // 只要在一个启用了黑名单的区域中就阻止
+                    return true;
                 }
             }
         }
 
-        // 检查区域特定黑名单
+        // Check area-specific blacklist
         for (String areaName : currentAreas) {
             Set<Item> areaBlacklist = AREA_BLACKLISTS.get(areaName);
             if (areaBlacklist != null && areaBlacklist.contains(item)) {
@@ -116,7 +123,7 @@ public class ItemBlacklistManager {
     }
 
     /**
-     * 检查玩家是否在被限制的区域
+     * Check if player is in a restricted area.
      */
     private static boolean isPlayerInRestrictedArea(ServerPlayer player) {
         Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
@@ -130,7 +137,7 @@ public class ItemBlacklistManager {
     }
 
     /**
-     * 检查命令是否被禁止
+     * Check if a command is blocked.
      */
     public static boolean isCommandBlocked(String command, ServerPlayer player) {
         String baseCommand = command.split(" ")[0].toLowerCase();
@@ -150,7 +157,7 @@ public class ItemBlacklistManager {
     }
 
     /**
-     * 处理物品使用事件
+     * Handle item use event.
      */
     @SubscribeEvent
     public static void onItemUse(PlayerInteractEvent.RightClickItem event) {
@@ -167,22 +174,22 @@ public class ItemBlacklistManager {
             event.setCanceled(true);
             event.setCancellationResult(InteractionResult.FAIL);
 
-            // 发送拒绝消息
+            // Send denial message
             player.displayClientMessage(
                 Component.translatable("command.areamonitor.item.use_denied", BuiltInRegistries.ITEM.getKey(itemStack.getItem()).getPath()).withStyle(ChatFormatting.RED),
                 true
             );
 
-            // 播放拒绝音效
+            // Play denial sound
             player.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.get(), SoundSource.PLAYERS, 1.0f, 0.5f);
 
-            AreaMonitorMod.LOGGER.debug("阻止玩家 {} 使用黑名单物品: {}",
+            AreaMonitorMod.LOGGER.debug("Blocked player {} from using blacklisted item: {}",
                 player.getName().getString(), itemStack.getItem().toString());
         }
     }
 
     /**
-     * 处理物品投掷事件（如末影珍珠）
+     * Handle item throw event (e.g., ender pearls).
      */
     @SubscribeEvent
     public static void onItemThrow(PlayerInteractEvent.RightClickItem event) {
@@ -195,22 +202,22 @@ public class ItemBlacklistManager {
             return;
         }
 
-        // 检查特定的投掷物品
+        // Check specific throwable items
         Item item = itemStack.getItem();
         if ((item == Items.ENDER_PEARL || item == Items.CHORUS_FRUIT) && isItemBlacklisted(item, player)) {
             event.setCanceled(true);
             event.setCancellationResult(InteractionResult.FAIL);
 
-            // 发送拒绝消息
+            // Send denial message
             player.displayClientMessage(
                 Component.translatable("command.areamonitor.item.use_denied", getItemName(item)).withStyle(ChatFormatting.RED),
                 true
             );
 
-            // 播放拒绝音效
+            // Play denial sound
             player.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.get(), SoundSource.PLAYERS, 1.0f, 0.5f);
 
-            AreaMonitorMod.LOGGER.debug("阻止玩家 {} 投掷黑名单物品: {}",
+            AreaMonitorMod.LOGGER.debug("Blocked player {} from throwing blacklisted item: {}",
                 player.getName().getString(), item.toString());
         }
     }
@@ -220,7 +227,7 @@ public class ItemBlacklistManager {
     }
 
     /**
-     * 处理命令使用事件
+     * Handle command use event.
      */
     @SubscribeEvent
     public static void onCommandUse(CommandEvent event) {
@@ -232,22 +239,22 @@ public class ItemBlacklistManager {
         if (isCommandBlocked(command, player)) {
             event.setCanceled(true);
 
-            // 发送拒绝消息
+            // Send denial message
             player.displayClientMessage(
                 Component.translatable("command.areamonitor.teleport.use_denied").withStyle(ChatFormatting.RED),
                 true
             );
 
-            // 播放拒绝音效
+            // Play denial sound
             player.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.get(), SoundSource.PLAYERS, 1.0f, 0.5f);
 
-            AreaMonitorMod.LOGGER.debug("阻止玩家 {} 使用传送命令: {}",
+            AreaMonitorMod.LOGGER.debug("Blocked player {} from using teleport command: {}",
                 player.getName().getString(), command);
         }
     }
 
     /**
-     * 处理方块交互事件（防止使用特定方块）
+     * Handle block interaction event (prevent using specific blocks).
      */
     @SubscribeEvent
     public static void onBlockInteract(PlayerInteractEvent.RightClickBlock event) {
@@ -255,17 +262,17 @@ public class ItemBlacklistManager {
             return;
         }
 
-        // 检查是否在被限制的区域
+        // Check if in restricted area
         if (!isPlayerInRestrictedArea(player)) {
             return;
         }
 
-        // 可以在这里添加对特定方块的限制
-        // 例如：末地传送门、下界传送门等
+        // Add specific block restrictions here
+        // e.g., end portal, nether portal, etc.
     }
 
     /**
-     * 获取玩家的限制信息
+     * Get player restriction info.
      */
     public static void showPlayerRestrictions(ServerPlayer player) {
         Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
@@ -308,75 +315,82 @@ public class ItemBlacklistManager {
     }
 
     /**
-     * 获取全局黑名单物品列表
+     * Get global blacklist items.
      */
     public static Set<Item> getGlobalBlacklist() {
         return new HashSet<>(GLOBAL_BLACKLISTED_ITEMS);
     }
 
     /**
-     * 获取所有区域的特定黑名单
+     * Get all area-specific blacklists.
      */
     public static Map<String, Set<Item>> getAllAreaBlacklists() {
         return new HashMap<>(AREA_BLACKLISTS);
     }
 
     /**
-     * 添加物品到全局黑名单
+     * Add item to global blacklist.
      */
     public static void addToGlobalBlacklist(Item item) {
         GLOBAL_BLACKLISTED_ITEMS.add(item);
-        AreaMonitorMod.LOGGER.info("添加物品到全局黑名单: {}", item.toString());
+        AreaMonitorMod.LOGGER.info("Added item to global blacklist: {}", item.toString());
     }
 
     /**
-     * 从全局黑名单移除物品
+     * Remove item from global blacklist.
      */
     public static void removeFromGlobalBlacklist(Item item) {
         GLOBAL_BLACKLISTED_ITEMS.remove(item);
-        AreaMonitorMod.LOGGER.info("从全局黑名单移除物品: {}", item.toString());
+        AreaMonitorMod.LOGGER.info("Removed item from global blacklist: {}", item.toString());
     }
 
     /**
-     * 添加传送命令到黑名单
+     * Add teleport command to blacklist.
      */
     public static void addTeleportCommand(String command) {
         TELEPORT_COMMANDS.add(command.toLowerCase());
     }
 
     /**
-     * 从黑名单移除传送命令
+     * Remove teleport command from blacklist.
      */
     public static void removeTeleportCommand(String command) {
         TELEPORT_COMMANDS.remove(command.toLowerCase());
     }
 
     /**
-     * 获取所有禁止的传送命令
+     * Get all blocked teleport commands.
      */
     public static Set<String> getTeleportCommands() {
         return new HashSet<>(TELEPORT_COMMANDS);
     }
 
-    // 黑名单配置文件数据类
+    // Blacklist config data class
     private static class BlacklistConfigData {
         public List<String> global_blacklist = new ArrayList<>();
         public Map<String, List<String>> area_blacklists = new HashMap<>();
     }
 
     /**
-     * 初始化黑名单配置文件
+     * Get blacklist config file path using FMLPaths
+     */
+    private static File getBlacklistConfigFile() {
+        Path configDir = FMLPaths.CONFIGDIR.get().resolve("areamonitor");
+        return configDir.resolve("blacklist.json").toFile();
+    }
+
+    /**
+     * Initialize blacklist config file.
      */
     public static void initBlacklistConfig() {
-        // 延迟初始化文件路径，确保服务器目录可用
         if (blacklistConfigFile == null) {
-            blacklistConfigFile = new File("config/areamonitor/blacklist.json");
+            blacklistConfigFile = getBlacklistConfigFile();
         }
         loadBlacklistConfig();
     }
 
     /**
-     * 加载黑名单配置文件
+     * Load blacklist config file.
      */
     public static void loadBlacklistConfig() {
         if (blacklistConfigFile == null || !blacklistConfigFile.exists()) {
@@ -387,7 +401,7 @@ public class ItemBlacklistManager {
         try (FileReader reader = new FileReader(blacklistConfigFile)) {
             BlacklistConfigData configData = GSON.fromJson(reader, BlacklistConfigData.class);
             if (configData != null) {
-                // 加载全局黑名单
+                // Load global blacklist
                 GLOBAL_BLACKLISTED_ITEMS.clear();
                 if (configData.global_blacklist != null) {
                     for (String itemId : configData.global_blacklist) {
@@ -398,7 +412,7 @@ public class ItemBlacklistManager {
                     }
                 }
 
-                // 加载区域黑名单
+                // Load area blacklists
                 AREA_BLACKLISTS.clear();
                 if (configData.area_blacklists != null) {
                     for (Map.Entry<String, List<String>> entry : configData.area_blacklists.entrySet()) {
@@ -415,20 +429,25 @@ public class ItemBlacklistManager {
                     }
                 }
 
-                AreaMonitorMod.LOGGER.info("黑名单配置已加载");
+                AreaMonitorMod.LOGGER.info("Blacklist config loaded");
             }
-        } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("加载黑名单配置文件失败", e);
+        } catch (FileNotFoundException e) {
+            AreaMonitorMod.LOGGER.warn("Blacklist config file not found: {}", blacklistConfigFile.getAbsolutePath());
+            createDefaultBlacklistConfig();
+        } catch (JsonSyntaxException e) {
+            AreaMonitorMod.LOGGER.error("Blacklist config JSON syntax error: {}", blacklistConfigFile.getAbsolutePath(), e);
+        } catch (IOException e) {
+            AreaMonitorMod.LOGGER.error("Failed to read blacklist config: {}", blacklistConfigFile.getAbsolutePath(), e);
         }
     }
 
     /**
-     * 保存黑名单配置文件
+     * Save blacklist config file.
      */
     public static void saveBlacklistConfig() {
-        // 确保文件路径已初始化
+        // Ensure file path is initialized
         if (blacklistConfigFile == null) {
-            blacklistConfigFile = new File("config/areamonitor/blacklist.json");
+            blacklistConfigFile = getBlacklistConfigFile();
         }
 
         if (blacklistConfigFile == null) return;
@@ -436,19 +455,19 @@ public class ItemBlacklistManager {
         try {
             File parentDir = blacklistConfigFile.getParentFile();
             if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
-                AreaMonitorMod.LOGGER.error("无法创建黑名单配置目录: {}", parentDir.getAbsolutePath());
+                AreaMonitorMod.LOGGER.error("Failed to create blacklist config directory: {}", parentDir.getAbsolutePath());
                 return;
             }
 
             BlacklistConfigData configData = new BlacklistConfigData();
 
-            // 保存全局黑名单
+            // Save global blacklist
             for (Item item : GLOBAL_BLACKLISTED_ITEMS) {
                 String itemId = BuiltInRegistries.ITEM.getKey(item).toString();
                 configData.global_blacklist.add(itemId);
             }
 
-            // 保存区域黑名单
+            // Save area blacklists
             for (Map.Entry<String, Set<Item>> entry : AREA_BLACKLISTS.entrySet()) {
                 List<String> itemIds = new ArrayList<>();
                 for (Item item : entry.getValue()) {
@@ -462,32 +481,32 @@ public class ItemBlacklistManager {
                 GSON.toJson(configData, writer);
             }
 
-            AreaMonitorMod.LOGGER.info("黑名单配置已保存");
-        } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("保存黑名单配置文件失败", e);
+            AreaMonitorMod.LOGGER.info("Blacklist config saved");
+        } catch (IOException e) {
+            AreaMonitorMod.LOGGER.error("Failed to save blacklist config: {}", blacklistConfigFile.getAbsolutePath(), e);
         }
     }
 
     /**
-     * 创建默认黑名单配置文件
+     * Create default blacklist config file.
      */
     public static void createDefaultBlacklistConfig() {
-        // 确保文件路径已初始化
+        // Ensure file path is initialized
         if (blacklistConfigFile == null) {
-            blacklistConfigFile = new File("config/areamonitor/blacklist.json");
+            blacklistConfigFile = getBlacklistConfigFile();
         }
 
         if (blacklistConfigFile == null) return;
 
-        // 创建配置目录
+        // Create config directory
+        File parentDir = blacklistConfigFile.getParentFile();
         try {
-            File parentDir = blacklistConfigFile.getParentFile();
             if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
-                AreaMonitorMod.LOGGER.error("无法创建黑名单配置目录: {}", parentDir.getAbsolutePath());
+                AreaMonitorMod.LOGGER.error("Failed to create blacklist config directory: {}", parentDir.getAbsolutePath());
                 return;
             }
-        } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("创建配置目录时出错", e);
+        } catch (SecurityException e) {
+            AreaMonitorMod.LOGGER.error("Failed to create config directory (permission issue): {}", parentDir != null ? parentDir.getAbsolutePath() : "null", e);
             return;
         }
 
@@ -499,14 +518,14 @@ public class ItemBlacklistManager {
 
         try (FileWriter writer = new FileWriter(blacklistConfigFile)) {
             GSON.toJson(defaultConfig, writer);
-            AreaMonitorMod.LOGGER.info("已创建默认黑名单配置文件: {}", blacklistConfigFile.getAbsolutePath());
-        } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("创建默认黑名单配置文件失败", e);
+            AreaMonitorMod.LOGGER.info("Created default blacklist config: {}", blacklistConfigFile.getAbsolutePath());
+        } catch (IOException e) {
+            AreaMonitorMod.LOGGER.error("Failed to create default blacklist config: {}", blacklistConfigFile.getAbsolutePath(), e);
         }
     }
 
     /**
-     * 从ID解析物品
+     * Parse item from ID string.
      */
     private static Item parseItemFromId(String itemId) {
         try {
@@ -516,7 +535,8 @@ public class ItemBlacklistManager {
                 return null;
             }
             return item;
-        } catch (Exception e) {
+        } catch (IllegalArgumentException e) {
+            AreaMonitorMod.LOGGER.warn("Invalid item ID format: {}", itemId);
             return null;
         }
     }

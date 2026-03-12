@@ -1,5 +1,6 @@
 package com.kavinshi.areamonitor;
 
+import com.kavinshi.areamonitor.model.PlayerPosition;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
@@ -163,13 +164,13 @@ public class TriggerSystem {
     }
 
     /**
-     * 周期性触发器
+     * Periodic trigger that fires at regular intervals.
      */
     public static class PeriodicTrigger implements Trigger {
         private final AreaManager.TriggerType type;
-        private final int interval; // tick间隔
+        private final int interval;
         private final List<TriggerAction> actions;
-        private long lastTriggerTime = 0;
+        private final java.util.concurrent.atomic.AtomicLong lastTriggerTime = new java.util.concurrent.atomic.AtomicLong(0);
 
         public PeriodicTrigger(AreaManager.TriggerType type, int interval, List<TriggerAction> actions) {
             this.type = type;
@@ -180,9 +181,11 @@ public class TriggerSystem {
         @Override
         public boolean check(ServerPlayer player) {
             long currentTime = player.level().getGameTime();
-            if (currentTime - lastTriggerTime >= interval) {
-                lastTriggerTime = currentTime;
-                return true;
+            long lastTime = lastTriggerTime.get();
+            if (currentTime - lastTime >= interval) {
+                if (lastTriggerTime.compareAndSet(lastTime, currentTime)) {
+                    return true;
+                }
             }
             return false;
         }
@@ -268,17 +271,20 @@ public class TriggerSystem {
         public void execute(ServerPlayer player, MonitorArea area) {
             String processedCommand = processPlaceholders(command, player, area);
 
+            MinecraftServer server = player.getServer();
+            if (server == null) {
+                AreaMonitorMod.LOGGER.warn("Cannot execute command: server is null for player {}", player.getName().getString());
+                return;
+            }
+
             if (asConsole) {
-                MinecraftServer server = player.getServer();
-                if (server != null) {
-                    CommandSourceStack sourceStack = server.createCommandSourceStack()
-                        .withSuppressedOutput()
-                        .withPermission(4);
-                    server.getCommands().performPrefixedCommand(sourceStack, processedCommand);
-                }
+                CommandSourceStack sourceStack = server.createCommandSourceStack()
+                    .withSuppressedOutput()
+                    .withPermission(4);
+                server.getCommands().performPrefixedCommand(sourceStack, processedCommand);
             } else {
                 player.sendSystemMessage(Component.translatable("trigger.command.executing", processedCommand));
-                player.getServer().getCommands().performPrefixedCommand(
+                server.getCommands().performPrefixedCommand(
                     player.createCommandSourceStack(),
                     processedCommand
                 );

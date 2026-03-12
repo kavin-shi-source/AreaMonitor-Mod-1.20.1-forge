@@ -1,5 +1,6 @@
 package com.kavinshi.areamonitor;
 
+import com.kavinshi.areamonitor.model.PlayerPosition;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
@@ -11,11 +12,23 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 区域管理器，负责管理所有监控区域
+ * Area manager responsible for managing all monitored areas.
+ * Thread-safe implementation using ConcurrentHashMap.
  */
 public class AreaManager {
-    // 使用枚举实现线程安全的单例模式
     private static final AreaManager INSTANCE = new AreaManager();
+    
+    private static final int MAX_AREA_NAME_LENGTH = 32;
+    private static final int MIN_AREA_SIZE = 1;
+    private static final int MAX_AREA_SIZE = 1000000;
+    private static final int MAX_AREAS_PER_PLAYER = 100;
+    
+    private static final int TITLE_FADE_IN_TICKS = 5;
+    private static final int TITLE_STAY_TICKS = 30;
+    private static final int TITLE_FADE_OUT_TICKS = 5;
+    
+    private static final Set<String> EMPTY_AREA_SET = Collections.emptySet();
+    
     private final Map<String, MonitorArea> areas = new ConcurrentHashMap<>();
     private final Map<UUID, Set<String>> playerAreas = new ConcurrentHashMap<>();
     private final SpatialPartitionManager spatialPartition = new SpatialPartitionManager();
@@ -71,7 +84,7 @@ public class AreaManager {
         );
 
         Set<String> currentAreas = getCurrentAreasOptimized(player, position);
-        Set<String> previousAreas = playerAreas.getOrDefault(player.getUUID(), new HashSet<>());
+        Set<String> previousAreas = playerAreas.getOrDefault(player.getUUID(), EMPTY_AREA_SET);
 
         // 检测进入的新区域
         for (String areaName : currentAreas) {
@@ -131,7 +144,6 @@ public class AreaManager {
         // 延迟切换游戏模式
         AreaMonitor.addPendingGameModeChange(player, area.getEnterMode());
 
-        // TODO: 触发器系统需要重构
     }
 
     private void handleAreaLeave(ServerPlayer player, String areaName) {
@@ -146,7 +158,6 @@ public class AreaManager {
         // 延迟切换游戏模式（离开区域）
         AreaMonitor.addPendingGameModeChangeOnLeave(player, area.getLeaveMode());
 
-        // TODO: 触发器系统需要重构
     }
 
     private void showAreaMessage(ServerPlayer player, String areaName, boolean entering, GameType gameMode) {
@@ -161,12 +172,7 @@ public class AreaManager {
             // 使用 §7 (灰色) 和较小的格式，去掉粗体
             String message = String.format(LocalizationManager.translate("area.message"), action, areaName, modeName);
 
-            // 设置Title动画时间 (淡入, 停留, 淡出)
-            int fadeIn = 5;   // 0.25秒淡入 (减小)
-            int stay = 30;    // 1.5秒停留 (减小)
-            int fadeOut = 5;  // 0.25秒淡出 (减小)
-
-            player.connection.send(new ClientboundSetTitlesAnimationPacket(fadeIn, stay, fadeOut));
+            player.connection.send(new ClientboundSetTitlesAnimationPacket(TITLE_FADE_IN_TICKS, TITLE_STAY_TICKS, TITLE_FADE_OUT_TICKS));
             // 只显示一行，作为Title显示
             player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(message)));
             // 不发送Subtitle，实现单行显示

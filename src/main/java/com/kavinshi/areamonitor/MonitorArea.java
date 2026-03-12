@@ -1,36 +1,38 @@
 package com.kavinshi.areamonitor;
 
+import com.kavinshi.areamonitor.model.PlayerPosition;
+import com.kavinshi.areamonitor.model.RestrictionSettings;
+import com.kavinshi.areamonitor.util.DimensionUtils;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.AABB;
 
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * 监控区域类，表示一个独立的监控区域
+ * Monitor area class, represents an independent monitoring area.
+ * Thread-safe implementation with volatile fields and CopyOnWriteArrayList.
  */
 public class MonitorArea {
     private final String name;
-    private String displayName;
-    private String dimension;
-    private AreaBounds bounds;
-    private GameType enterMode;
-    private GameType leaveMode;
-    private boolean enabled;
-    private List<String> whitelist;
-    private RestrictionSettings restrictions;
+    private volatile String displayName;
+    private volatile String dimension;
+    private volatile AreaBounds bounds;
+    private volatile GameType enterMode;
+    private volatile GameType leaveMode;
+    private volatile boolean enabled;
+    private volatile List<String> whitelist;
+    private volatile RestrictionSettings restrictions;
 
     public MonitorArea(String name) {
         this.name = name;
         this.displayName = name;
-        this.dimension = "minecraft:overworld";
+        this.dimension = DimensionUtils.OVERWORLD;
         this.bounds = new RectangleBounds(0, 0, 0, 0);
         this.enterMode = GameType.ADVENTURE;
         this.leaveMode = GameType.SURVIVAL;
         this.enabled = true;
-        this.whitelist = new ArrayList<>();
+        this.whitelist = new CopyOnWriteArrayList<>();
         this.restrictions = new RestrictionSettings();
     }
 
@@ -54,7 +56,7 @@ public class MonitorArea {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     public List<String> getWhitelist() { return whitelist; }
-    public void setWhitelist(List<String> whitelist) { this.whitelist = whitelist; }
+    public void setWhitelist(List<String> whitelist) { this.whitelist = new CopyOnWriteArrayList<>(whitelist); }
 
     public RestrictionSettings getRestrictions() { return restrictions; }
     public void setRestrictions(RestrictionSettings restrictions) { this.restrictions = restrictions; }
@@ -142,39 +144,4 @@ public class MonitorArea {
     public enum BoundsType {
         RECTANGLE, CIRCLE, POLYGON
     }
-}
-
-class PlayerPosition {
-    private final double x, z;
-    private final String dimension;
-
-    public PlayerPosition(double x, double z, String dimension) {
-        this.x = x;
-        this.z = z;
-        this.dimension = dimension;
-    }
-
-    public double getX() { return x; }
-    public double getZ() { return z; }
-    public String getDimension() { return dimension; }
-}
-
-
-class RestrictionSettings {
-    private boolean enableItemBlacklist = true;  // 默认启用物品黑名单
-    private boolean blockTeleportCommands = true;  // 默认阻止传送命令
-    private Set<String> blockedItems = new HashSet<>();
-    private Set<String> blockedCommands = new HashSet<>();
-
-    public boolean isEnableItemBlacklist() { return enableItemBlacklist; }
-    public void setEnableItemBlacklist(boolean enableItemBlacklist) { this.enableItemBlacklist = enableItemBlacklist; }
-
-    public boolean isBlockTeleportCommands() { return blockTeleportCommands; }
-    public void setBlockTeleportCommands(boolean blockTeleportCommands) { this.blockTeleportCommands = blockTeleportCommands; }
-
-    public Set<String> getBlockedItems() { return blockedItems; }
-    public void setBlockedItems(Set<String> blockedItems) { this.blockedItems = blockedItems; }
-
-    public Set<String> getBlockedCommands() { return blockedCommands; }
-    public void setBlockedCommands(Set<String> blockedCommands) { this.blockedCommands = blockedCommands; }
 }

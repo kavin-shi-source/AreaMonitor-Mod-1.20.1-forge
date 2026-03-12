@@ -5,104 +5,116 @@
 ## Table of Contents
 - [Installation](#installation)
 - [Creating Your First Area](#creating-your-first-area)
-- [Advanced Usage](#advanced-usage)
+- [Command Reference](#command-reference)
+- [Common Use Cases](#common-use-cases)
 - [Troubleshooting](#troubleshooting)
 
 ## Installation
 
 ### Prerequisites
 - Minecraft 1.20.1
-- Forge installed and working
+- Forge installed
 - Server operator (OP) permissions
 
 ### Steps
 1. Download the AreaMonitor mod JAR file
-2. Place it in your Minecraft `mods` folder
-3. Start your Minecraft client or server
-4. Verify the mod is loaded by checking the logs for "AreaMonitor" entries
+2. Place it in your `mods` folder
+3. Start the server
 
 ## Creating Your First Area
 
-### Step 1: Get the Selection Tool
+### Step 1: Get Selection Tool
 ```
 /areamonitor visual tool
 ```
-This gives you a wooden axe that you'll use to select your area.
 
-### Step 2: Select the First Corner
-1. Hold the wooden axe in your main hand
-2. Right-click on the first corner block of your desired area
-3. You'll see a green message confirming the first point
+### Step 2: Select Area
+1. Hold the wooden axe, right-click the first corner
+2. Right-click the opposite corner
+3. Review the area info to confirm
 
-### Step 3: Select the Second Corner
-1. Continue holding the wooden axe
-2. Right-click on the opposite corner block
-3. You'll see detailed area information including:
-   - Coordinates of both points
-   - Area size in blocks
-   - Current dimension
-
-### Step 4: Create the Area
+### Step 3: Create Area
 ```
 /areamonitor selection create my_creative_zone
 ```
-Replace `my_creative_zone` with your desired area name.
 
-### Step 5: Configure Game Modes
-Set the game mode for when players enter the area:
+### Step 4: Configure Game Modes
 ```
 /areamonitor area setEnterMode my_creative_zone creative
-```
-
-Set the game mode for when players leave the area:
-```
 /areamonitor area setLeaveMode my_creative_zone survival
 ```
 
-### Step 6: Test Your Area
-1. Walk into the area - you should automatically switch to creative mode
-2. Walk out of the area - you should automatically switch back to survival mode
-3. You'll see on-screen messages confirming the transitions
+### Step 5: Test
+Walk into area → Auto switch to creative mode
+Walk out of area → Auto switch to survival mode
 
-## Advanced Usage
+## Command Reference
 
-### Adding Players to Whitelist
-Players on the whitelist won't be affected by area monitoring:
-```
-/areamonitor whitelist add PlayerName
-```
+### Basic Commands
+| Command | Description |
+|---------|-------------|
+| `/areamonitor status` | Show monitoring status |
+| `/areamonitor help` | Show all commands |
+| `/areamonitor toggle` | Toggle monitoring |
+| `/areamonitor reload` | Reload configuration |
+| `/areamonitor save` | Save configuration |
 
-### Viewing Area Information
-```
-/areamonitor area info my_creative_zone
-```
+### Area Management
+| Command | Description |
+|---------|-------------|
+| `/areamonitor area list` | List all areas |
+| `/areamonitor area info <name>` | Show area details |
+| `/areamonitor area delete <name>` | Delete area |
+| `/areamonitor area toggle <name>` | Toggle area |
+| `/areamonitor area setEnterMode <area> <mode>` | Set enter mode |
+| `/areamonitor area setLeaveMode <area> <mode>` | Set leave mode |
 
-### Visualizing Area Boundaries
-```
-/areamonitor visual show my_creative_zone
-```
+### Visual Tools
+| Command | Description |
+|---------|-------------|
+| `/areamonitor visual tool` | Get selection tool |
+| `/areamonitor visual show <area>` | Show area boundaries |
+| `/areamonitor visual hide` | Hide area boundaries |
 
-### Managing Multiple Areas
-You can create multiple areas with different settings:
-```
-/areamonitor selection create pvp_arena
-/areamonitor area setEnterMode pvp_arena adventure
-/areamonitor area setLeaveMode pvp_arena survival
-```
+### Selection Tools
+| Command | Description |
+|---------|-------------|
+| `/areamonitor selection create <name>` | Create area from selection |
+| `/areamonitor selection cancel` | Cancel selection |
+| `/areamonitor selection info` | Show selection info |
+| `/areamonitor selection tutorial` | Show tutorial |
 
-### Language Switching
-```
-/areamonitor language en  # Switch to English
-/areamonitor language zh  # Switch to Chinese
-```
+### Whitelist Management
+| Command | Description |
+|---------|-------------|
+| `/areamonitor whitelist add <player>` | Add player |
+| `/areamonitor whitelist remove <player>` | Remove player |
+| `/areamonitor whitelist list` | List whitelist |
+| `/areamonitor whitelist clear` | Clear whitelist |
+
+### Blacklist Management
+| Command | Description |
+|---------|-------------|
+| `/areamonitor blacklist info` | Show current restrictions |
+| `/areamonitor blacklist area <area> add <item>` | Add blacklisted item |
+| `/areamonitor blacklist area <area> remove <item>` | Remove blacklisted item |
+| `/areamonitor blacklist area <area> list` | List blacklist |
+| `/areamonitor blacklist area <area> toggle` | Toggle blacklist |
+
+### Language Settings
+| Command | Description |
+|---------|-------------|
+| `/areamonitor language` | Show current language |
+| `/areamonitor language en` | Switch to English |
+| `/areamonitor language zh` | Switch to Chinese |
 
 ## Common Use Cases
 
 ### Creative Building Zone
 ```
-/areamonitor selection create creative_plot
-/areamonitor area setEnterMode creative_plot creative
-/areamonitor area setLeaveMode creative_plot survival
+/areamonitor selection create creative_zone
+/areamonitor area setEnterMode creative_zone creative
+/areamonitor area setLeaveMode creative_zone survival
 ```
 
 ### PVP Arena
@@ -123,36 +135,18 @@ You can create multiple areas with different settings:
 
 ### Selection Tool Not Working
 - Ensure you have OP permissions
-- Make sure you're holding the tool in your main hand
-- Try getting a new tool: `/areamonitor visual tool`
+- Make sure the tool is in your main hand
+- Get a new tool: `/areamonitor visual tool`
 
 ### Area Not Triggering
-- Check area size (must be ≤1000x1000 blocks)
+- Check area size (≤1000x1000 blocks)
 - Verify you're in the correct dimension
 - Check if you're on the whitelist
-- Look at server logs for error messages
 
 ### Language Issues
-- Switch language and restart if text appears incorrectly
-- Check that both language files are present in the lang folder
-
-### Performance Issues
-- Reduce the number of active areas
-- Increase the check interval in configuration
-- Remove very large areas (>100000 blocks)
-
-## Tips and Best Practices
-
-1. **Start Small**: Begin with small areas to test functionality
-2. **Use Descriptive Names**: Choose clear, memorable area names
-3. **Test Thoroughly**: Always test areas with different game modes
-4. **Monitor Performance**: Watch server TPS when using many areas
-5. **Backup Configs**: Regularly backup your area configurations
-6. **Document Areas**: Keep notes on what each area is for
+- Switch language: `/areamonitor language en`
+- Check the lang folder
 
 ## Getting Help
 
-- Use `/areamonitor help` for command reference
-- Check server logs for error messages
-- Create an issue on the GitHub repository
-- Review the full documentation
+- Use `/areamonitor help` for commands

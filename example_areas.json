@@ -1,0 +1,28 @@
+{
+  "areas": {
+    "protected_zone_1": {
+      "displayName": "保护区1",
+      "dimension": "minecraft:overworld",
+      "minX": -30,
+      "maxX": -12,
+      "minZ": 0,
+      "maxZ": 6,
+      "enterMode": "adventure",
+      "leaveMode": "survival",
+      "enabled": true,
+      "whitelist": []
+    },
+    "creative_zone": {
+      "displayName": "创造区",
+      "dimension": "minecraft:overworld",
+      "minX": 50,
+      "maxX": 100,
+      "minZ": 50,
+      "maxZ": 100,
+      "enterMode": "creative",
+      "leaveMode": "survival",
+      "enabled": true,
+      "whitelist": ["admin", "moderator"]
+    }
+  }
+}

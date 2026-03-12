@@ -7,25 +7,38 @@ import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.*;
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Whitelist manager for controlling which players are exempt from area monitoring.
+ */
 @Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class WhitelistManager {
-    private static final Set<String> playerWhitelist = new HashSet<>();
-    private static final Set<UUID> whitelistUUIDs = new HashSet<>();
+    private static final Set<String> playerWhitelist = ConcurrentHashMap.newKeySet();
+    private static final Set<UUID> whitelistUUIDs = ConcurrentHashMap.newKeySet();
     private static File whitelistFile;
     private static MinecraftServer minecraftServer;
+
+    private static File getWhitelistFile() {
+        Path configDir = FMLPaths.CONFIGDIR.get().resolve("areamonitor");
+        if (!configDir.toFile().exists()) {
+            configDir.toFile().mkdirs();
+        }
+        return configDir.resolve("whitelist.txt").toFile();
+    }
 
     @SubscribeEvent
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
         minecraftServer = event.getServer();
-        whitelistFile = new File(minecraftServer.getServerDirectory(), "config/areamonitor-whitelist.txt");
+        whitelistFile = getWhitelistFile();
         loadWhitelist();
-        // 移除日志
     }
 
     @SubscribeEvent
@@ -54,6 +67,10 @@ public class WhitelistManager {
         playerWhitelist.clear();
         whitelistUUIDs.clear();
 
+        if (whitelistFile == null) {
+            whitelistFile = getWhitelistFile();
+        }
+
         if (!whitelistFile.exists()) {
             return;
         }
@@ -76,23 +93,27 @@ public class WhitelistManager {
                 }
             }
         } catch (IOException e) {
-            AreaMonitorMod.LOGGER.error("无法加载白名单文件", e);
+            AreaMonitorMod.LOGGER.error("Failed to load whitelist file", e);
         }
     }
 
     public static void saveWhitelist() {
+        if (whitelistFile == null) {
+            whitelistFile = getWhitelistFile();
+        }
+
         try {
             File parentDir = whitelistFile.getParentFile();
             if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
-                AreaMonitorMod.LOGGER.error("无法创建配置目录: {}", parentDir.getAbsolutePath());
+                AreaMonitorMod.LOGGER.error("Failed to create config directory: {}", parentDir.getAbsolutePath());
                 return;
             }
 
             try (FileWriter fileWriter = new FileWriter(whitelistFile);
                  BufferedWriter writer = new BufferedWriter(fileWriter)) {
-                writer.write("# 区域监控模组白名单");
+                writer.write("# Area Monitor Mod Whitelist");
                 writer.newLine();
-                writer.write("# 每行一个玩家名（不区分大小写）");
+                writer.write("# One player name per line (case insensitive)");
                 writer.newLine();
                 writer.newLine();
 
@@ -102,7 +123,7 @@ public class WhitelistManager {
                 }
             }
         } catch (IOException e) {
-            AreaMonitorMod.LOGGER.error("保存白名单文件失败: {}", whitelistFile.getAbsolutePath(), e);
+            AreaMonitorMod.LOGGER.error("Failed to save whitelist file: {}", whitelistFile.getAbsolutePath(), e);
         }
     }
 
