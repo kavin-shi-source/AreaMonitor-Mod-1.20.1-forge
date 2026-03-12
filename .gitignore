@@ -27,8 +27,11 @@ forge*changelog.txt
 # Claude Code files
 .claude
 
-# Test folders (if any)
-*AreaMonitor*test*
+# Test folders and files
+src/test/
+**/test/
+**/*Test*
+**/*test*
 
 # VS Code
 .vscode
