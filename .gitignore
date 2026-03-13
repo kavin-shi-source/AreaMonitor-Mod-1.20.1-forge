@@ -35,3 +35,7 @@ src/test/
 
 # VS Code
 .vscode
+
+# Compressed files
+*.gz
+*.log

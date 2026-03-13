@@ -984,20 +984,14 @@ public class ExtendedCommands {
     }
 
     private static int setLanguageEnglish(CommandContext<CommandSourceStack> context) {
-        if (LocalizationManager.setLanguage(LocalizationManager.LANGUAGE_ENGLISH)) {
-            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.english.success", false);
-        } else {
-            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.failed", false);
-        }
+        LocalizationManager.switchLanguage(LocalizationManager.LANGUAGE_ENGLISH);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.english.success", false);
         return 1;
     }
 
     private static int setLanguageChinese(CommandContext<CommandSourceStack> context) {
-        if (LocalizationManager.setLanguage(LocalizationManager.LANGUAGE_CHINESE)) {
-            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.chinese.success", false);
-        } else {
-            MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.failed", false);
-        }
+        LocalizationManager.switchLanguage(LocalizationManager.LANGUAGE_CHINESE);
+        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.chinese.success", true);
         return 1;
     }
 

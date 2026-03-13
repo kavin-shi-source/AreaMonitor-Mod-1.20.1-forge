@@ -46,12 +46,12 @@ public class AreaMonitor {
     }
 
     private record PendingAction(UUID playerId, Runnable action, long executeTime) {
-        // record类自动生成构造函数
-        // executeTime应该是绝对时间戳（当前时间 + 延迟）
+        // Record class auto-generates constructor
+        // executeTime should be absolute timestamp (current time + delay)
     }
 
     /**
-     * 获取当前的Minecraft服务器实例
+     * Get the current Minecraft server instance.
      */
     public static MinecraftServer getServer() {
         return minecraftServer;
@@ -127,8 +127,8 @@ public class AreaMonitor {
     }
 
     /**
-     * 添加待处理的游戏模式切换（进入区域）
-     * 注意：使用 playerId 而非 player 引用，避免玩家下线后访问无效对象
+     * Add pending game mode change (entering area).
+     * Note: Use playerId instead of player reference to avoid accessing invalid objects after player disconnects.
      */
     public static void addPendingGameModeChange(ServerPlayer player, GameType gameMode) {
         UUID playerId = player.getUUID();
@@ -180,8 +180,8 @@ public class AreaMonitor {
     }
 
     /**
-     * 添加待处理的游戏模式切换（离开区域）
-     * 注意：使用 playerId 而非 player 引用，避免玩家下线后访问无效对象
+     * Add pending game mode change (leaving area).
+     * Note: Use playerId instead of player reference to avoid accessing invalid objects after player disconnects.
      */
     public static void addPendingGameModeChangeOnLeave(ServerPlayer player, GameType gameMode) {
         UUID playerId = player.getUUID();

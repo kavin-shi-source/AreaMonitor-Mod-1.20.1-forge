@@ -42,14 +42,14 @@ public class AreaManager {
     public void addArea(MonitorArea area) {
         areas.put(area.getName(), area);
         spatialPartition.addRegion(area);
-        AreaMonitorMod.LOGGER.info("添加监控区域: {}", area.getName());
+        AreaMonitorMod.LOGGER.info("Added monitoring area: {}", area.getName());
     }
 
     public void removeArea(String areaName) {
         MonitorArea removed = areas.remove(areaName);
         if (removed != null) {
             spatialPartition.removeRegion(areaName);
-            AreaMonitorMod.LOGGER.info("移除监控区域: {}", areaName);
+            AreaMonitorMod.LOGGER.info("Removed monitoring area: {}", areaName);
         }
     }
 
@@ -86,38 +86,38 @@ public class AreaManager {
         Set<String> currentAreas = getCurrentAreasOptimized(player, position);
         Set<String> previousAreas = playerAreas.getOrDefault(player.getUUID(), EMPTY_AREA_SET);
 
-        // 检测进入的新区域
+        // Detect newly entered areas
         for (String areaName : currentAreas) {
             if (!previousAreas.contains(areaName)) {
                 handleAreaEnter(player, areaName);
             }
         }
 
-        // 检测离开的区域
+        // Detect left areas
         for (String areaName : previousAreas) {
             if (!currentAreas.contains(areaName)) {
                 handleAreaLeave(player, areaName);
             }
         }
 
-        // 只有当区域状态发生变化时才更新缓存
+        // Only update cache when area state changes
         if (!currentAreas.equals(previousAreas)) {
             playerAreas.put(player.getUUID(), new HashSet<>(currentAreas));
         }
     }
 
     /**
-     * 使用空间分区优化的区域检测
+     * Optimized area detection using spatial partitioning.
      */
     private Set<String> getCurrentAreasOptimized(ServerPlayer player, PlayerPosition position) {
         Set<String> currentAreas = new HashSet<>();
 
-        // 使用空间分区获取可能相关的区域
+        // Use spatial partitioning to get potentially relevant areas
         Set<MonitorArea> potentialAreas = spatialPartition.getPotentialRegions(
             position.getX(), position.getZ(), position.getDimension()
         );
 
-        // 只检查相关的区域
+        // Only check relevant areas
         for (MonitorArea area : potentialAreas) {
             if (area.isEnabled() && area.isPlayerInArea(position)) {
                 currentAreas.add(area.getName());
@@ -131,17 +131,17 @@ public class AreaManager {
         MonitorArea area = areas.get(areaName);
         if (area == null || !area.isEnabled()) return;
 
-        // 检查区域白名单
+        // Check area whitelist
         if (area.getWhitelist().contains(player.getName().getString().toLowerCase())) {
             return;
         }
 
         AreaMonitorMod.LOGGER.debug("Player {} entered area {}", player.getName().getString(), areaName);
 
-        // 显示进入消息
+        // Show enter message
         showAreaMessage(player, area.getDisplayName(), true, area.getEnterMode());
 
-        // 延迟切换游戏模式
+        // Delayed game mode switch
         AreaMonitor.addPendingGameModeChange(player, area.getEnterMode());
 
     }
@@ -152,16 +152,16 @@ public class AreaManager {
 
         AreaMonitorMod.LOGGER.debug("Player {} left area {}", player.getName().getString(), areaName);
 
-        // 显示离开消息
+        // Show leave message
         showAreaMessage(player, area.getDisplayName(), false, area.getLeaveMode());
 
-        // 延迟切换游戏模式（离开区域）
+        // Delayed game mode switch (leaving area)
         AreaMonitor.addPendingGameModeChangeOnLeave(player, area.getLeaveMode());
 
     }
 
     private void showAreaMessage(ServerPlayer player, String areaName, boolean entering, GameType gameMode) {
-        // 只发送屏幕中央Title提示，移除聊天消息
+        // Only send screen center Title notification, remove chat messages
         showAreaTitle(player, areaName, entering, gameMode);
     }
 
@@ -169,15 +169,15 @@ public class AreaManager {
         try {
             String action = entering ? LocalizationManager.translate("area.enter") : LocalizationManager.translate("area.leave");
             String modeName = LocalizationManager.getGameModeDisplayName(gameMode);
-            // 使用 §7 (灰色) 和较小的格式，去掉粗体
+            // Use §7 (gray) and smaller format, remove bold
             String message = String.format(LocalizationManager.translate("area.message"), action, areaName, modeName);
 
             player.connection.send(new ClientboundSetTitlesAnimationPacket(TITLE_FADE_IN_TICKS, TITLE_STAY_TICKS, TITLE_FADE_OUT_TICKS));
-            // 只显示一行，作为Title显示
+            // Only display one line as Title
             player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(message)));
-            // 不发送Subtitle，实现单行显示
+            // Do not send Subtitle, achieve single line display
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("发送Title提示时出错", e);
+            AreaMonitorMod.LOGGER.error("Error sending title notification", e);
         }
     }
 
@@ -187,7 +187,7 @@ public class AreaManager {
 
         if (area == null) return playersInArea;
 
-        // 获取当前服务器实例并检查所有在线玩家
+        // Get current server instance and check all online players
         MinecraftServer server = AreaMonitor.getServer();
         if (server != null) {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -219,22 +219,22 @@ public class AreaManager {
     }
 
     public void clearUnusedCaches() {
-        // 清理长时间未活动的玩家数据
+        // Clean up player data that has been inactive for a long time
         playerAreas.entrySet().removeIf(entry -> {
-            // 这里可以添加更复杂的清理逻辑
-            return false; // 暂时不清理
+            // More complex cleanup logic can be added here
+            return false; // Do not clean up for now
         });
     }
 
     /**
-     * 重新加载所有区域到空间分区（用于区域配置更新后）
+     * Rebuild all areas into spatial partition (used after area config updates).
      */
     public void rebuildSpatialPartition() {
         spatialPartition.clear();
         for (MonitorArea area : areas.values()) {
             spatialPartition.addRegion(area);
         }
-        AreaMonitorMod.LOGGER.info("空间分区已重建，共 {} 个区域", areas.size());
+        AreaMonitorMod.LOGGER.info("Spatial partition rebuilt, total {} areas", areas.size());
     }
 
     public enum TriggerType {

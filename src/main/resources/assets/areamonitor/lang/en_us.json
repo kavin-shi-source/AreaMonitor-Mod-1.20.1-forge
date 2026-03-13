@@ -230,5 +230,9 @@
   "selection.tool.no_permission": "§cYou don't have permission to use the selection tool",
   "selection.tool.obtained": "§aArea selection tool obtained",
   "selection.warning.area_too_large": "§c⚠ Warning: Area is too large, may affect server performance",
-  "trigger.command.executing": "Executing command: %s"
+  "trigger.command.executing": "Executing command: %s",
+  "trigger.action.error": "Error executing trigger action",
+  "trigger.sound.error": "Failed to play sound effect",
+  "trigger.particle.error": "Failed to display particle effect",
+  "trigger.teleport.error": "Failed to teleport player"
 }

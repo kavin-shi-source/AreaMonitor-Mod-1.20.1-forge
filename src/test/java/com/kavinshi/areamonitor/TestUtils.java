@@ -3,12 +3,12 @@ package com.kavinshi.areamonitor;
 import net.minecraft.world.level.GameType;
 
 /**
- * 测试工具类
+ * Test utilities.
  */
 public class TestUtils {
 
     /**
-     * 创建测试用的区域
+     * Create a test area.
      */
     public static MonitorArea createTestArea(String name, int minX, int minZ, int maxX, int maxZ) {
         MonitorArea area = new MonitorArea(name);
@@ -22,7 +22,7 @@ public class TestUtils {
     }
 
     /**
-     * 创建测试用的区域配置
+     * Create a test area config.
      */
     public static ConfigManager.AreaConfig createTestAreaConfig(int minX, int minZ, int maxX, int maxZ) {
         ConfigManager.AreaConfig config = new ConfigManager.AreaConfig();
@@ -40,7 +40,7 @@ public class TestUtils {
     }
 
     /**
-     * 清理测试环境
+     * Clean up test environment.
      */
     public static void cleanupTestEnvironment() {
         AreaManager areaManager = AreaManager.getInstance();
@@ -48,7 +48,6 @@ public class TestUtils {
             areaManager.removeArea(areaName);
         }
 
-        // 清理LocalizationManager缓存
-        LocalizationManager.setLanguage(LocalizationManager.LANGUAGE_ENGLISH);
+        LocalizationManager.switchLanguage(LocalizationManager.LANGUAGE_ENGLISH);
     }
 }

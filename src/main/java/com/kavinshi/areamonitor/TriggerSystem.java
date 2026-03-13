@@ -16,12 +16,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 高级触发系统，处理各种触发条件和动作
+ * Advanced trigger system for handling various trigger conditions and actions.
  */
 public class TriggerSystem {
 
     /**
-     * 基础触发器接口
+     * Base trigger interface.
      */
     public interface Trigger {
         boolean check(ServerPlayer player);
@@ -30,7 +30,7 @@ public class TriggerSystem {
     }
 
     /**
-     * 物品持有触发器
+     * Item hold trigger.
      */
     public static class ItemHoldTrigger implements Trigger {
         private final AreaManager.TriggerType type;
@@ -86,7 +86,7 @@ public class TriggerSystem {
                 try {
                     action.execute(player, area);
                 } catch (Exception e) {
-                    AreaMonitorMod.LOGGER.error("执行触发动作时出错", e);
+                    AreaMonitorMod.LOGGER.error("Error executing trigger action", e);
                 }
             }
         }
@@ -98,7 +98,7 @@ public class TriggerSystem {
     }
 
     /**
-     * 玩家数量触发器
+     * Player count trigger.
      */
     public static class PlayerCountTrigger implements Trigger {
         private final AreaManager.TriggerType type;
@@ -118,7 +118,7 @@ public class TriggerSystem {
 
         @Override
         public boolean check(ServerPlayer player) {
-            // 对于玩家数量触发器，这个方法不会被直接调用
+            // For player count trigger, this method is not directly called
             return false;
         }
 
@@ -152,7 +152,7 @@ public class TriggerSystem {
                 try {
                     action.execute(player, area);
                 } catch (Exception e) {
-                    AreaMonitorMod.LOGGER.error("执行玩家数量触发动作时出错", e);
+                    AreaMonitorMod.LOGGER.error("Error executing player count trigger action", e);
                 }
             }
         }
@@ -196,7 +196,7 @@ public class TriggerSystem {
                 try {
                     action.execute(player, area);
                 } catch (Exception e) {
-                    AreaMonitorMod.LOGGER.error("执行周期性触发动作时出错", e);
+                    AreaMonitorMod.LOGGER.error("Error executing periodic trigger action", e);
                 }
             }
         }
@@ -208,21 +208,21 @@ public class TriggerSystem {
     }
 
     /**
-     * 触发条件枚举
+     * Trigger condition enumeration.
      */
     public enum TriggerCondition {
         AND, OR
     }
 
     /**
-     * 触发动作接口
+     * Trigger action interface.
      */
     public interface TriggerAction {
         void execute(ServerPlayer player, MonitorArea area);
     }
 
     /**
-     * 发送消息动作
+     * Send message action.
      */
     public static class SendMessageAction implements TriggerAction {
         private final String message;
@@ -256,7 +256,7 @@ public class TriggerSystem {
     }
 
     /**
-     * 执行命令动作
+     * Execute command action.
      */
     public static class ExecuteCommandAction implements TriggerAction {
         private final String command;
@@ -303,7 +303,7 @@ public class TriggerSystem {
     }
 
     /**
-     * 播放音效动作
+     * Play sound action.
      */
     public static class PlaySoundAction implements TriggerAction {
         private final String soundName;
@@ -326,13 +326,13 @@ public class TriggerSystem {
                     pitch
                 );
             } catch (Exception e) {
-                AreaMonitorMod.LOGGER.error("播放音效失败", e);
+                AreaMonitorMod.LOGGER.error("Failed to play sound effect", e);
             }
         }
     }
 
     /**
-     * 粒子效果动作
+     * Particle effect action.
      */
     public static class ParticleEffectAction implements TriggerAction {
         private final String particleType;
@@ -361,13 +361,13 @@ public class TriggerSystem {
                     offsetX, offsetY, offsetZ
                 );
             } catch (Exception e) {
-                AreaMonitorMod.LOGGER.error("显示粒子效果失败", e);
+                AreaMonitorMod.LOGGER.error("Failed to display particle effect", e);
             }
         }
     }
 
     /**
-     * 传送动作
+     * Teleport action.
      */
     public static class TeleportAction implements TriggerAction {
         private final double x, y, z;
@@ -386,18 +386,18 @@ public class TriggerSystem {
         @Override
         public void execute(ServerPlayer player, MonitorArea area) {
             try {
-                // 简单的传送实现
+                // Simple teleport implementation
                 player.teleportTo(x, y, z);
                 player.setYRot(yaw);
                 player.setXRot(pitch);
             } catch (Exception e) {
-                AreaMonitorMod.LOGGER.error("传送玩家失败", e);
+                AreaMonitorMod.LOGGER.error("Failed to teleport player", e);
             }
         }
     }
 
     /**
-     * 切换游戏模式动作
+     * Game mode switch action.
      */
     public static class GameModeAction implements TriggerAction {
         private final GameType gameMode;

@@ -28,13 +28,13 @@ public class LocalizationManager {
     private volatile String currentLanguage = DEFAULT_LANGUAGE;
 
     /**
-     * 支持的语言列表
+     * Supported languages.
      */
     public static final String LANGUAGE_ENGLISH = "en_us";
     public static final String LANGUAGE_CHINESE = "zh_cn";
 
     /**
-     * 默认语言设置为英文
+     * Default language is English.
      */
     private static final String DEFAULT_LANGUAGE = LANGUAGE_ENGLISH;
 
@@ -46,21 +46,18 @@ public class LocalizationManager {
     }
 
     private LocalizationManager() {
-        // 默认使用英文
         currentLanguage = DEFAULT_LANGUAGE;
         loadLanguage();
     }
 
     /**
-     * 加载语言文件
+     * Load language file.
      */
     private void loadLanguage() {
         translations.clear();
 
-        // 不再自动检测语言，使用当前设置的语言
         AreaMonitorMod.LOGGER.info("LocalizationManager: Loading language: {}", currentLanguage);
 
-        // 加载对应语言文件
         String resourcePath = String.format("assets/%s/lang/%s.json", MOD_ID, currentLanguage);
 
         try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream(resourcePath)) {
@@ -69,7 +66,6 @@ public class LocalizationManager {
                     new InputStreamReader(inputStream, StandardCharsets.UTF_8)
                 ).getAsJsonObject();
 
-                // 解析JSON到翻译映射
                 parseJsonObject(jsonObject, "");
                 AreaMonitorMod.LOGGER.info("LocalizationManager: Successfully loaded language file: {}", currentLanguage);
             } else {
@@ -83,7 +79,7 @@ public class LocalizationManager {
     }
 
     /**
-     * 递归解析JSON对象
+     * Recursively parse JSON object.
      */
     private void parseJsonObject(JsonObject jsonObject, String prefix) {
         for (Map.Entry<String, com.google.gson.JsonElement> entry : jsonObject.entrySet()) {
@@ -98,22 +94,19 @@ public class LocalizationManager {
     }
 
     /**
-     * 加载默认翻译（英文）
+     * Load default translations (English).
      */
     private void loadDefaultTranslations() {
-        // 游戏模式相关
         translations.put("gameMode.survival", "Survival Mode");
         translations.put("gameMode.creative", "Creative Mode");
         translations.put("gameMode.adventure", "Adventure Mode");
         translations.put("gameMode.spectator", "Spectator Mode");
 
-        // 区域相关
         translations.put("area.enter", "§aEnter");
         translations.put("area.leave", "§cLeave");
         translations.put("area.message", "§7%s area: %s | %s");
         translations.put("area.gamemode_changed", "§aSwitched to %s");
 
-        // 命令相关
         translations.put("command.areamonitor.toggle.enabled", "§6Area monitoring §aenabled§6, use /areamonitor status to check status");
         translations.put("command.areamonitor.toggle.disabled", "§6Area monitoring §cdisabled§6, use /areamonitor toggle to re-enable");
         translations.put("command.areamonitor.area.create.success", "§aArea '%s' created successfully");
@@ -134,7 +127,6 @@ public class LocalizationManager {
         translations.put("command.areamonitor.save.success", "§aConfiguration saved successfully");
         translations.put("command.areamonitor.save.error", "§cFailed to save configuration: %s");
 
-        // 错误相关
         translations.put("error.invalid_gamemode", "§cInvalid game mode: %s");
         translations.put("error.area_not_found", "§cArea not found: %s");
         translations.put("error.invalid_coordinates", "§cInvalid coordinates");
@@ -142,7 +134,7 @@ public class LocalizationManager {
     }
 
     /**
-     * 获取翻译文本
+     * Get translated text.
      */
     public static String translate(String key, Object... args) {
         String template = InstanceHolder.INSTANCE.translations.getOrDefault(key, key);
@@ -171,14 +163,14 @@ public class LocalizationManager {
     }
 
     /**
-     * 获取翻译文本并转换为Component
+     * Get translated text and convert to Component.
      */
     public static MutableComponent translateComponent(String key, Object... args) {
         return Component.literal(translate(key, args));
     }
 
     /**
-     * 获取游戏模式显示名称
+     * Get game mode display name.
      */
     public static String getGameModeDisplayName(net.minecraft.world.level.GameType gameMode) {
         return switch (gameMode) {
@@ -190,78 +182,76 @@ public class LocalizationManager {
     }
 
     /**
-     * 重新加载语言文件
+     * Reload language file.
      */
-    public static void reload() {
+    public static void reloadLanguage() {
         InstanceHolder.INSTANCE.loadLanguage();
     }
 
     /**
-     * 获取Minecraft客户端语言设置
+     * Get Minecraft client language setting.
      */
     private String getMinecraftLanguage() {
         try {
             if (net.minecraftforge.fml.loading.FMLLoader.getDist().isClient()) {
                 Class<?> languageClass = Class.forName("net.minecraft.locale.Language");
-                java.lang.reflect.Method getInstanceMethod = languageClass.getMethod("getInstance");
-                Object languageInstance = getInstanceMethod.invoke(null);
-                java.lang.reflect.Method getCodeMethod = languageInstance.getClass().getMethod("getCode");
-                return (String) getCodeMethod.invoke(languageInstance);
+                java.lang.reflect.Method getInstance = languageClass.getMethod("getInstance");
+                Object languageInstance = getInstance.invoke(null);
+                java.lang.reflect.Method getSelected = languageClass.getMethod("getSelected");
+                Object selected = getSelected.invoke(languageInstance);
+                if (selected != null) {
+                    java.lang.reflect.Method getCode = selected.getClass().getMethod("getCode");
+                    return (String) getCode.invoke(selected);
+                }
             }
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.debug("Could not get Minecraft client language: {}", e.getMessage());
+            AreaMonitorMod.LOGGER.debug("Could not detect Minecraft language: {}", e.getMessage());
         }
         return null;
     }
 
     /**
-     * 获取当前语言代码
+     * Get current language code.
      */
     public static String getCurrentLanguage() {
         return InstanceHolder.INSTANCE.currentLanguage;
     }
 
     /**
-     * 切换语言
+     * Switch language.
      */
-    public static boolean setLanguage(String languageCode) {
-        if (LANGUAGE_ENGLISH.equals(languageCode) || LANGUAGE_CHINESE.equals(languageCode)) {
+    public static void switchLanguage(String languageCode) {
+        if (Arrays.asList(SUPPORTED_LANGUAGES).contains(languageCode)) {
             InstanceHolder.INSTANCE.currentLanguage = languageCode;
-            InstanceHolder.INSTANCE.loadLanguage(); // 重新加载对应语言文件
-            AreaMonitorMod.LOGGER.info("LocalizationManager: Language switched to: {}", languageCode);
-            return true;
+            InstanceHolder.INSTANCE.loadLanguage();
         }
-        AreaMonitorMod.LOGGER.warn("LocalizationManager: Unsupported language: {}", languageCode);
-        return false;
     }
 
     /**
-     * 获取支持的语言列表
+     * Get supported languages list.
      */
     public static String[] getSupportedLanguages() {
-        return new String[]{LANGUAGE_ENGLISH, LANGUAGE_CHINESE};
+        return SUPPORTED_LANGUAGES.clone();
     }
 
     /**
-     * 获取语言显示名称
+     * Get language display name.
      */
     public static String getLanguageDisplayName(String languageCode) {
         return switch (languageCode) {
             case LANGUAGE_ENGLISH -> "English";
             case LANGUAGE_CHINESE -> "中文";
-            default -> "Unknown";
+            default -> languageCode;
         };
     }
 
     /**
-     * 测试语言检测（用于调试）
+     * Test language detection (for debugging).
      */
     public static void testLanguageDetection() {
         AreaMonitorMod.LOGGER.info("=== LocalizationManager Test ===");
         AreaMonitorMod.LOGGER.info("Current language: {}", getCurrentLanguage());
         AreaMonitorMod.LOGGER.info("Test translation: {}", translate("gameMode.adventure"));
         AreaMonitorMod.LOGGER.info("Test translation: {}", translate("area.enter"));
-        AreaMonitorMod.LOGGER.info("Test translation: {}", translate("area.message", "Enter", "Test Area", "Adventure Mode"));
-        AreaMonitorMod.LOGGER.info("==============================");
     }
 }

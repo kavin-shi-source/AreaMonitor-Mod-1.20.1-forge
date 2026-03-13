@@ -230,5 +230,9 @@
   "selection.tool.no_permission": "§c你没有权限使用选择工具",
   "selection.tool.obtained": "§a已获得区域选择工具",
   "selection.warning.area_too_large": "§c⚠ 警告：区域过大，可能影响服务器性能",
-  "trigger.command.executing": "正在执行命令：%s"
+  "trigger.command.executing": "正在执行命令：%s",
+  "trigger.action.error": "执行触发动作时出错",
+  "trigger.sound.error": "播放音效失败",
+  "trigger.particle.error": "显示粒子效果失败",
+  "trigger.teleport.error": "传送玩家失败"
 }

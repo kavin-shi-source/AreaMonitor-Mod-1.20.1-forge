@@ -6,19 +6,18 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 四叉树空间分区管理器
- * 用于优化大量区域的检测性能
+ * Quad-tree spatial partition manager.
+ * Used to optimize detection performance for large numbers of regions.
  */
 public class SpatialPartitionManager {
-    private static final int GRID_SIZE = 256; // 网格大小
-    private static final int MAX_REGIONS_PER_GRID = 50; // 每个网格最大区域数
+    private static final int GRID_SIZE = 256;
+    private static final int MAX_REGIONS_PER_GRID = 50;
 
-    // 空间网格映射 [x][z] -> 区域集合
     private final Map<String, Set<String>> spatialGrid = new ConcurrentHashMap<>();
     private final Map<String, MonitorArea> allRegions = new ConcurrentHashMap<>();
 
     /**
-     * 添加区域到空间分区
+     * Add region to spatial partition.
      */
     public void addRegion(MonitorArea region) {
         allRegions.put(region.getName(), region);
@@ -26,7 +25,7 @@ public class SpatialPartitionManager {
     }
 
     /**
-     * 从空间分区移除区域
+     * Remove region from spatial partition.
      */
     public void removeRegion(String regionName) {
         MonitorArea region = allRegions.remove(regionName);
@@ -36,26 +35,22 @@ public class SpatialPartitionManager {
     }
 
     /**
-     * 更新区域在空间分区中的位置
+     * Update region position in spatial partition.
      */
     public void updateRegion(MonitorArea region) {
-        // 先移除旧的位置
         removeRegionFromGrid(region);
-        // 重新添加
         addRegionToGrid(region);
     }
 
     /**
-     * 获取可能与给定位置相交的区域
+     * Get potential regions that may intersect with given position.
      */
     public Set<MonitorArea> getPotentialRegions(double x, double z, String dimension) {
         Set<MonitorArea> result = new HashSet<>();
 
-        // 获取玩家所在网格及相邻网格
         int gridX = (int) Math.floor(x / GRID_SIZE);
         int gridZ = (int) Math.floor(z / GRID_SIZE);
 
-        // 检查3x3网格范围（包括相邻网格）
         for (int dx = -1; dx <= 1; dx++) {
             for (int dz = -1; dz <= 1; dz++) {
                 String gridKey = getGridKey(gridX + dx, gridZ + dz);
@@ -76,21 +71,21 @@ public class SpatialPartitionManager {
     }
 
     /**
-     * 获取所有区域
+     * Get all regions.
      */
     public Collection<MonitorArea> getAllRegions() {
         return allRegions.values();
     }
 
     /**
-     * 获取区域数量
+     * Get region count.
      */
     public int getRegionCount() {
         return allRegions.size();
     }
 
     /**
-     * 获取网格统计信息
+     * Get grid statistics.
      */
     public Map<String, Object> getGridStats() {
         Map<String, Object> stats = new HashMap<>();
@@ -114,25 +109,21 @@ public class SpatialPartitionManager {
     }
 
     /**
-     * 清除所有数据
+     * Clear all data.
      */
     public void clear() {
         spatialGrid.clear();
         allRegions.clear();
     }
 
-    // 私有方法
-
     private void addRegionToGrid(MonitorArea region) {
         AABB bounds = region.getBoundingBox();
 
-        // 计算区域覆盖的网格范围
         int minGridX = (int) Math.floor(bounds.minX / GRID_SIZE);
         int maxGridX = (int) Math.floor(bounds.maxX / GRID_SIZE);
         int minGridZ = (int) Math.floor(bounds.minZ / GRID_SIZE);
         int maxGridZ = (int) Math.floor(bounds.maxZ / GRID_SIZE);
 
-        // 将区域添加到所有覆盖的网格中
         for (int x = minGridX; x <= maxGridX; x++) {
             for (int z = minGridZ; z <= maxGridZ; z++) {
                 String gridKey = getGridKey(x, z);
@@ -146,10 +137,8 @@ public class SpatialPartitionManager {
     private void removeRegionFromGrid(MonitorArea region) {
         String regionName = region.getName();
 
-        // 从所有网格中移除该区域
         spatialGrid.values().forEach(regions -> regions.remove(regionName));
 
-        // 清理空网格
         spatialGrid.entrySet().removeIf(entry -> entry.getValue().isEmpty());
     }
 

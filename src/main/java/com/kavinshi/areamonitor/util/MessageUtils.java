@@ -19,7 +19,7 @@ import net.minecraft.server.level.ServerPlayer;
  * <p>The server language is controlled by the {@code /areamonitor language en/zh} command,
  * defaulting to English.</p>
  * 
- * @since 2.0.2
+ * @since 2.0.3
  */
 public final class MessageUtils {
     

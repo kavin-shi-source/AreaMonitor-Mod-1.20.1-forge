@@ -2,6 +2,7 @@ package com.kavinshi.areamonitor;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
@@ -18,55 +19,50 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class SelectionTool {
     /**
+     * NBT tag key for identifying selection tools.
+     */
+    private static final String NBT_TAG_SELECTION_TOOL = "areamonitor_selection_tool";
+
+    /**
      * Maximum distance between two selection points (in blocks).
      * Prevents creating extremely large areas that could impact performance.
      */
     private static final double MAX_SELECTION_DISTANCE = 1000.0;
-    
+
     /**
      * Maximum area size in square blocks.
      * Limits the total area that can be monitored to prevent performance issues.
      */
     private static final long MAX_SELECTION_AREA = 1_000_000L;
-    
+
     /**
      * Threshold for showing a warning about large area selection.
      * Areas larger than this will show a warning but still allow creation.
      */
     public static final long LARGE_AREA_WARNING_THRESHOLD = 100_000L;
-    
+
     /**
      * Cooldown period for help messages in milliseconds.
      * Prevents chat spam when player repeatedly right-clicks without selection.
      */
     public static final int HELP_MESSAGE_COOLDOWN_MS = 5000;
-    
+
     private static final Map<UUID, SelectionPoints> playerSelections = new ConcurrentHashMap<>();
     private static final Map<UUID, Long> lastHelpTimes = new ConcurrentHashMap<>();
 
     private SelectionTool() {
     }
 
-    private static String getSelectionToolName() {
-        return "§a" + LocalizationManager.translate("area.selection.tool_name") + " Tool";
-    }
-
     /**
      * Check if player is holding the selection tool.
+     * Uses NBT tag for identification, independent of item name or language.
      */
     public static boolean isHoldingSelectionTool(ServerPlayer player) {
         ItemStack heldItem = player.getMainHandItem();
         if (heldItem.isEmpty()) return false;
 
-        net.minecraft.network.chat.Component name = heldItem.getHoverName();
-        if (name == null) return false;
-
-        String nameString = name.getString();
-        if (nameString == null) return false;
-
-        return nameString.contains("Area Selection") ||
-               nameString.contains("区域选择") ||
-               nameString.contains(LocalizationManager.translate("area.selection.tool_name"));
+        CompoundTag tag = heldItem.getTag();
+        return tag != null && tag.getBoolean(NBT_TAG_SELECTION_TOOL);
     }
 
     /**
@@ -74,7 +70,11 @@ public class SelectionTool {
      */
     public static void giveSelectionTool(ServerPlayer player) {
         ItemStack tool = new ItemStack(Items.WOODEN_AXE);
-        tool.setHoverName(net.minecraft.network.chat.Component.literal(getSelectionToolName()));
+
+        CompoundTag tag = tool.getOrCreateTag();
+        tag.putBoolean(NBT_TAG_SELECTION_TOOL, true);
+
+        tool.setHoverName(net.minecraft.network.chat.Component.translatable("area.selection.tool_name"));
 
         if (player.getInventory().getFreeSlot() != -1) {
             if (player.addItem(tool)) {

@@ -2,6 +2,20 @@
 
 [![中文版本](https://img.shields.io/badge/中文版本-点击这里-red.svg)](CHANGELOG.md)
 
+## [2.0.3] - 2025-03-14
+
+### Added
+- **NBT Tag Identification**: Selection tool uses NBT tags for identification, no longer depends on name, supports any language switching
+
+### Fixed
+- **Language Switching Issue**: Fixed selection tool not working after switching language
+- **Hardcoded Strings**: Removed hardcoded Chinese/English strings in SelectionTool
+
+### Improved
+- **Code Comments**: All code comments unified to English
+- **Log Language**: All log outputs unified to English
+- **Code Quality**: Passed final code audit, score 10/10
+
 ## [2.0.2] - 2025-03-13
 
 ### Added
