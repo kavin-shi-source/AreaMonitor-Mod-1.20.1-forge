@@ -293,14 +293,22 @@ public class ConfigManager {
     }
 
     /**
-     * Validate area config integrity
+     * Validate area config integrity with enhanced checks.
      */
     private static boolean validateAreaConfig(String areaName, AreaConfig config) {
         if (areaName == null || areaName.trim().isEmpty()) {
+            AreaMonitorMod.LOGGER.warn("Area name is null or empty");
+            return false;
+        }
+
+        // Validate area name length
+        if (areaName.length() > 64) {
+            AreaMonitorMod.LOGGER.warn("Area {} name is too long (max 64 characters)", areaName);
             return false;
         }
 
         if (config == null) {
+            AreaMonitorMod.LOGGER.warn("Area {} config is null", areaName);
             return false;
         }
 
@@ -317,13 +325,50 @@ public class ConfigManager {
             return false;
         }
 
+        // Validate coordinate bounds (Minecraft world border is ±29,999,984)
+        int worldBorder = 29999984;
+        if (Math.abs(config.minX) > worldBorder || Math.abs(config.maxX) > worldBorder ||
+            Math.abs(config.minZ) > worldBorder || Math.abs(config.maxZ) > worldBorder) {
+            AreaMonitorMod.LOGGER.warn("Area {} has coordinates outside world border (±{}): minX={}, maxX={}, minZ={}, maxZ={}",
+                    areaName, worldBorder, config.minX, config.maxX, config.minZ, config.maxZ);
+            return false;
+        }
+
+        // Validate area size (prevent extremely large areas that could cause performance issues)
+        long areaWidth = (long) config.maxX - config.minX;
+        long areaLength = (long) config.maxZ - config.minZ;
+        long areaSize = areaWidth * areaLength;
+        long maxAreaSize = 10000000L; // 10 million blocks (e.g., 3162x3162)
+
+        if (areaSize > maxAreaSize) {
+            AreaMonitorMod.LOGGER.warn("Area {} is too large ({}x{} = {} blocks, max {}). This may cause performance issues.",
+                    areaName, areaWidth, areaLength, areaSize, maxAreaSize);
+            // Don't reject, just warn
+        }
+
         // Validate game mode
         try {
             parseGameMode(config.enterMode);
             parseGameMode(config.leaveMode);
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.warn("Area {} contains invalid game mode config", areaName);
+            AreaMonitorMod.LOGGER.warn("Area {} contains invalid game mode config: enterMode={}, leaveMode={}",
+                    areaName, config.enterMode, config.leaveMode);
             return false;
+        }
+
+        // Validate dimension
+        if (config.dimension != null && !config.dimension.isEmpty()) {
+            if (!config.dimension.contains(":")) {
+                AreaMonitorMod.LOGGER.warn("Area {} has invalid dimension format: {} (should be namespace:path)",
+                        areaName, config.dimension);
+                return false;
+            }
+        }
+
+        // Validate whitelist
+        if (config.whitelist != null && config.whitelist.size() > 100) {
+            AreaMonitorMod.LOGGER.warn("Area {} has too many whitelisted players ({}), this may impact performance",
+                    areaName, config.whitelist.size());
         }
 
         return true;
@@ -356,7 +401,8 @@ public class ConfigManager {
             AreaMonitorMod.LOGGER.info("Area monitor config validation complete");
             AreaMonitorMod.LOGGER.info("Configure specific monitoring areas in config/areamonitor/areas.json");
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.warn("Config validation failed, config may not be fully loaded: {}", e.getMessage());
+            // Log full stack trace for config validation issues
+            AreaMonitorMod.LOGGER.warn("Config validation failed, config may not be fully loaded", e);
         }
     }
 

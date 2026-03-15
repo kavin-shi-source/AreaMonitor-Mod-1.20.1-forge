@@ -1,12 +1,5 @@
 package com.kavinshi.areamonitor.model;
 
-/**
- * Player position data class.
- * 
- * <p>Stores player coordinates and dimension information.</p>
- * 
- * @since 1.0.0
- */
 public class PlayerPosition {
     private final double x;
     private final double z;
@@ -18,15 +11,15 @@ public class PlayerPosition {
         this.dimension = dimension;
     }
 
-    public double getX() { 
-        return x; 
+    public double getX() {
+        return x;
     }
-    
-    public double getZ() { 
-        return z; 
+
+    public double getZ() {
+        return z;
     }
-    
-    public String getDimension() { 
-        return dimension; 
+
+    public String getDimension() {
+        return dimension;
     }
 }

@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
 import com.kavinshi.areamonitor.model.RestrictionSettings;
+import com.kavinshi.areamonitor.util.MessageUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -17,6 +18,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraftforge.event.CommandEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.Event;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLPaths;
@@ -157,7 +159,7 @@ public class ItemBlacklistManager {
     }
 
     /**
-     * Handle item use event.
+     * Handle item use event (includes all blacklisted items like ender pearls, chorus fruit, etc.)
      */
     @SubscribeEvent
     public static void onItemUse(PlayerInteractEvent.RightClickItem event) {
@@ -170,60 +172,22 @@ public class ItemBlacklistManager {
             return;
         }
 
-        if (isItemBlacklisted(itemStack.getItem(), player)) {
+        Item item = itemStack.getItem();
+        if (isItemBlacklisted(item, player)) {
             event.setCanceled(true);
             event.setCancellationResult(InteractionResult.FAIL);
 
-            // Send denial message
             player.displayClientMessage(
-                Component.translatable("command.areamonitor.item.use_denied", BuiltInRegistries.ITEM.getKey(itemStack.getItem()).getPath()).withStyle(ChatFormatting.RED),
+                MessageUtils.smartComponent(player, "command.areamonitor.item.use_denied", 
+                    BuiltInRegistries.ITEM.getKey(item).getPath()).withStyle(ChatFormatting.RED),
                 true
             );
 
-            // Play denial sound
             player.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.get(), SoundSource.PLAYERS, 1.0f, 0.5f);
 
             AreaMonitorMod.LOGGER.debug("Blocked player {} from using blacklisted item: {}",
-                player.getName().getString(), itemStack.getItem().toString());
-        }
-    }
-
-    /**
-     * Handle item throw event (e.g., ender pearls).
-     */
-    @SubscribeEvent
-    public static void onItemThrow(PlayerInteractEvent.RightClickItem event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
-            return;
-        }
-
-        ItemStack itemStack = event.getItemStack();
-        if (itemStack.isEmpty()) {
-            return;
-        }
-
-        // Check specific throwable items
-        Item item = itemStack.getItem();
-        if ((item == Items.ENDER_PEARL || item == Items.CHORUS_FRUIT) && isItemBlacklisted(item, player)) {
-            event.setCanceled(true);
-            event.setCancellationResult(InteractionResult.FAIL);
-
-            // Send denial message
-            player.displayClientMessage(
-                Component.translatable("command.areamonitor.item.use_denied", getItemName(item)).withStyle(ChatFormatting.RED),
-                true
-            );
-
-            // Play denial sound
-            player.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.get(), SoundSource.PLAYERS, 1.0f, 0.5f);
-
-            AreaMonitorMod.LOGGER.debug("Blocked player {} from throwing blacklisted item: {}",
                 player.getName().getString(), item.toString());
         }
-    }
-
-    private static String getItemName(Item item) {
-        return BuiltInRegistries.ITEM.getKey(item).getPath();
     }
 
     /**
@@ -239,36 +203,16 @@ public class ItemBlacklistManager {
         if (isCommandBlocked(command, player)) {
             event.setCanceled(true);
 
-            // Send denial message
             player.displayClientMessage(
-                Component.translatable("command.areamonitor.teleport.use_denied").withStyle(ChatFormatting.RED),
+                MessageUtils.smartComponent(player, "command.areamonitor.teleport.use_denied").withStyle(ChatFormatting.RED),
                 true
             );
 
-            // Play denial sound
             player.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.get(), SoundSource.PLAYERS, 1.0f, 0.5f);
 
             AreaMonitorMod.LOGGER.debug("Blocked player {} from using teleport command: {}",
                 player.getName().getString(), command);
         }
-    }
-
-    /**
-     * Handle block interaction event (prevent using specific blocks).
-     */
-    @SubscribeEvent
-    public static void onBlockInteract(PlayerInteractEvent.RightClickBlock event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
-            return;
-        }
-
-        // Check if in restricted area
-        if (!isPlayerInRestrictedArea(player)) {
-            return;
-        }
-
-        // Add specific block restrictions here
-        // e.g., end portal, nether portal, etc.
     }
 
     /**
@@ -278,14 +222,14 @@ public class ItemBlacklistManager {
         Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
         if (currentAreas.isEmpty()) {
             player.displayClientMessage(
-                Component.translatable("command.areamonitor.blacklist.not_in_restricted_area"),
+                MessageUtils.smartComponent(player, "command.areamonitor.blacklist.not_in_restricted_area"),
                 true
             );
             return;
         }
 
         player.displayClientMessage(
-            Component.translatable("command.areamonitor.blacklist.restrictions_header"),
+            MessageUtils.smartComponent(player, "command.areamonitor.blacklist.restrictions_header"),
             false
         );
 
@@ -294,20 +238,20 @@ public class ItemBlacklistManager {
             if (area == null) continue;
 
             player.displayClientMessage(
-                Component.translatable("command.areamonitor.blacklist.area_info", area.getDisplayName()),
+                MessageUtils.smartComponent(player, "command.areamonitor.blacklist.area_info", area.getDisplayName()),
                 false
             );
 
             RestrictionSettings restrictions = area.getRestrictions();
             if (restrictions.isEnableItemBlacklist()) {
                 player.displayClientMessage(
-                    Component.translatable("command.areamonitor.blacklist.item_blacklist_enabled"),
+                    MessageUtils.smartComponent(player, "command.areamonitor.blacklist.item_blacklist_enabled"),
                     false
                 );
             }
             if (restrictions.isBlockTeleportCommands()) {
                 player.displayClientMessage(
-                    Component.translatable("command.areamonitor.blacklist.teleport_disabled"),
+                    MessageUtils.smartComponent(player, "command.areamonitor.blacklist.teleport_disabled"),
                     false
                 );
             }

@@ -32,6 +32,7 @@ import java.util.concurrent.CompletableFuture;
  */
 @Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ExtendedCommands {
+    private static final List<String> GAME_MODES = List.of("survival", "creative", "adventure", "spectator");
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
@@ -155,7 +156,7 @@ public class ExtendedCommands {
                         })
                         .then(Commands.argument("mode", StringArgumentType.string())
                             .suggests((context, builder) -> {
-                                for (String mode : ModConstants.GAME_MODE_SUGGESTIONS) {
+                                for (String mode : GAME_MODES) {
                                     if (mode.startsWith(builder.getRemaining().toLowerCase())) {
                                         builder.suggest(mode);
                                     }
@@ -180,7 +181,7 @@ public class ExtendedCommands {
                         })
                         .then(Commands.argument("mode", StringArgumentType.string())
                             .suggests((context, builder) -> {
-                                for (String mode : ModConstants.GAME_MODE_SUGGESTIONS) {
+                                for (String mode : GAME_MODES) {
                                     if (mode.startsWith(builder.getRemaining().toLowerCase())) {
                                         builder.suggest(mode);
                                     }
@@ -690,22 +691,6 @@ public class ExtendedCommands {
         return builder.buildFuture();
     }
 
-    // 添加物品到黑名单
-    private static int addToBlacklist(String itemName, CommandContext<CommandSourceStack> context) {
-        // 这里需要解析物品名称并添加到黑名单
-        context.getSource().sendSuccess(
-            () -> Component.translatable("feature.development"),
-            true
-        );
-        return 1;
-    }
-
-    // 从黑名单移除物品
-    private static int removeFromBlacklist(String itemName, CommandContext<CommandSourceStack> context) {
-        MessageUtils.sendSuccess(context.getSource(), "feature.development", true);
-        return 1;
-    }
-
     // 从选择创建区域
     private static int createAreaFromSelection(String areaName, CommandContext<CommandSourceStack> context) {
         if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
@@ -793,8 +778,8 @@ public class ExtendedCommands {
         }
 
         String modeLower = mode.toLowerCase();
-        if (!ModConstants.GAME_MODE_SUGGESTIONS.contains(modeLower)) {
-            MessageUtils.sendFailure(context.getSource(), "area.invalid_gamemode", mode, String.join(", ", ModConstants.GAME_MODE_SUGGESTIONS));
+        if (!GAME_MODES.contains(modeLower)) {
+            MessageUtils.sendFailure(context.getSource(), "area.invalid_gamemode", mode, String.join(", ", GAME_MODES));
             return 0;
         }
 
@@ -817,8 +802,8 @@ public class ExtendedCommands {
         }
 
         String modeLower = mode.toLowerCase();
-        if (!ModConstants.GAME_MODE_SUGGESTIONS.contains(modeLower)) {
-            MessageUtils.sendFailure(context.getSource(), "area.invalid_gamemode", mode, String.join(", ", ModConstants.GAME_MODE_SUGGESTIONS));
+        if (!GAME_MODES.contains(modeLower)) {
+            MessageUtils.sendFailure(context.getSource(), "area.invalid_gamemode", mode, String.join(", ", GAME_MODES));
             return 0;
         }
 

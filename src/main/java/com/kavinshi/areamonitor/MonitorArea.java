@@ -6,23 +6,20 @@ import com.kavinshi.areamonitor.util.DimensionUtils;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.AABB;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Monitor area class, represents an independent monitoring area.
- * Thread-safe implementation with volatile fields and CopyOnWriteArrayList.
- */
 public class MonitorArea {
     private final String name;
-    private volatile String displayName;
-    private volatile String dimension;
-    private volatile AreaBounds bounds;
-    private volatile GameType enterMode;
-    private volatile GameType leaveMode;
-    private volatile boolean enabled;
-    private volatile List<String> whitelist;
-    private volatile RestrictionSettings restrictions;
+    private String displayName;
+    private String dimension;
+    private AreaBounds bounds;
+    private GameType enterMode;
+    private GameType leaveMode;
+    private boolean enabled;
+    private List<String> whitelist;
+    private RestrictionSettings restrictions;
 
     public MonitorArea(String name) {
         this.name = name;
@@ -56,7 +53,14 @@ public class MonitorArea {
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     public List<String> getWhitelist() { return whitelist; }
-    public void setWhitelist(List<String> whitelist) { this.whitelist = new CopyOnWriteArrayList<>(whitelist); }
+
+    public void setWhitelist(List<String> whitelist) {
+        List<String> lowercaseList = new ArrayList<>();
+        for (String name : whitelist) {
+            lowercaseList.add(name.toLowerCase());
+        }
+        this.whitelist = new CopyOnWriteArrayList<>(lowercaseList);
+    }
 
     public RestrictionSettings getRestrictions() { return restrictions; }
     public void setRestrictions(RestrictionSettings restrictions) { this.restrictions = restrictions; }

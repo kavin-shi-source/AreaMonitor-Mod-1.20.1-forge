@@ -18,11 +18,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AreaManager {
     private static final AreaManager INSTANCE = new AreaManager();
     
-    private static final int MAX_AREA_NAME_LENGTH = 32;
-    private static final int MIN_AREA_SIZE = 1;
-    private static final int MAX_AREA_SIZE = 1000000;
-    private static final int MAX_AREAS_PER_PLAYER = 100;
-    
     private static final int TITLE_FADE_IN_TICKS = 5;
     private static final int TITLE_STAY_TICKS = 30;
     private static final int TITLE_FADE_OUT_TICKS = 5;
@@ -32,6 +27,9 @@ public class AreaManager {
     private final Map<String, MonitorArea> areas = new ConcurrentHashMap<>();
     private final Map<UUID, Set<String>> playerAreas = new ConcurrentHashMap<>();
     private final SpatialPartitionManager spatialPartition = new SpatialPartitionManager();
+
+    // Reusable Set pool to reduce allocations in checkPlayer
+    private final Map<UUID, Set<String>> currentAreasCache = new ConcurrentHashMap<>();
 
     public static AreaManager getInstance() {
         return INSTANCE;
@@ -102,15 +100,21 @@ public class AreaManager {
 
         // Only update cache when area state changes
         if (!currentAreas.equals(previousAreas)) {
+            // Create defensive copy for storage
             playerAreas.put(player.getUUID(), new HashSet<>(currentAreas));
         }
     }
 
     /**
      * Optimized area detection using spatial partitioning.
+     * Reuses Set objects to reduce GC pressure.
      */
     private Set<String> getCurrentAreasOptimized(ServerPlayer player, PlayerPosition position) {
-        Set<String> currentAreas = new HashSet<>();
+        UUID playerId = player.getUUID();
+
+        // Reuse existing Set or create new one
+        Set<String> currentAreas = currentAreasCache.computeIfAbsent(playerId, k -> new HashSet<>());
+        currentAreas.clear(); // Clear previous contents
 
         // Use spatial partitioning to get potentially relevant areas
         Set<MonitorArea> potentialAreas = spatialPartition.getPotentialRegions(
@@ -131,8 +135,9 @@ public class AreaManager {
         MonitorArea area = areas.get(areaName);
         if (area == null || !area.isEnabled()) return;
 
-        // Check area whitelist
-        if (area.getWhitelist().contains(player.getName().getString().toLowerCase())) {
+        // Check area whitelist (whitelist is already lowercase)
+        String playerNameLower = player.getName().getString().toLowerCase();
+        if (area.getWhitelist().contains(playerNameLower)) {
             return;
         }
 
@@ -182,48 +187,37 @@ public class AreaManager {
     }
 
 
-    private Set<ServerPlayer> getPlayersInArea(MonitorArea area) {
-        Set<ServerPlayer> playersInArea = new HashSet<>();
-
-        if (area == null) return playersInArea;
-
-        // Get current server instance and check all online players
-        MinecraftServer server = AreaMonitor.getServer();
-        if (server != null) {
-            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                PlayerPosition position = new PlayerPosition(
-                    player.getX(),
-                    player.getZ(),
-                    player.level().dimension().location().toString()
-                );
-
-                if (area.isPlayerInArea(position)) {
-                    playersInArea.add(player);
-                }
-            }
-        }
-
-        return playersInArea;
-    }
-
     public Set<String> getCurrentAreas(ServerPlayer player) {
         return playerAreas.getOrDefault(player.getUUID(), new HashSet<>());
     }
 
     public void clearPlayerData(UUID playerId) {
         playerAreas.remove(playerId);
+        currentAreasCache.remove(playerId);
     }
 
     public void clearAllData() {
         playerAreas.clear();
+        currentAreasCache.clear();
     }
 
+    /**
+     * Clear unused player area caches for players who have been offline for a long time.
+     * This helps prevent memory leaks from accumulating player data.
+     */
     public void clearUnusedCaches() {
-        // Clean up player data that has been inactive for a long time
-        playerAreas.entrySet().removeIf(entry -> {
-            // More complex cleanup logic can be added here
-            return false; // Do not clean up for now
-        });
+        // Remove player data for players who are no longer online
+        MinecraftServer server = AreaMonitor.getServer();
+        if (server != null) {
+            Set<UUID> onlinePlayerIds = new HashSet<>();
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                onlinePlayerIds.add(player.getUUID());
+            }
+
+            // Remove offline player data
+            playerAreas.keySet().removeIf(playerId -> !onlinePlayerIds.contains(playerId));
+            currentAreasCache.keySet().removeIf(playerId -> !onlinePlayerIds.contains(playerId));
+        }
     }
 
     /**
@@ -235,9 +229,5 @@ public class AreaManager {
             spatialPartition.addRegion(area);
         }
         AreaMonitorMod.LOGGER.info("Spatial partition rebuilt, total {} areas", areas.size());
-    }
-
-    public enum TriggerType {
-        ENTER, LEAVE, PERIODIC, ITEM_HELD, PLAYER_COUNT
     }
 }

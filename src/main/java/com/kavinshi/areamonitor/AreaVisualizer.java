@@ -8,12 +8,12 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Area visualization system for displaying area boundaries and effects.
+ * Optimized for batch particle sending to reduce network overhead.
  */
 public class AreaVisualizer {
     private static final double PARTICLE_SPACING = 1.0;
@@ -29,34 +29,51 @@ public class AreaVisualizer {
     }
 
     /**
-     * Show area border.
+     * Particle data for batching.
      */
-    public static void showAreaBorder(ServerPlayer player, MonitorArea area) {
-        if (area.getBounds() instanceof MonitorArea.RectangleBounds bounds) {
-            showRectangleBorder(player, bounds);
-        } else if (area.getBounds() instanceof MonitorArea.CircleBounds bounds) {
-            showCircleBorder(player, bounds);
+    private static class ParticleData {
+        final double x, y, z;
+        final ParticleOptions particle;
+
+        ParticleData(double x, double y, double z, ParticleOptions particle) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.particle = particle;
         }
     }
 
     /**
-     * Show rectangle area border.
+     * Show area border with batched particle sending for better performance.
      */
-    private static void showRectangleBorder(ServerPlayer player, MonitorArea.RectangleBounds bounds) {
-        Level level = player.level();
-        double y = player.getY();
+    public static void showAreaBorder(ServerPlayer player, MonitorArea area) {
+        List<ParticleData> batch = new ArrayList<>();
 
-        showHorizontalLine(level, bounds.getMinX(), bounds.getMaxX(), bounds.getMinZ(), y, ParticleTypes.END_ROD);
-        showHorizontalLine(level, bounds.getMinX(), bounds.getMaxX(), bounds.getMaxZ(), y, ParticleTypes.END_ROD);
-        showHorizontalLine(level, bounds.getMinZ(), bounds.getMaxZ(), bounds.getMinX(), y, ParticleTypes.END_ROD);
-        showHorizontalLine(level, bounds.getMinZ(), bounds.getMaxZ(), bounds.getMaxX(), y, ParticleTypes.END_ROD);
+        if (area.getBounds() instanceof MonitorArea.RectangleBounds bounds) {
+            collectRectangleBorderParticles(player, bounds, batch);
+        } else if (area.getBounds() instanceof MonitorArea.CircleBounds bounds) {
+            collectCircleBorderParticles(player, bounds, batch);
+        }
+
+        sendParticleBatch(player.level(), batch);
     }
 
     /**
-     * Show circle area border.
+     * Collect rectangle border particles into batch.
      */
-    private static void showCircleBorder(ServerPlayer player, MonitorArea.CircleBounds bounds) {
-        Level level = player.level();
+    private static void collectRectangleBorderParticles(ServerPlayer player, MonitorArea.RectangleBounds bounds, List<ParticleData> batch) {
+        double y = player.getY();
+
+        collectHorizontalLineParticles(bounds.getMinX(), bounds.getMaxX(), bounds.getMinZ(), y, ParticleTypes.END_ROD, batch);
+        collectHorizontalLineParticles(bounds.getMinX(), bounds.getMaxX(), bounds.getMaxZ(), y, ParticleTypes.END_ROD, batch);
+        collectHorizontalLineParticles(bounds.getMinZ(), bounds.getMaxZ(), bounds.getMinX(), y, ParticleTypes.END_ROD, batch);
+        collectHorizontalLineParticles(bounds.getMinZ(), bounds.getMaxZ(), bounds.getMaxX(), y, ParticleTypes.END_ROD, batch);
+    }
+
+    /**
+     * Collect circle border particles into batch.
+     */
+    private static void collectCircleBorderParticles(ServerPlayer player, MonitorArea.CircleBounds bounds, List<ParticleData> batch) {
         double y = player.getY();
         double centerX = bounds.getCenterX();
         double centerZ = bounds.getCenterZ();
@@ -67,30 +84,44 @@ public class AreaVisualizer {
             double angle = 2 * Math.PI * i / segments;
             double x = centerX + radius * Math.cos(angle);
             double z = centerZ + radius * Math.sin(angle);
-            spawnParticle(level, x, y, z, ParticleTypes.END_ROD);
+            batch.add(new ParticleData(x, y, z, ParticleTypes.END_ROD));
         }
     }
 
     /**
-     * Show horizontal line segment.
+     * Collect horizontal line particles into batch.
      */
-    private static void showHorizontalLine(Level level, double start, double end, double fixed, double y, ParticleOptions particle) {
+    private static void collectHorizontalLineParticles(double start, double end, double fixed, double y, ParticleOptions particle, List<ParticleData> batch) {
         double step = start < end ? PARTICLE_SPACING : -PARTICLE_SPACING;
         for (double pos = start; pos <= end; pos += step) {
-            spawnParticle(level, pos, y, fixed, particle);
+            batch.add(new ParticleData(pos, y, fixed, particle));
         }
     }
 
     /**
-     * Spawn particle effect.
+     * Send particle batch to nearby players efficiently.
+     * This reduces the number of player list iterations from O(n*m) to O(n+m)
+     * where n = number of particles, m = number of players.
      */
-    public static void spawnParticle(Level level, double x, double y, double z, ParticleOptions particle) {
-        if (!level.isClientSide()) {
-            for (net.minecraft.world.entity.player.Player p : level.players()) {
-                if (!(p instanceof ServerPlayer player)) continue;
-                if (player.distanceToSqr(x, y, z) <= MAX_PARTICLE_RENDER_DISTANCE_SQ) {
+    private static void sendParticleBatch(Level level, List<ParticleData> batch) {
+        if (level.isClientSide() || batch.isEmpty()) {
+            return;
+        }
+
+        // Get all server players once
+        List<ServerPlayer> players = new ArrayList<>();
+        for (net.minecraft.world.entity.player.Player p : level.players()) {
+            if (p instanceof ServerPlayer serverPlayer) {
+                players.add(serverPlayer);
+            }
+        }
+
+        // Send particles to nearby players
+        for (ParticleData particle : batch) {
+            for (ServerPlayer player : players) {
+                if (player.distanceToSqr(particle.x, particle.y, particle.z) <= MAX_PARTICLE_RENDER_DISTANCE_SQ) {
                     player.connection.send(new ClientboundLevelParticlesPacket(
-                        particle, false, x, y, z, 0, 0, 0, 0, 1
+                        particle.particle, false, particle.x, particle.y, particle.z, 0, 0, 0, 0, 1
                     ));
                 }
             }
@@ -144,30 +175,35 @@ public class AreaVisualizer {
                 }
             }
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.debug("Error finding player by UUID: {}", e.getMessage());
+            // Log full stack trace for debugging
+            AreaMonitorMod.LOGGER.debug("Error finding player by UUID: {}", playerId, e);
         }
         return null;
     }
 
     /**
-     * Show selection area (two points).
+     * Show selection area (two points) with batched particle sending.
      */
     public static void showSelection(ServerPlayer player, BlockPos pos1, BlockPos pos2) {
         Level level = player.level();
         double y = player.getY();
 
-        spawnParticle(level, pos1.getX() + 0.5, y, pos1.getZ() + 0.5, ParticleTypes.ANGRY_VILLAGER);
-        spawnParticle(level, pos2.getX() + 0.5, y, pos2.getZ() + 0.5, ParticleTypes.ANGRY_VILLAGER);
+        List<ParticleData> batch = new ArrayList<>();
+
+        batch.add(new ParticleData(pos1.getX() + 0.5, y, pos1.getZ() + 0.5, ParticleTypes.ANGRY_VILLAGER));
+        batch.add(new ParticleData(pos2.getX() + 0.5, y, pos2.getZ() + 0.5, ParticleTypes.ANGRY_VILLAGER));
 
         if (pos1 != null && pos2 != null) {
-            showLineBetween(level, pos1, pos2, y, ParticleTypes.END_ROD);
+            collectLineBetweenParticles(pos1, pos2, y, ParticleTypes.END_ROD, batch);
         }
+
+        sendParticleBatch(level, batch);
     }
 
     /**
-     * Show line between two points.
+     * Collect line particles between two points into batch.
      */
-    private static void showLineBetween(Level level, BlockPos pos1, BlockPos pos2, double y, ParticleOptions particle) {
+    private static void collectLineBetweenParticles(BlockPos pos1, BlockPos pos2, double y, ParticleOptions particle, List<ParticleData> batch) {
         double dx = pos2.getX() - pos1.getX();
         double dz = pos2.getZ() - pos1.getZ();
         double distance = Math.sqrt(dx * dx + dz * dz);
@@ -177,7 +213,27 @@ public class AreaVisualizer {
             double ratio = (double) i / steps;
             double x = pos1.getX() + dx * ratio;
             double z = pos1.getZ() + dz * ratio;
-            spawnParticle(level, x + 0.5, y, z + 0.5, particle);
+            batch.add(new ParticleData(x + 0.5, y, z + 0.5, particle));
+        }
+    }
+
+    /**
+     * Spawn a single particle (for backward compatibility and simple use cases).
+     * For batch operations, use the batch methods instead.
+     */
+    public static void spawnParticle(Level level, double x, double y, double z, ParticleOptions particle) {
+        if (level.isClientSide()) {
+            return;
+        }
+
+        for (net.minecraft.world.entity.player.Player p : level.players()) {
+            if (p instanceof ServerPlayer player) {
+                if (player.distanceToSqr(x, y, z) <= MAX_PARTICLE_RENDER_DISTANCE_SQ) {
+                    player.connection.send(new ClientboundLevelParticlesPacket(
+                        particle, false, x, y, z, 0, 0, 0, 0, 1
+                    ));
+                }
+            }
         }
     }
 

@@ -156,7 +156,8 @@ public class LocalizationManager {
             }
             return result;
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("Localization format error for key '{}': {}", key, e.getMessage());
+            // Log full stack trace for localization format errors
+            AreaMonitorMod.LOGGER.error("Localization format error for key '{}'", key, e);
             AreaMonitorMod.LOGGER.error("Template: '{}', Args: {}", template, java.util.Arrays.toString(args));
             return template;
         }
@@ -205,7 +206,8 @@ public class LocalizationManager {
                 }
             }
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.debug("Could not detect Minecraft language: {}", e.getMessage());
+            // Debug level is appropriate here as this is expected to fail in some environments
+            AreaMonitorMod.LOGGER.debug("Could not detect Minecraft language", e);
         }
         return null;
     }

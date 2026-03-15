@@ -1,5 +1,6 @@
 package com.kavinshi.areamonitor;
 
+import com.kavinshi.areamonitor.util.MessageUtils;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.Level;
@@ -35,7 +36,7 @@ public class SelectionEventHandler {
 
         if (SelectionTool.isHoldingSelectionTool(player)) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.tool.instructions"),
+                MessageUtils.smartComponent(player, "selection.tool.instructions"),
                 false
             );
         }

@@ -1,5 +1,6 @@
 package com.kavinshi.areamonitor;
 
+import com.kavinshi.areamonitor.util.MessageUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -79,17 +80,17 @@ public class SelectionTool {
         if (player.getInventory().getFreeSlot() != -1) {
             if (player.addItem(tool)) {
                 player.displayClientMessage(
-                    net.minecraft.network.chat.Component.translatable("selection.tool.obtained"),
+                    MessageUtils.smartComponent(player, "selection.tool.obtained"),
                     false
                 );
                 player.displayClientMessage(
-                    net.minecraft.network.chat.Component.translatable("selection.tool.instructions"),
+                    MessageUtils.smartComponent(player, "selection.tool.instructions"),
                     false
                 );
             }
         } else {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.tool.inventory_full"),
+                MessageUtils.smartComponent(player, "selection.tool.inventory_full"),
                 true
             );
         }
@@ -105,7 +106,7 @@ public class SelectionTool {
 
         if (!player.hasPermissions(2)) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.tool.no_permission"),
+                MessageUtils.smartComponent(player, "selection.tool.no_permission"),
                 true
             );
             return;
@@ -120,15 +121,15 @@ public class SelectionTool {
             selection.setFirstPoint(pos);
 
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.mode.header").withStyle(net.minecraft.ChatFormatting.BOLD),
+                MessageUtils.smartComponent(player, "selection.mode.header").withStyle(net.minecraft.ChatFormatting.BOLD),
                 false
             );
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.first_point_set", pos.getX(), pos.getY(), pos.getZ()),
+                MessageUtils.smartComponent(player, "selection.first_point_set", pos.getX(), pos.getY(), pos.getZ()),
                 false
             );
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.set_second_point"),
+                MessageUtils.smartComponent(player, "selection.set_second_point"),
                 false
             );
 
@@ -146,7 +147,7 @@ public class SelectionTool {
 
             if (distance > MAX_SELECTION_DISTANCE) {
                 player.displayClientMessage(
-                    net.minecraft.network.chat.Component.translatable("selection.distance_too_far"),
+                    MessageUtils.smartComponent(player, "selection.distance_too_far"),
                     true
                 );
                 return;
@@ -209,51 +210,51 @@ public class SelectionTool {
         int height = maxZ - minZ + 1;
 
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.complete.header").withStyle(net.minecraft.ChatFormatting.BOLD),
+            MessageUtils.smartComponent(player, "selection.complete.header").withStyle(net.minecraft.ChatFormatting.BOLD),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.point.first", pos1.getX(), pos1.getY(), pos1.getZ()),
+            MessageUtils.smartComponent(player, "selection.point.first", pos1.getX(), pos1.getY(), pos1.getZ()),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.point.second", pos2.getX(), pos2.getY(), pos2.getZ()),
+            MessageUtils.smartComponent(player, "selection.point.second", pos2.getX(), pos2.getY(), pos2.getZ()),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.area.bounds", minX, maxX, minZ, maxZ),
+            MessageUtils.smartComponent(player, "selection.area.bounds", minX, maxX, minZ, maxZ),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.area.size", width, height, area),
+            MessageUtils.smartComponent(player, "selection.area.size", width, height, area),
             false
         );
 
         if (area > MAX_SELECTION_AREA) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.warning.area_too_large"),
+                MessageUtils.smartComponent(player, "selection.warning.area_too_large"),
                 false
             );
         } else if (area > LARGE_AREA_WARNING_THRESHOLD) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.note.area_large"),
+                MessageUtils.smartComponent(player, "selection.note.area_large"),
                 false
             );
         } else {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.area.size_ok"),
+                MessageUtils.smartComponent(player, "selection.area.size_ok"),
                 false
             );
         }
 
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.instructions.create_or_cancel"),
+            MessageUtils.smartComponent(player, "selection.instructions.create_or_cancel"),
             false
         );
 
         String currentDimension = player.level().dimension().location().toString();
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.dimension.current", getDimensionDisplayName(currentDimension)),
+            MessageUtils.smartComponent(player, "selection.dimension.current", getDimensionDisplayName(currentDimension)),
             false
         );
     }
@@ -277,7 +278,7 @@ public class SelectionTool {
         SelectionPoints selection = playerSelections.get(player.getUUID());
         if (selection == null || !selection.isComplete()) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.error.no_points"),
+                MessageUtils.smartComponent(player, "selection.error.no_points"),
                 true
             );
             return;
@@ -299,16 +300,16 @@ public class SelectionTool {
         AreaManager.getInstance().addArea(area);
 
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.area.created", areaName).withStyle(net.minecraft.ChatFormatting.BOLD),
+            MessageUtils.smartComponent(player, "selection.area.created", areaName).withStyle(net.minecraft.ChatFormatting.BOLD),
             false
         );
 
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.area.dimension", getDimensionDisplayName(currentDimension)),
+            MessageUtils.smartComponent(player, "selection.area.dimension", getDimensionDisplayName(currentDimension)),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.area.range",
+            MessageUtils.smartComponent(player, "selection.area.range",
                 Math.min(pos1.getX(), pos2.getX()) + ", " + Math.max(pos1.getX(), pos2.getX()) + "] × [" +
                 Math.min(pos1.getZ(), pos2.getZ()) + ", " + Math.max(pos1.getZ(), pos2.getZ()) + "]"),
             false
@@ -329,15 +330,15 @@ public class SelectionTool {
      */
     private static void showModeSetupGuide(ServerPlayer player) {
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.mode.setup_header").withStyle(net.minecraft.ChatFormatting.BOLD),
+            MessageUtils.smartComponent(player, "selection.mode.setup_header").withStyle(net.minecraft.ChatFormatting.BOLD),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.mode.setup_instructions"),
+            MessageUtils.smartComponent(player, "selection.mode.setup_instructions"),
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.mode.available_modes"),
+            MessageUtils.smartComponent(player, "selection.mode.available_modes"),
             false
         );
         player.displayClientMessage(
@@ -345,7 +346,7 @@ public class SelectionTool {
             false
         );
         player.displayClientMessage(
-            net.minecraft.network.chat.Component.translatable("selection.mode.setup_complete"),
+            MessageUtils.smartComponent(player, "selection.mode.setup_complete"),
             false
         );
     }
@@ -357,7 +358,7 @@ public class SelectionTool {
         SelectionPoints selection = playerSelections.remove(player.getUUID());
         if (selection != null) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.cancelled"),
+                MessageUtils.smartComponent(player, "selection.cancelled"),
                 true
             );
         }
@@ -384,7 +385,7 @@ public class SelectionTool {
         SelectionPoints selection = playerSelections.get(player.getUUID());
         if (selection == null) {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.no_active_selection"),
+                MessageUtils.smartComponent(player, "selection.no_active_selection"),
                 true
             );
             return;
@@ -393,7 +394,7 @@ public class SelectionTool {
         if (selection.hasFirstPoint()) {
             BlockPos pos1 = selection.getFirstPoint();
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.current.first_point",
+                MessageUtils.smartComponent(player, "selection.current.first_point",
                     pos1.getX(), pos1.getY(), pos1.getZ()),
                 false
             );
@@ -402,13 +403,13 @@ public class SelectionTool {
         if (selection.hasSecondPoint()) {
             BlockPos pos2 = selection.getSecondPoint();
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.current.second_point",
+                MessageUtils.smartComponent(player, "selection.current.second_point",
                     pos2.getX(), pos2.getY(), pos2.getZ()),
                 false
             );
         } else {
             player.displayClientMessage(
-                net.minecraft.network.chat.Component.translatable("selection.need_second_point"),
+                MessageUtils.smartComponent(player, "selection.need_second_point"),
                 false
             );
         }

@@ -2,12 +2,9 @@ package com.kavinshi.areamonitor;
 
 import net.minecraft.core.BlockPos;
 
-/**
- * Data class for storing selection points.
- */
 public class SelectionPoints {
-    private volatile BlockPos firstPoint;
-    private volatile BlockPos secondPoint;
+    private BlockPos firstPoint;
+    private BlockPos secondPoint;
 
     public boolean hasFirstPoint() {
         return firstPoint != null;

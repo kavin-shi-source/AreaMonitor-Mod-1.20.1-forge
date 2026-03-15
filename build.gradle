@@ -1,23 +1,24 @@
 plugins {
     id 'eclipse'
     id 'idea'
+    id 'maven-publish'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
     id 'org.parchmentmc.librarian.forgegradle' version '1.+'
 }
 
-version = '2.0.3'
-group = 'com.kavinshi.areamonitor'
+version = mod_version
+group = mod_group_id
 
 base {
-    archivesName = 'areamonitor'
+    archivesName = mod_id
 }
 
-java {
-    toolchain.languageVersion = JavaLanguageVersion.of(17)
-}
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
 
 minecraft {
-    mappings channel: 'parchment', version: '2023.09.03-1.20.1'
+    mappings channel: mappings_channel, version: mappings_version
 
     runs {
         configureEach {
@@ -25,36 +26,69 @@ minecraft {
             property 'forge.logging.markers', 'REGISTRIES'
             property 'forge.logging.console.level', 'debug'
 
+            // 热重载支持 - 修改代码后无需重启游戏
+            jvmArg '-XX:+IgnoreUnrecognizedVMOptions'
+            jvmArg '-XX:+AllowEnhancedClassRedefinition'
+
+            // 控制台彩色打印
+            property 'terminal.jline', 'true'
+
             mods {
-                areamonitor {
+                "${mod_id}" {
                     source sourceSets.main
                 }
             }
         }
 
         client {
+            // 主客户端配置
+        }
+
+        // 第二个客户端 - 用于测试多人游戏
+        client2 {
+            parent runs.client
+            args '--username', 'Player2'
+            workingDirectory project.file('run/client2')
         }
 
         server {
             args '--nogui'
         }
+
+        // 数据生成器
+        data {
+            workingDirectory project.file('run-data')
+            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/').absolutePath, '--existing', file('src/main/resources/').absolutePath
+        }
     }
 }
 
-dependencies {
-    minecraft 'net.minecraftforge:forge:1.20.1-47.0.35'
+// 生成资源目录
+sourceSets.main.resources {
+    srcDir 'src/generated/resources'
 }
 
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 
-processResources {
+    // 测试依赖
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+}
+
+tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
-            mod_id: "areamonitor",  // ✅ 添加缺失的属性
-            mod_version: version,
-            minecraft_version: '1.20.1',
-            minecraft_version_range: '[1.20.1,1.21)',
-            forge_version: '47.0.35',
-            forge_version_range: '[47,)',
-            loader_version_range: '[47,)'
+            minecraft_version: minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            forge_version: forge_version,
+            forge_version_range: forge_version_range,
+            loader_version_range: loader_version_range,
+            mod_id: mod_id,
+            mod_name: mod_name,
+            mod_license: mod_license,
+            mod_version: mod_version,
+            mod_authors: mod_authors,
+            mod_description: mod_description,
     ]
     inputs.properties replaceProperties
 
@@ -63,10 +97,25 @@ processResources {
     }
 }
 
-// 测试配置
-dependencies {
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.8.1'
-    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.8.1'
+tasks.named('jar', Jar).configure {
+    from "LICENSE.txt"
+
+    exclude "**/*.bat"
+    exclude "**/*.psd"
+    exclude "**/unused"
+
+    manifest {
+        attributes([
+                'Specification-Title'     : mod_id,
+                'Specification-Vendor'    : mod_authors,
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : project.name,
+                'Implementation-Version'  : project.jar.archiveVersion,
+                'Implementation-Vendor'   : mod_authors,
+                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+    finalizedBy 'reobfJar'
 }
 
 test {
@@ -78,4 +127,32 @@ test {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    options.release = 17
 }
+
+// 生成源码jar，方便发布和其他开发者查看
+java {
+    withSourcesJar()
+}
+
+// IDEA配置 - 自动下载依赖的源码和文档
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}
+
+/*publishing {
+    publications {
+        register('mavenJava', MavenPublication) {
+            artifact jar
+        }
+    }
+    repositories {
+        maven {
+            url "file://${project.projectDir}/mcmodsrepo"
+        }
+    }
+}*/
+

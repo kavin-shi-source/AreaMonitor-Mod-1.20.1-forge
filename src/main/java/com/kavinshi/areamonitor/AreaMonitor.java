@@ -34,6 +34,7 @@ public class AreaMonitor {
     private static final int TITLE_STAY_TICKS = 30;
     private static final int TITLE_FADE_OUT_TICKS = 10;
     private static final long GAME_MODE_SWITCH_DELAY_MS = 1000L;
+    private static final long PENDING_ACTION_TIMEOUT_MS = 10000L;  // 10 seconds timeout for pending actions
 
     private static class PlayerState {
         boolean wasInArea = false;
@@ -109,12 +110,25 @@ public class AreaMonitor {
         }
     }
 
+    /**
+     * Process pending actions and clean up expired ones.
+     * This prevents memory leaks from actions that never execute.
+     */
     private static void processPendingActions() {
         long currentTime = System.currentTimeMillis();
         Iterator<PendingAction> iterator = pendingActions.iterator();
 
         while (iterator.hasNext()) {
             PendingAction action = iterator.next();
+
+            // Remove expired actions (timeout after 10 seconds)
+            if (currentTime - action.executeTime > PENDING_ACTION_TIMEOUT_MS) {
+                AreaMonitorMod.LOGGER.debug("Removing expired pending action for player {}", action.playerId);
+                iterator.remove();
+                continue;
+            }
+
+            // Execute actions that are ready
             if (currentTime >= action.executeTime) {
                 try {
                     action.action.run();
@@ -222,8 +236,9 @@ public class AreaMonitor {
                 player.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));
             }
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.debug("Failed to show title to player {}: {}", 
-                player.getName().getString(), e.getMessage());
+            // Log full stack trace for debugging network issues
+            AreaMonitorMod.LOGGER.debug("Failed to show title to player {}",
+                player.getName().getString(), e);
         }
     }
 
