@@ -8,13 +8,18 @@ import com.kavinshi.areamonitor.commands.ProtectionCommands;
 import com.kavinshi.areamonitor.commands.TemplateCommands;
 import com.kavinshi.areamonitor.commands.TriggerCommands;
 import com.kavinshi.areamonitor.commands.WhitelistCommands;
+import com.kavinshi.areamonitor.network.ModNetwork;
+import com.kavinshi.areamonitor.network.S2COpenManagementScreenPacket;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
+import net.minecraft.network.chat.Component;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -339,13 +344,19 @@ public class ExtendedCommands {
                                 .executes(context -> TriggerCommands.clearTitle(
                                     StringArgumentType.getString(context, "area"), true, context))))
                         .then(Commands.literal("tp")
-                            .then(Commands.argument("dim", StringArgumentType.string())
+                            .then(Commands.argument("dim", ResourceLocationArgument.id())
+                                .suggests((context, builder) -> {
+                                    builder.suggest("minecraft:overworld");
+                                    builder.suggest("minecraft:the_nether");
+                                    builder.suggest("minecraft:the_end");
+                                    return builder.buildFuture();
+                                })
                                 .then(Commands.argument("x", DoubleArgumentType.doubleArg())
                                     .then(Commands.argument("y", DoubleArgumentType.doubleArg())
                                         .then(Commands.argument("z", DoubleArgumentType.doubleArg())
                                             .executes(context -> TriggerCommands.setTp(
                                                 StringArgumentType.getString(context, "area"), true,
-                                                StringArgumentType.getString(context, "dim"),
+                                                ResourceLocationArgument.getId(context, "dim").toString(),
                                                 DoubleArgumentType.getDouble(context, "x"),
                                                 DoubleArgumentType.getDouble(context, "y"),
                                                 DoubleArgumentType.getDouble(context, "z"), context))))))
@@ -390,13 +401,19 @@ public class ExtendedCommands {
                                 .executes(context -> TriggerCommands.clearTitle(
                                     StringArgumentType.getString(context, "area"), false, context))))
                         .then(Commands.literal("tp")
-                            .then(Commands.argument("dim", StringArgumentType.string())
+                            .then(Commands.argument("dim", ResourceLocationArgument.id())
+                                .suggests((context, builder) -> {
+                                    builder.suggest("minecraft:overworld");
+                                    builder.suggest("minecraft:the_nether");
+                                    builder.suggest("minecraft:the_end");
+                                    return builder.buildFuture();
+                                })
                                 .then(Commands.argument("x", DoubleArgumentType.doubleArg())
                                     .then(Commands.argument("y", DoubleArgumentType.doubleArg())
                                         .then(Commands.argument("z", DoubleArgumentType.doubleArg())
                                             .executes(context -> TriggerCommands.setTp(
                                                 StringArgumentType.getString(context, "area"), false,
-                                                StringArgumentType.getString(context, "dim"),
+                                                ResourceLocationArgument.getId(context, "dim").toString(),
                                                 DoubleArgumentType.getDouble(context, "x"),
                                                 DoubleArgumentType.getDouble(context, "y"),
                                                 DoubleArgumentType.getDouble(context, "z"), context))))))
@@ -406,6 +423,22 @@ public class ExtendedCommands {
                         .then(Commands.literal("info")
                             .executes(context -> TriggerCommands.showInfo(
                                 StringArgumentType.getString(context, "area"), false, context))))))
+
+            // --- GUI command ---
+            .then(Commands.literal("gui")
+                .executes(context -> {
+                    net.minecraft.server.level.ServerPlayer player =
+                        context.getSource().getPlayerOrException();
+                    ModNetwork.sendToPlayer(new S2COpenManagementScreenPacket(), player);
+                    context.getSource().sendSystemMessage(
+                        Component.literal("Opening area management GUI. ")
+                            .withStyle(ChatFormatting.GREEN)
+                            .append(Component.literal(
+                                "(If GUI doesn't open, the client-side mod is not installed. Use commands instead.)")
+                                .withStyle(ChatFormatting.GRAY)));
+                    return 1;
+                })
+            )
 
             // --- Template commands ---
             .then(Commands.literal("template")

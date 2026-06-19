@@ -40,3 +40,5 @@ src/test/
 *.gz
 *.log
 *3.md
+*路线图.md
+docs/

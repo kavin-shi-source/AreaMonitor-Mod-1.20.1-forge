@@ -137,87 +137,51 @@ public class AreaMonitor {
     }
 
     /**
-     * Add pending game mode change (entering area).
-     * Note: Use playerId instead of player reference to avoid accessing invalid objects after player disconnects.
+     * Enqueue a game mode change with configurable delay.
      */
-    public static void addPendingGameModeChange(ServerPlayer player, GameType gameMode) {
-        UUID playerId = player.getUUID();
-        GameType targetMode = gameMode;
-        
+    private static void enqueueGameModeChange(UUID playerId, GameType gameMode, boolean requireAreaCheck) {
         pendingActions.add(new PendingAction(playerId, () -> {
             if (minecraftServer == null) return;
-            
+
             ServerPlayer currentPlayer = minecraftServer.getPlayerList().getPlayer(playerId);
             if (currentPlayer == null || !currentPlayer.isAlive()) return;
-            
-            Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(currentPlayer);
-            
-            if (!currentAreas.isEmpty()) {
-                if (ConfigManager.CONFIG.debugMode.get()) {
-                    AreaMonitorMod.LOGGER.debug("AreaMonitor: Switching game mode for player {} to {}", 
-                        currentPlayer.getName().getString(), targetMode);
-                }
-                currentPlayer.setGameMode(targetMode);
 
-                boolean showMessages = ConfigManager.CONFIG.showMessages.get();
-                if (ConfigManager.CONFIG.debugMode.get()) {
-                    AreaMonitorMod.LOGGER.debug("AreaMonitor: showMessages config = {}", showMessages);
-                }
+            // For enter: only apply if player is still in at least one monitored area
+            if (requireAreaCheck && AreaManager.getInstance().getCurrentAreas(currentPlayer).isEmpty()) {
+                return;
+            }
 
-                if (showMessages) {
-                    try {
-                        String finalMessage = LocalizationManager.translate("area.gamemode_changed", 
-                            LocalizationManager.getGameModeDisplayName(targetMode));
+            if (ConfigManager.CONFIG.debugMode.get()) {
+                AreaMonitorMod.LOGGER.debug("AreaMonitor: Switching game mode for player {} to {}",
+                    currentPlayer.getName().getString(), gameMode);
+            }
+            currentPlayer.setGameMode(gameMode);
 
-                        if (ConfigManager.CONFIG.debugMode.get()) {
-                            AreaMonitorMod.LOGGER.debug("AreaMonitor: Sending message to player {}: {}", 
-                                currentPlayer.getName().getString(), finalMessage);
-                        }
-                        currentPlayer.displayClientMessage(
-                            Component.literal(finalMessage),
-                            true
-                        );
-                        if (ConfigManager.CONFIG.debugMode.get()) {
-                            AreaMonitorMod.LOGGER.debug("AreaMonitor: Message sent successfully");
-                        }
-                    } catch (Exception e) {
-                        AreaMonitorMod.LOGGER.error("AreaMonitor: Error sending message to player {}", 
-                            currentPlayer.getName().getString(), e);
-                    }
+            if (ConfigManager.CONFIG.showMessages.get()) {
+                try {
+                    String finalMessage = LocalizationManager.translate("area.gamemode_changed",
+                        LocalizationManager.getGameModeDisplayName(gameMode));
+                    currentPlayer.displayClientMessage(Component.literal(finalMessage), true);
+                } catch (Exception e) {
+                    AreaMonitorMod.LOGGER.error("AreaMonitor: Error sending message to player {}",
+                        currentPlayer.getName().getString(), e);
                 }
             }
         }, System.currentTimeMillis() + ConfigManager.CONFIG.gameModeSwitchDelayMs.get()));
     }
 
     /**
+     * Add pending game mode change (entering area).
+     */
+    public static void addPendingGameModeChange(ServerPlayer player, GameType gameMode) {
+        enqueueGameModeChange(player.getUUID(), gameMode, true);
+    }
+
+    /**
      * Add pending game mode change (leaving area).
-     * Note: Use playerId instead of player reference to avoid accessing invalid objects after player disconnects.
      */
     public static void addPendingGameModeChangeOnLeave(ServerPlayer player, GameType gameMode) {
-        UUID playerId = player.getUUID();
-        GameType targetMode = gameMode;
-        
-        pendingActions.add(new PendingAction(playerId, () -> {
-            if (minecraftServer == null) return;
-            
-            ServerPlayer currentPlayer = minecraftServer.getPlayerList().getPlayer(playerId);
-            if (currentPlayer == null) return;
-            
-            currentPlayer.setGameMode(targetMode);
-            if (ConfigManager.CONFIG.showMessages.get()) {
-                try {
-                    String finalMessage = LocalizationManager.translate("area.gamemode_changed", 
-                        LocalizationManager.getGameModeDisplayName(targetMode));
-                    currentPlayer.displayClientMessage(
-                        Component.literal(finalMessage),
-                        true
-                    );
-                } catch (Exception e) {
-                    AreaMonitorMod.LOGGER.error("AreaMonitor: Error sending leave message to player {}", 
-                        currentPlayer.getName().getString(), e);
-                }
-            }
-        }, System.currentTimeMillis() + ConfigManager.CONFIG.gameModeSwitchDelayMs.get()));
+        enqueueGameModeChange(player.getUUID(), gameMode, false);
     }
 
     @SubscribeEvent

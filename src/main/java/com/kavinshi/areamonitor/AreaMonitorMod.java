@@ -1,5 +1,6 @@
 package com.kavinshi.areamonitor;
 
+import com.kavinshi.areamonitor.network.ModNetwork;
 import com.mojang.logging.LogUtils;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -23,6 +24,8 @@ public class AreaMonitorMod {
         MinecraftForge.EVENT_BUS.register(this);
 
         ConfigManager.init();
+
+        ModNetwork.register();
 
         AreaMonitorMod.LOGGER.info("AreaMonitor mod initialized successfully");
     }
