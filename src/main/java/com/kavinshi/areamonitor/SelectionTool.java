@@ -69,10 +69,10 @@ public class SelectionTool {
                     return item;
                 }
             }
+            AreaMonitorMod.LOGGER.warn("Invalid selection tool item ID in config: {}, falling back to wooden_axe", itemId);
         } catch (Exception e) {
             AreaMonitorMod.LOGGER.warn("Invalid selection tool item ID in config: {}, falling back to wooden_axe", itemId, e);
         }
-        AreaMonitorMod.LOGGER.warn("Invalid selection tool item ID in config: {}, falling back to wooden_axe", itemId);
         return Items.WOODEN_AXE;
     }
 
