@@ -112,6 +112,21 @@ public class C2SAreaActionPacket {
             if (obj.has("enabled") && !obj.get("enabled").isJsonNull()) {
                 area.setEnabled(obj.get("enabled").getAsBoolean());
             }
+            // Bounds update
+            if (obj.has("boundsType") && !obj.get("boundsType").isJsonNull()) {
+                String type = obj.get("boundsType").getAsString();
+                if ("RECTANGLE".equals(type) &&
+                    obj.has("minX") && obj.has("minZ") && obj.has("maxX") && obj.has("maxZ")) {
+                    area.setBounds(new MonitorArea.RectangleBounds(
+                        obj.get("minX").getAsInt(), obj.get("minZ").getAsInt(),
+                        obj.get("maxX").getAsInt(), obj.get("maxZ").getAsInt()));
+                } else if ("CIRCLE".equals(type) &&
+                    obj.has("centerX") && obj.has("centerZ") && obj.has("radius")) {
+                    area.setBounds(new MonitorArea.CircleBounds(
+                        obj.get("centerX").getAsInt(), obj.get("centerZ").getAsInt(),
+                        obj.get("radius").getAsInt()));
+                }
+            }
         } catch (Exception e) {
             com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.error("Failed to apply area update", e);
         }
