@@ -3,7 +3,9 @@ package com.kavinshi.areamonitor;
 import com.kavinshi.areamonitor.util.MessageUtils;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
@@ -55,6 +57,25 @@ public class SelectionTool {
     }
 
     /**
+     * Get the configured selection tool item from config.
+     */
+    private static net.minecraft.world.item.Item getSelectionToolItem() {
+        String itemId = ConfigManager.CONFIG.selectionToolItemId.get();
+        try {
+            ResourceLocation location = ResourceLocation.tryParse(itemId);
+            if (location != null) {
+                net.minecraft.world.item.Item item = BuiltInRegistries.ITEM.get(location);
+                if (item != Items.AIR) {
+                    return item;
+                }
+            }
+        } catch (Exception e) {
+            AreaMonitorMod.LOGGER.warn("Invalid selection tool item ID in config: {}, falling back to wooden_axe", itemId);
+        }
+        return Items.WOODEN_AXE;
+    }
+
+    /**
      * Check if player is holding the selection tool.
      * Uses NBT tag for identification, independent of item name or language.
      */
@@ -70,7 +91,7 @@ public class SelectionTool {
      * Give selection tool to player.
      */
     public static void giveSelectionTool(ServerPlayer player) {
-        ItemStack tool = new ItemStack(Items.WOODEN_AXE);
+        ItemStack tool = new ItemStack(getSelectionToolItem());
 
         CompoundTag tag = tool.getOrCreateTag();
         tag.putBoolean(NBT_TAG_SELECTION_TOOL, true);

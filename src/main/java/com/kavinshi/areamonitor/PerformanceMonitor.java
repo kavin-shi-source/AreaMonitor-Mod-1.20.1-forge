@@ -29,7 +29,6 @@ public class PerformanceMonitor {
     private static int currentCheckInterval = 5;
     private static long lastCheck = 0;
     private static long lastOptimization = 0;
-    private static final long OPTIMIZATION_COOLDOWN = 30000;
 
     private static final Map<String, PerformanceMetric> metrics = new ConcurrentHashMap<>();
 
@@ -99,7 +98,7 @@ public class PerformanceMonitor {
 
     private static void handleLowTPS(double currentTPS) {
         long currentTime = System.currentTimeMillis();
-        if (currentTime - lastOptimization < OPTIMIZATION_COOLDOWN) {
+        if (currentTime - lastOptimization < ConfigManager.CONFIG.optimizationCooldownMs.get()) {
             return;
         }
 
@@ -122,7 +121,7 @@ public class PerformanceMonitor {
 
     private static void handleHighMemoryUsage() {
         long currentTime = System.currentTimeMillis();
-        if (currentTime - lastOptimization < OPTIMIZATION_COOLDOWN) {
+        if (currentTime - lastOptimization < ConfigManager.CONFIG.optimizationCooldownMs.get()) {
             return;
         }
 

@@ -27,7 +27,6 @@ public class AreaMonitor {
     private static final Map<UUID, PlayerState> playerStates = new ConcurrentHashMap<>();
     private static volatile MinecraftServer minecraftServer;
     private static final AtomicInteger tickCounter = new AtomicInteger(0);
-    private static final long GAME_MODE_SWITCH_DELAY_MS = 1000L;
     private static final long PENDING_ACTION_TIMEOUT_MS = 10000L;  // 10 seconds timeout for pending actions
 
     private static class PlayerState {
@@ -56,6 +55,7 @@ public class AreaMonitor {
     @SubscribeEvent
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
         minecraftServer = event.getServer();
+        ConfigManager.ensureConfigFiles();
     }
 
     @SubscribeEvent
@@ -183,7 +183,7 @@ public class AreaMonitor {
                     }
                 }
             }
-        }, System.currentTimeMillis() + GAME_MODE_SWITCH_DELAY_MS));
+        }, System.currentTimeMillis() + ConfigManager.CONFIG.gameModeSwitchDelayMs.get()));
     }
 
     /**
@@ -214,7 +214,7 @@ public class AreaMonitor {
                         currentPlayer.getName().getString(), e);
                 }
             }
-        }, System.currentTimeMillis() + GAME_MODE_SWITCH_DELAY_MS));
+        }, System.currentTimeMillis() + ConfigManager.CONFIG.gameModeSwitchDelayMs.get()));
     }
 
     @SubscribeEvent

@@ -16,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * Optimized for batch particle sending to reduce network overhead.
  */
 public class AreaVisualizer {
-    private static final double PARTICLE_SPACING = 1.0;
     private static final int VISUALIZATION_DURATION = 100;
     /**
      * Maximum squared distance for particle visibility (32 blocks).
@@ -26,6 +25,13 @@ public class AreaVisualizer {
     private static final Map<UUID, VisualizationData> activeVisualizations = new ConcurrentHashMap<>();
 
     private AreaVisualizer() {
+    }
+
+    /**
+     * Get the current particle spacing from config.
+     */
+    private static double getParticleSpacing() {
+        return ConfigManager.CONFIG.particleSpacing.get();
     }
 
     /**
@@ -79,7 +85,7 @@ public class AreaVisualizer {
         double centerZ = bounds.getCenterZ();
         double radius = bounds.getRadius();
 
-        int segments = (int) (radius * 2 * Math.PI / PARTICLE_SPACING);
+        int segments = (int) (radius * 2 * Math.PI / getParticleSpacing());
         for (int i = 0; i < segments; i++) {
             double angle = 2 * Math.PI * i / segments;
             double x = centerX + radius * Math.cos(angle);
@@ -92,7 +98,7 @@ public class AreaVisualizer {
      * Collect horizontal line particles into batch.
      */
     private static void collectHorizontalLineParticles(double start, double end, double fixed, double y, ParticleOptions particle, List<ParticleData> batch) {
-        double step = start < end ? PARTICLE_SPACING : -PARTICLE_SPACING;
+        double step = start < end ? getParticleSpacing() : -getParticleSpacing();
         for (double pos = start; pos <= end; pos += step) {
             batch.add(new ParticleData(pos, y, fixed, particle));
         }
@@ -207,7 +213,7 @@ public class AreaVisualizer {
         double dx = pos2.getX() - pos1.getX();
         double dz = pos2.getZ() - pos1.getZ();
         double distance = Math.sqrt(dx * dx + dz * dz);
-        int steps = (int) (distance / PARTICLE_SPACING);
+        int steps = (int) (distance / getParticleSpacing());
 
         for (int i = 0; i <= steps; i++) {
             double ratio = (double) i / steps;

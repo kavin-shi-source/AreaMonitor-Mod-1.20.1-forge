@@ -143,16 +143,27 @@ idea {
     }
 }
 
-/*publishing {
+publishing {
     publications {
         register('mavenJava', MavenPublication) {
             artifact jar
+            artifact sourcesJar
         }
     }
     repositories {
         maven {
-            url "file://${project.projectDir}/mcmodsrepo"
+            name = 'localRepo'
+            url = uri("file://${project.projectDir}/mcmodsrepo")
         }
+        // Uncomment and configure for remote publishing:
+        // maven {
+        //     name = 'modrinth'
+        //     url = uri('https://api.modrinth.com/maven')
+        //     credentials {
+        //         username = project.findProperty('modrinth.token') ?: ''
+        //         password = ''
+        //     }
+        // }
     }
-}*/
+}
 

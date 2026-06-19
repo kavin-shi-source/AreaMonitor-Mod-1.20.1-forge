@@ -48,6 +48,12 @@ public class ConfigManager {
         public final ForgeConfigSpec.BooleanValue showMessages;
         public final ForgeConfigSpec.BooleanValue debugMode;
 
+        // Performance tuning
+        public final ForgeConfigSpec.LongValue gameModeSwitchDelayMs;
+        public final ForgeConfigSpec.LongValue optimizationCooldownMs;
+        public final ForgeConfigSpec.DoubleValue particleSpacing;
+        public final ForgeConfigSpec.ConfigValue<String> selectionToolItemId;
+
         public Config(ForgeConfigSpec.Builder builder) {
             builder.comment("Area Monitor Settings").push("area_monitor");
 
@@ -62,6 +68,22 @@ public class ConfigManager {
             debugMode = builder
                     .comment("Enable debug mode (shows detailed logs)")
                     .define("debugMode", false);
+
+            gameModeSwitchDelayMs = builder
+                    .comment("Delay in milliseconds before applying game mode switch after entering/leaving an area")
+                    .defineInRange("gameModeSwitchDelayMs", 1000L, 0L, 10000L);
+
+            optimizationCooldownMs = builder
+                    .comment("Minimum cooldown in milliseconds between performance optimization actions")
+                    .defineInRange("optimizationCooldownMs", 30000L, 5000L, 300000L);
+
+            particleSpacing = builder
+                    .comment("Spacing between particles when visualizing area boundaries")
+                    .defineInRange("particleSpacing", 1.0, 0.25, 5.0);
+
+            selectionToolItemId = builder
+                    .comment("Item ID used for the area selection tool (e.g., \"minecraft:wooden_axe\")")
+                    .define("selectionToolItemId", "minecraft:wooden_axe");
 
             builder.pop();
 
@@ -218,17 +240,18 @@ public class ConfigManager {
 
         // Add an example area
         AreaConfig exampleArea = new AreaConfig();
-        exampleArea.displayName = "Protected Area Example";
-        exampleArea.dimension = "minecraft:overworld";
-        exampleArea.minX = -100;
-        exampleArea.minZ = -100;
-        exampleArea.maxX = 100;
-        exampleArea.maxZ = 100;
-        exampleArea.enterMode = "adventure";
-        exampleArea.leaveMode = "survival";
-        exampleArea.enabled = true;
-        exampleArea.whitelist = new ArrayList<>();
-        exampleArea.whitelist.add("Admin");
+        exampleArea.setDisplayName("Protected Area Example");
+        exampleArea.setDimension("minecraft:overworld");
+        exampleArea.setMinX(-100);
+        exampleArea.setMinZ(-100);
+        exampleArea.setMaxX(100);
+        exampleArea.setMaxZ(100);
+        exampleArea.setEnterMode("adventure");
+        exampleArea.setLeaveMode("survival");
+        exampleArea.setEnabled(true);
+        List<String> exampleWhitelist = new ArrayList<>();
+        exampleWhitelist.add("Admin");
+        exampleArea.setWhitelist(exampleWhitelist);
 
         configData.areas.put("example_protected_area", exampleArea);
 
@@ -251,22 +274,22 @@ public class ConfigManager {
 
     private static MonitorArea createAreaFromConfig(String name, AreaConfig config) {
         MonitorArea area = new MonitorArea(name);
-        area.setDisplayName(config.displayName != null ? config.displayName : name);
-        area.setDimension(config.dimension != null ? config.dimension : "minecraft:overworld");
-        area.setEnterMode(parseGameMode(config.enterMode));
-        area.setLeaveMode(parseGameMode(config.leaveMode));
-        area.setEnabled(config.enabled);
+        area.setDisplayName(config.getDisplayName() != null ? config.getDisplayName() : name);
+        area.setDimension(config.getDimension() != null ? config.getDimension() : "minecraft:overworld");
+        area.setEnterMode(parseGameMode(config.getEnterMode()));
+        area.setLeaveMode(parseGameMode(config.getLeaveMode()));
+        area.setEnabled(config.isEnabled());
 
         // Set bounds
-        if (config.minX != null && config.maxX != null && config.minZ != null && config.maxZ != null) {
+        if (config.getMinX() != null && config.getMaxX() != null && config.getMinZ() != null && config.getMaxZ() != null) {
             area.setBounds(new MonitorArea.RectangleBounds(
-                config.minX, config.minZ, config.maxX, config.maxZ
+                config.getMinX(), config.getMinZ(), config.getMaxX(), config.getMaxZ()
             ));
         }
 
         // Set whitelist
-        if (config.whitelist != null) {
-            area.setWhitelist(new ArrayList<>(config.whitelist));
+        if (config.getWhitelist() != null) {
+            area.setWhitelist(new ArrayList<>(config.getWhitelist()));
         }
 
         return area;
@@ -281,18 +304,18 @@ public class ConfigManager {
 
     private static AreaConfig createConfigFromArea(MonitorArea area) {
         AreaConfig config = new AreaConfig();
-        config.displayName = area.getDisplayName();
-        config.dimension = area.getDimension();
-        config.enterMode = area.getEnterMode().getName();
-        config.leaveMode = area.getLeaveMode().getName();
-        config.enabled = area.isEnabled();
-        config.whitelist = area.getWhitelist();
+        config.setDisplayName(area.getDisplayName());
+        config.setDimension(area.getDimension());
+        config.setEnterMode(area.getEnterMode().getName());
+        config.setLeaveMode(area.getLeaveMode().getName());
+        config.setEnabled(area.isEnabled());
+        config.setWhitelist(area.getWhitelist());
 
         if (area.getBounds() instanceof MonitorArea.RectangleBounds rect) {
-            config.minX = rect.getMinX();
-            config.maxX = rect.getMaxX();
-            config.minZ = rect.getMinZ();
-            config.maxZ = rect.getMaxZ();
+            config.setMinX(rect.getMinX());
+            config.setMaxX(rect.getMaxX());
+            config.setMinZ(rect.getMinZ());
+            config.setMaxZ(rect.getMaxZ());
         }
 
         return config;
@@ -319,30 +342,30 @@ public class ConfigManager {
         }
 
         // Validate coordinate range
-        if (config.minX == null || config.maxX == null || config.minZ == null || config.maxZ == null) {
+        if (config.getMinX() == null || config.getMaxX() == null || config.getMinZ() == null || config.getMaxZ() == null) {
             AreaMonitorMod.LOGGER.warn("Area {} missing required coordinate config", areaName);
             return false;
         }
 
         // Validate coordinate logic
-        if (config.minX >= config.maxX || config.minZ >= config.maxZ) {
+        if (config.getMinX() >= config.getMaxX() || config.getMinZ() >= config.getMaxZ()) {
             AreaMonitorMod.LOGGER.warn("Area {} has invalid coordinate range: minX={}, maxX={}, minZ={}, maxZ={}",
-                    areaName, config.minX, config.maxX, config.minZ, config.maxZ);
+                    areaName, config.getMinX(), config.getMaxX(), config.getMinZ(), config.getMaxZ());
             return false;
         }
 
         // Validate coordinate bounds (Minecraft world border is ±29,999,984)
         int worldBorder = 29999984;
-        if (Math.abs(config.minX) > worldBorder || Math.abs(config.maxX) > worldBorder ||
-            Math.abs(config.minZ) > worldBorder || Math.abs(config.maxZ) > worldBorder) {
+        if (Math.abs(config.getMinX()) > worldBorder || Math.abs(config.getMaxX()) > worldBorder ||
+            Math.abs(config.getMinZ()) > worldBorder || Math.abs(config.getMaxZ()) > worldBorder) {
             AreaMonitorMod.LOGGER.warn("Area {} has coordinates outside world border (±{}): minX={}, maxX={}, minZ={}, maxZ={}",
-                    areaName, worldBorder, config.minX, config.maxX, config.minZ, config.maxZ);
+                    areaName, worldBorder, config.getMinX(), config.getMaxX(), config.getMinZ(), config.getMaxZ());
             return false;
         }
 
         // Validate area size (prevent extremely large areas that could cause performance issues)
-        long areaWidth = (long) config.maxX - config.minX;
-        long areaLength = (long) config.maxZ - config.minZ;
+        long areaWidth = (long) config.getMaxX() - config.getMinX();
+        long areaLength = (long) config.getMaxZ() - config.getMinZ();
         long areaSize = areaWidth * areaLength;
         long maxAreaSize = 10000000L; // 10 million blocks (e.g., 3162x3162)
 
@@ -354,27 +377,27 @@ public class ConfigManager {
 
         // Validate game mode
         try {
-            parseGameMode(config.enterMode);
-            parseGameMode(config.leaveMode);
+            parseGameMode(config.getEnterMode());
+            parseGameMode(config.getLeaveMode());
         } catch (Exception e) {
             AreaMonitorMod.LOGGER.warn("Area {} contains invalid game mode config: enterMode={}, leaveMode={}",
-                    areaName, config.enterMode, config.leaveMode);
+                    areaName, config.getEnterMode(), config.getLeaveMode());
             return false;
         }
 
         // Validate dimension
-        if (config.dimension != null && !config.dimension.isEmpty()) {
-            if (!config.dimension.contains(":")) {
+        if (config.getDimension() != null && !config.getDimension().isEmpty()) {
+            if (!config.getDimension().contains(":")) {
                 AreaMonitorMod.LOGGER.warn("Area {} has invalid dimension format: {} (should be namespace:path)",
-                        areaName, config.dimension);
+                        areaName, config.getDimension());
                 return false;
             }
         }
 
         // Validate whitelist
-        if (config.whitelist != null && config.whitelist.size() > 100) {
+        if (config.getWhitelist() != null && config.getWhitelist().size() > 100) {
             AreaMonitorMod.LOGGER.warn("Area {} has too many whitelisted players ({}), this may impact performance",
-                    areaName, config.whitelist.size());
+                    areaName, config.getWhitelist().size());
         }
 
         return true;
@@ -388,13 +411,34 @@ public class ConfigManager {
     }
 
     public static class AreaConfig {
-        public String displayName;
-        public String dimension = "minecraft:overworld";
-        public Integer minX, maxX, minZ, maxZ;
-        public String enterMode = "adventure";
-        public String leaveMode = "survival";
-        public boolean enabled = true;
-        public List<String> whitelist = new ArrayList<>();
+        private String displayName;
+        private String dimension = "minecraft:overworld";
+        private Integer minX, maxX, minZ, maxZ;
+        private String enterMode = "adventure";
+        private String leaveMode = "survival";
+        private boolean enabled = true;
+        private List<String> whitelist = new ArrayList<>();
+
+        public String getDisplayName() { return displayName; }
+        public void setDisplayName(String v) { this.displayName = v; }
+        public String getDimension() { return dimension; }
+        public void setDimension(String v) { this.dimension = v; }
+        public Integer getMinX() { return minX; }
+        public void setMinX(Integer v) { this.minX = v; }
+        public Integer getMaxX() { return maxX; }
+        public void setMaxX(Integer v) { this.maxX = v; }
+        public Integer getMinZ() { return minZ; }
+        public void setMinZ(Integer v) { this.minZ = v; }
+        public Integer getMaxZ() { return maxZ; }
+        public void setMaxZ(Integer v) { this.maxZ = v; }
+        public String getEnterMode() { return enterMode; }
+        public void setEnterMode(String v) { this.enterMode = v; }
+        public String getLeaveMode() { return leaveMode; }
+        public void setLeaveMode(String v) { this.leaveMode = v; }
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean v) { this.enabled = v; }
+        public List<String> getWhitelist() { return whitelist; }
+        public void setWhitelist(List<String> v) { this.whitelist = v != null ? v : new ArrayList<>(); }
     }
 
     /**

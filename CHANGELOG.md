@@ -2,6 +2,35 @@
 
 [![English Version](https://img.shields.io/badge/English-Version-blue.svg)](CHANGELOG_EN.md)
 
+## [2.0.3-3] - 2025-06-19
+
+### 重构
+- **命令系统拆分**: `ExtendedCommands`（原 994 行）拆分为 5 个专项命令类——`AreaCommands`（区域管理）、`WhitelistCommands`（白名单/开关/帮助/语言）、`BlacklistCommands`（黑名单+物品索引）、`VisualCommands`（可视化/性能）、`SelectionCommands`（选择工具/配置），各司其职，解除单一职责违反 (M-05)
+
+### 优化
+- **常量配置化**: `gameModeSwitchDelayMs`、`optimizationCooldownMs`、`particleSpacing`、`selectionToolItemId` 四个硬编码常量移入 `ConfigManager`，支持运行时调参无需重新编译
+- **IO 初始化延后**: `ensureConfigFiles()` 从 `AreaMonitorMod` 构造函数移至 `ServerAboutToStartEvent`，消除构造阶段文件 IO 阻塞 Forge 加载 (M-01)
+
+### 变更
+- **AreaConfig 封装**: 8 个 public 字段改为 private + getter/setter，遵循封装原则 (M-08)
+- **构建发布**: 启用 Gradle `publishing` 配置，支持本地 Maven 仓库发布；ForgeGradle / Parchment mappings 维持当前可用最新版 (B-03~B-05)
+
+## [2.0.3-2] - 2025-06-19
+
+### 清理
+- **死代码移除**: 删除 `AreaMonitor.showTitle()` 方法及 `wasInArea` 字段，清理相关常量和导入 (M-03, M-04)
+- **枚举清理**: 移除 `MonitorArea.BoundsType.POLYGON`（已定义但无对应实现，代码中无任何 case 分支）(M-11)
+- **许可证统一**: `README.md` 许可证徽章从 MIT 更正为 GPL-3.0，与 `mods.toml` / `LICENSE.txt` 保持一致 (B-01)
+
+### 优化
+- **Lambda 提取**: `ExtendedCommands` 中 7 处重复的 `suggests` lambda 提取为 `suggestAreaNames()` 私有静态方法 (M-06)
+- **空集复用**: `AreaManager.getCurrentAreas` 默认值改用 `EMPTY_AREA_SET` 常量，避免每次调用新建 `HashSet` (M-10)
+- **代码风格统一**: `AreaMonitor` 中 `var players` 替换为显式类型 `List<ServerPlayer>`，与项目其余部分一致 (M-02)
+
+### 新增
+- **数据类完善**: `PlayerPosition` 添加 `equals()` / `hashCode()` 实现，消除 HashMap 键比较时的引用相等依赖 (M-09)
+- **单元测试基线**: 新增 4 个核心类单元测试（AreaManager / SpatialPartitionManager / AreaBounds / PlayerPosition），建立回归保护 (B-02)
+
 ## [2.0.3-1] - 2025-06-19
 
 ### 修复

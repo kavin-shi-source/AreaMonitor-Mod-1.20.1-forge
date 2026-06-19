@@ -23,7 +23,6 @@ public class AreaMonitorMod {
         MinecraftForge.EVENT_BUS.register(this);
 
         ConfigManager.init();
-        ConfigManager.ensureConfigFiles();
 
         AreaMonitorMod.LOGGER.info("AreaMonitor mod initialized successfully");
     }
