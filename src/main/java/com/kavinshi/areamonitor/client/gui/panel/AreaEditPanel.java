@@ -142,16 +142,16 @@ public class AreaEditPanel extends Screen {
         y += 6;
 
         addQuickLink(lx, y, "gui.protection_settings",
-            "/areamonitor protect " + entry.name() + " info");
+            "areamonitor protect " + entry.name() + " info");
         y += 24;
         addQuickLink(lx, y, "gui.trigger_settings",
-            "/areamonitor trigger " + entry.name() + " enter info");
+            "areamonitor trigger " + entry.name() + " enter info");
         y += 24;
         addQuickLink(lx, y, "gui.whitelist_settings",
-            "/areamonitor whitelist list");
+            "areamonitor whitelist list");
         y += 24;
         addQuickLink(lx, y, "gui.restriction_settings",
-            "/areamonitor blacklist area " + entry.name() + " list");
+            "areamonitor blacklist area " + entry.name() + " list");
         y += 36;
 
         // Save / Cancel
