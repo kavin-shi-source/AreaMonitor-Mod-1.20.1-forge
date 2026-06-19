@@ -53,7 +53,6 @@ public class PerformanceMonitor {
             lastCheck = currentTime;
         }
 
-        AreaVisualizer.updatePersistentVisualizations();
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.kavinshi.areamonitor.util;
 
 import com.kavinshi.areamonitor.LocalizationManager;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * Dimension utility class.
@@ -37,15 +38,16 @@ public final class DimensionUtils {
     }
     
     /**
-     * Check if dimension ID is valid.
+     * Check if dimension ID is valid using Minecraft's built-in parser.
+     * This ensures strict validation of namespace:path format.
      * 
      * @param dimensionId Dimension ID
-     * @return Whether the dimension is valid
+     * @return Whether the dimension is a valid ResourceLocation
      */
     public static boolean isValidDimension(String dimensionId) {
         if (dimensionId == null) {
             return false;
         }
-        return dimensionId.startsWith("minecraft:") || dimensionId.contains(":");
+        return ResourceLocation.tryParse(dimensionId) != null;
     }
 }

@@ -190,29 +190,6 @@ public class LocalizationManager {
     }
 
     /**
-     * Get Minecraft client language setting.
-     */
-    private String getMinecraftLanguage() {
-        try {
-            if (net.minecraftforge.fml.loading.FMLLoader.getDist().isClient()) {
-                Class<?> languageClass = Class.forName("net.minecraft.locale.Language");
-                java.lang.reflect.Method getInstance = languageClass.getMethod("getInstance");
-                Object languageInstance = getInstance.invoke(null);
-                java.lang.reflect.Method getSelected = languageClass.getMethod("getSelected");
-                Object selected = getSelected.invoke(languageInstance);
-                if (selected != null) {
-                    java.lang.reflect.Method getCode = selected.getClass().getMethod("getCode");
-                    return (String) getCode.invoke(selected);
-                }
-            }
-        } catch (Exception e) {
-            // Debug level is appropriate here as this is expected to fail in some environments
-            AreaMonitorMod.LOGGER.debug("Could not detect Minecraft language", e);
-        }
-        return null;
-    }
-
-    /**
      * Get current language code.
      */
     public static String getCurrentLanguage() {

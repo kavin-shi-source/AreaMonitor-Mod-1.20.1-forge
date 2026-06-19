@@ -14,6 +14,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -21,11 +22,13 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Extended command system supporting multi-area management, visual editing, and more.
@@ -666,27 +669,55 @@ public class ExtendedCommands {
 
     // 获取物品显示名称
     private static String getItemDisplayName(Item item) {
-        return item.getDescriptionId(); // 简化实现，实际应该使用翻译键
+        return new ItemStack(item).getHoverName().getString();
+    }
+
+    // 物品名称建议索引缓存，按首字符分组以提高补全性能
+    private static final Map<Character, List<String>> ITEM_SUGGESTION_INDEX = new ConcurrentHashMap<>();
+    private static volatile boolean suggestionIndexBuilt = false;
+    private static final int MAX_SUGGESTIONS = 100;
+
+    private static void buildSuggestionIndex() {
+        if (suggestionIndexBuilt) return;
+        synchronized (ITEM_SUGGESTION_INDEX) {
+            if (suggestionIndexBuilt) return;
+            for (var entry : BuiltInRegistries.ITEM.entrySet()) {
+                if (entry.getValue() == Items.AIR) continue;
+                String itemId = entry.getKey().location().toString();
+                String itemName = entry.getKey().location().getPath();
+                // 按完整ID首字符索引
+                ITEM_SUGGESTION_INDEX.computeIfAbsent(itemId.charAt(0), k -> new ArrayList<>()).add(itemId);
+                // 按物品名首字符索引（非minecraft命名空间的情况）
+                if (!itemId.startsWith("minecraft:")) {
+                    ITEM_SUGGESTION_INDEX.computeIfAbsent(itemName.charAt(0), k -> new ArrayList<>()).add(itemId);
+                }
+            }
+            suggestionIndexBuilt = true;
+            AreaMonitorMod.LOGGER.debug("Item suggestion index built with {} entries", 
+                ITEM_SUGGESTION_INDEX.values().stream().mapToInt(List::size).sum());
+        }
     }
 
     // 物品名称建议提供者
     private static CompletableFuture<Suggestions> suggestItems(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        buildSuggestionIndex();
         String remaining = builder.getRemaining().toLowerCase();
 
-        // 遍历所有注册物品
-        BuiltInRegistries.ITEM.entrySet().forEach(entry -> {
-            String itemId = entry.getKey().location().toString();
-            String itemName = entry.getKey().location().getPath();
+        if (remaining.isEmpty()) {
+            return builder.buildFuture();
+        }
 
-            // 支持完整ID匹配和部分名称匹配
-            if (itemId.startsWith(remaining) || itemName.startsWith(remaining) ||
-                itemName.contains(remaining.replace("minecraft:", ""))) {
-                // 过滤掉空气等特殊物品
-                if (entry.getValue() != Items.AIR || remaining.contains("air")) {
-                    builder.suggest(itemId);
-                }
+        int suggestionCount = 0;
+        // 优先使用索引查找
+        List<String> candidates = ITEM_SUGGESTION_INDEX.getOrDefault(remaining.charAt(0), Collections.emptyList());
+        for (String itemId : candidates) {
+            if (suggestionCount >= MAX_SUGGESTIONS) break;
+            String itemName = itemId.contains(":") ? itemId.substring(itemId.indexOf(':') + 1) : itemId;
+            if (itemId.startsWith(remaining) || itemName.startsWith(remaining)) {
+                builder.suggest(itemId);
+                suggestionCount++;
             }
-        });
+        }
 
         return builder.buildFuture();
     }

@@ -27,14 +27,20 @@ public class ConfigManager {
     private static File blacklistConfigFile;
 
     static {
+        ForgeConfigSpec tempSpec;
+        Config tempConfig;
         try {
             final Pair<Config, ForgeConfigSpec> specPair = new ForgeConfigSpec.Builder().configure(Config::new);
-            SPEC = specPair.getRight();
-            CONFIG = specPair.getLeft();
+            tempSpec = specPair.getRight();
+            tempConfig = specPair.getLeft();
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.error("Error creating config spec", e);
-            throw e;
+            AreaMonitorMod.LOGGER.error("Error creating config spec, using hardcoded fallback", e);
+            ForgeConfigSpec.Builder fallbackBuilder = new ForgeConfigSpec.Builder();
+            tempConfig = new Config(fallbackBuilder);
+            tempSpec = fallbackBuilder.build();
         }
+        SPEC = tempSpec;
+        CONFIG = tempConfig;
     }
 
     public static class Config {

@@ -2,6 +2,22 @@
 
 [![English Version](https://img.shields.io/badge/English-Version-blue.svg)](CHANGELOG_EN.md)
 
+## [2.0.3-1] - 2025-06-19
+
+### 修复
+- **ConfigManager 异常处理**: 移除静态初始化块中的 `throw e`，捕获异常后回退到安全默认配置，避免类加载失败导致模组完全不可用 (CRIT-1)
+- **粒子双重渲染**: 移除 `PerformanceMonitor.onServerTick` 中冗余的 `AreaVisualizer.updatePersistentVisualizations()` 调用，消除每 Tick 向客户端发送双倍粒子包的问题 (MAJ-1)
+- **维度验证缺陷**: `DimensionUtils.isValidDimension` 改用 `ResourceLocation.tryParse()` 严格校验，修复 `"foo:"` 等无效格式通过验证的问题 (MAJ-5)
+- **物品显示名称**: 修复 `getItemDisplayName` 返回翻译键（如 `item.minecraft.bread`）而非实际显示名称的问题，改用 `ItemStack.getHoverName()` (M-07)
+- **白名单双重索引同步风险**: 白名单存储格式从 txt（纯用户名）迁移为 JSON（UUID→用户名），运行时以 UUID 为主键，消除改名导致的双索引不一致问题 (MAJ-3)
+
+### 优化
+- **白名单延迟写入**: 实现 `dirty` 标志 + 30 秒自动保存策略，替换每次修改立即写入磁盘的方式，显著减少批量操作时的 IO 开销 (MAJ-2)
+- **物品补全性能**: `suggestItems` 预构建首字符索引 Map，限制建议数量上限为 100 条，避免大型模组包中遍历数万注册物品导致线程阻塞 (MAJ-4)
+
+### 清理
+- **死代码移除**: 删除 `LocalizationManager.getMinecraftLanguage()` 反射方法（无任何调用点）(SS-2)
+
 ## [2.0.3] - 2025-03-14
 
 ### 新增
