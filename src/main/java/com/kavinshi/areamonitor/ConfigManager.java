@@ -280,16 +280,50 @@ public class ConfigManager {
         area.setLeaveMode(parseGameMode(config.getLeaveMode()));
         area.setEnabled(config.isEnabled());
 
-        // Set bounds
-        if (config.getMinX() != null && config.getMaxX() != null && config.getMinZ() != null && config.getMaxZ() != null) {
-            area.setBounds(new MonitorArea.RectangleBounds(
-                config.getMinX(), config.getMinZ(), config.getMaxX(), config.getMaxZ()
-            ));
+        // Set bounds based on boundsType
+        String type = config.getBoundsType() != null ? config.getBoundsType() : "RECTANGLE";
+        switch (type) {
+            case "CIRCLE":
+                if (config.getCenterX() != null && config.getCenterZ() != null && config.getRadius() != null) {
+                    area.setBounds(new MonitorArea.CircleBounds(
+                        config.getCenterX(), config.getCenterZ(), config.getRadius()));
+                }
+                break;
+            case "POLYGON":
+                if (config.getVertices() != null && config.getVertices().length >= 3) {
+                    List<MonitorArea.Vec2i> vertexList = new ArrayList<>();
+                    for (int[] v : config.getVertices()) {
+                        if (v.length >= 2) vertexList.add(new MonitorArea.Vec2i(v[0], v[1]));
+                    }
+                    if (vertexList.size() >= 3) {
+                        area.setBounds(new MonitorArea.PolygonBounds(vertexList));
+                    }
+                }
+                break;
+            default: // RECTANGLE — backward compatible
+                if (config.getMinX() != null && config.getMaxX() != null && config.getMinZ() != null && config.getMaxZ() != null) {
+                    area.setBounds(new MonitorArea.RectangleBounds(
+                        config.getMinX(), config.getMinZ(), config.getMaxX(), config.getMaxZ()));
+                }
+                break;
         }
 
         // Set whitelist
         if (config.getWhitelist() != null) {
             area.setWhitelist(new ArrayList<>(config.getWhitelist()));
+        }
+
+        // Set protection settings
+        if (config.getProtection() != null) {
+            area.setProtection(config.getProtection());
+        }
+
+        // Set triggers
+        if (config.getEnterTrigger() != null) {
+            area.setEnterTrigger(config.getEnterTrigger());
+        }
+        if (config.getLeaveTrigger() != null) {
+            area.setLeaveTrigger(config.getLeaveTrigger());
         }
 
         return area;
@@ -312,10 +346,35 @@ public class ConfigManager {
         config.setWhitelist(area.getWhitelist());
 
         if (area.getBounds() instanceof MonitorArea.RectangleBounds rect) {
+            config.setBoundsType("RECTANGLE");
             config.setMinX(rect.getMinX());
             config.setMaxX(rect.getMaxX());
             config.setMinZ(rect.getMinZ());
             config.setMaxZ(rect.getMaxZ());
+        } else if (area.getBounds() instanceof MonitorArea.CircleBounds circle) {
+            config.setBoundsType("CIRCLE");
+            config.setCenterX(circle.getCenterX());
+            config.setCenterZ(circle.getCenterZ());
+            config.setRadius(circle.getRadius());
+        } else if (area.getBounds() instanceof MonitorArea.PolygonBounds poly) {
+            config.setBoundsType("POLYGON");
+            int[][] vertArray = new int[poly.getVertices().size()][2];
+            for (int i = 0; i < poly.getVertices().size(); i++) {
+                vertArray[i][0] = poly.getVertices().get(i).x();
+                vertArray[i][1] = poly.getVertices().get(i).z();
+            }
+            config.setVertices(vertArray);
+        }
+
+        // Save protection settings
+        config.setProtection(area.getProtection());
+
+        // Save triggers
+        if (area.getEnterTrigger() != null) {
+            config.setEnterTrigger(area.getEnterTrigger());
+        }
+        if (area.getLeaveTrigger() != null) {
+            config.setLeaveTrigger(area.getLeaveTrigger());
         }
 
         return config;
@@ -341,38 +400,61 @@ public class ConfigManager {
             return false;
         }
 
-        // Validate coordinate range
-        if (config.getMinX() == null || config.getMaxX() == null || config.getMinZ() == null || config.getMaxZ() == null) {
-            AreaMonitorMod.LOGGER.warn("Area {} missing required coordinate config", areaName);
-            return false;
-        }
+        // Validate coordinate range based on bounds type
+        String boundsType = config.getBoundsType() != null ? config.getBoundsType() : "RECTANGLE";
 
-        // Validate coordinate logic
-        if (config.getMinX() >= config.getMaxX() || config.getMinZ() >= config.getMaxZ()) {
-            AreaMonitorMod.LOGGER.warn("Area {} has invalid coordinate range: minX={}, maxX={}, minZ={}, maxZ={}",
-                    areaName, config.getMinX(), config.getMaxX(), config.getMinZ(), config.getMaxZ());
-            return false;
-        }
+        switch (boundsType) {
+            case "CIRCLE":
+                if (config.getCenterX() == null || config.getCenterZ() == null || config.getRadius() == null) {
+                    AreaMonitorMod.LOGGER.warn("Area {} missing required circle config", areaName);
+                    return false;
+                }
+                if (config.getRadius() <= 0) {
+                    AreaMonitorMod.LOGGER.warn("Area {} has invalid radius: {}", areaName, config.getRadius());
+                    return false;
+                }
+                break;
 
-        // Validate coordinate bounds (Minecraft world border is ±29,999,984)
-        int worldBorder = 29999984;
-        if (Math.abs(config.getMinX()) > worldBorder || Math.abs(config.getMaxX()) > worldBorder ||
-            Math.abs(config.getMinZ()) > worldBorder || Math.abs(config.getMaxZ()) > worldBorder) {
-            AreaMonitorMod.LOGGER.warn("Area {} has coordinates outside world border (±{}): minX={}, maxX={}, minZ={}, maxZ={}",
-                    areaName, worldBorder, config.getMinX(), config.getMaxX(), config.getMinZ(), config.getMaxZ());
-            return false;
-        }
+            case "POLYGON":
+                if (config.getVertices() == null || config.getVertices().length < 3) {
+                    AreaMonitorMod.LOGGER.warn("Area {} polygon requires at least 3 vertices", areaName);
+                    return false;
+                }
+                if (config.getVertices().length > 32) {
+                    AreaMonitorMod.LOGGER.warn("Area {} polygon has too many vertices: {}", areaName, config.getVertices().length);
+                    return false;
+                }
+                break;
 
-        // Validate area size (prevent extremely large areas that could cause performance issues)
-        long areaWidth = (long) config.getMaxX() - config.getMinX();
-        long areaLength = (long) config.getMaxZ() - config.getMinZ();
-        long areaSize = areaWidth * areaLength;
-        long maxAreaSize = 10000000L; // 10 million blocks (e.g., 3162x3162)
+            default: // RECTANGLE — keep existing validation
+                if (config.getMinX() == null || config.getMaxX() == null || config.getMinZ() == null || config.getMaxZ() == null) {
+                    AreaMonitorMod.LOGGER.warn("Area {} missing required coordinate config", areaName);
+                    return false;
+                }
 
-        if (areaSize > maxAreaSize) {
-            AreaMonitorMod.LOGGER.warn("Area {} is too large ({}x{} = {} blocks, max {}). This may cause performance issues.",
-                    areaName, areaWidth, areaLength, areaSize, maxAreaSize);
-            // Don't reject, just warn
+                if (config.getMinX() >= config.getMaxX() || config.getMinZ() >= config.getMaxZ()) {
+                    AreaMonitorMod.LOGGER.warn("Area {} has invalid coordinate range: minX={}, maxX={}, minZ={}, maxZ={}",
+                            areaName, config.getMinX(), config.getMaxX(), config.getMinZ(), config.getMaxZ());
+                    return false;
+                }
+
+                int worldBorder = 29999984;
+                if (Math.abs(config.getMinX()) > worldBorder || Math.abs(config.getMaxX()) > worldBorder ||
+                    Math.abs(config.getMinZ()) > worldBorder || Math.abs(config.getMaxZ()) > worldBorder) {
+                    AreaMonitorMod.LOGGER.warn("Area {} has coordinates outside world border (±{}): minX={}, maxX={}, minZ={}, maxZ={}",
+                            areaName, worldBorder, config.getMinX(), config.getMaxX(), config.getMinZ(), config.getMaxZ());
+                    return false;
+                }
+
+                long areaWidth = (long) config.getMaxX() - config.getMinX();
+                long areaLength = (long) config.getMaxZ() - config.getMinZ();
+                long areaSize = areaWidth * areaLength;
+                long maxAreaSize = 10000000L;
+                if (areaSize > maxAreaSize) {
+                    AreaMonitorMod.LOGGER.warn("Area {} is too large ({}x{} = {} blocks, max {}). This may cause performance issues.",
+                            areaName, areaWidth, areaLength, areaSize, maxAreaSize);
+                }
+                break;
         }
 
         // Validate game mode
@@ -418,6 +500,12 @@ public class ConfigManager {
         private String leaveMode = "survival";
         private boolean enabled = true;
         private List<String> whitelist = new ArrayList<>();
+        private ProtectionSettings protection;
+        private TriggerConfig enterTrigger;
+        private TriggerConfig leaveTrigger;
+        private String boundsType = "RECTANGLE";
+        private int[][] vertices;
+        private Integer centerX, centerZ, radius;
 
         public String getDisplayName() { return displayName; }
         public void setDisplayName(String v) { this.displayName = v; }
@@ -439,6 +527,22 @@ public class ConfigManager {
         public void setEnabled(boolean v) { this.enabled = v; }
         public List<String> getWhitelist() { return whitelist; }
         public void setWhitelist(List<String> v) { this.whitelist = v != null ? v : new ArrayList<>(); }
+        public ProtectionSettings getProtection() { return protection; }
+        public void setProtection(ProtectionSettings v) { this.protection = v; }
+        public TriggerConfig getEnterTrigger() { return enterTrigger; }
+        public void setEnterTrigger(TriggerConfig v) { this.enterTrigger = v; }
+        public TriggerConfig getLeaveTrigger() { return leaveTrigger; }
+        public void setLeaveTrigger(TriggerConfig v) { this.leaveTrigger = v; }
+        public String getBoundsType() { return boundsType; }
+        public void setBoundsType(String v) { this.boundsType = v; }
+        public int[][] getVertices() { return vertices; }
+        public void setVertices(int[][] v) { this.vertices = v; }
+        public Integer getCenterX() { return centerX; }
+        public void setCenterX(Integer v) { this.centerX = v; }
+        public Integer getCenterZ() { return centerZ; }
+        public void setCenterZ(Integer v) { this.centerZ = v; }
+        public Integer getRadius() { return radius; }
+        public void setRadius(Integer v) { this.radius = v; }
     }
 
     /**

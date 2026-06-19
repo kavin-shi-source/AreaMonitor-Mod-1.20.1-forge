@@ -20,6 +20,9 @@ public class MonitorArea {
     private boolean enabled;
     private List<String> whitelist;
     private RestrictionSettings restrictions;
+    private ProtectionSettings protection = new ProtectionSettings();
+    private TriggerConfig enterTrigger = null;
+    private TriggerConfig leaveTrigger = null;
 
     public MonitorArea(String name) {
         this.name = name;
@@ -31,6 +34,7 @@ public class MonitorArea {
         this.enabled = true;
         this.whitelist = new CopyOnWriteArrayList<>();
         this.restrictions = new RestrictionSettings();
+        this.protection = new ProtectionSettings();
     }
 
     public String getName() { return name; }
@@ -64,6 +68,17 @@ public class MonitorArea {
 
     public RestrictionSettings getRestrictions() { return restrictions; }
     public void setRestrictions(RestrictionSettings restrictions) { this.restrictions = restrictions; }
+
+    public ProtectionSettings getProtection() { return protection; }
+    public void setProtection(ProtectionSettings protection) { this.protection = protection; }
+
+    public TriggerConfig getEnterTrigger() { return enterTrigger; }
+    public void setEnterTrigger(TriggerConfig v) { this.enterTrigger = v; }
+    public TriggerConfig getLeaveTrigger() { return leaveTrigger; }
+    public void setLeaveTrigger(TriggerConfig v) { this.leaveTrigger = v; }
+
+    public boolean hasEnterTrigger() { return enterTrigger != null && enterTrigger.hasAnyAction(); }
+    public boolean hasLeaveTrigger() { return leaveTrigger != null && leaveTrigger.hasAnyAction(); }
 
     public boolean isPlayerInArea(PlayerPosition position) {
         if (!position.getDimension().equals(dimension)) {
@@ -145,7 +160,69 @@ public class MonitorArea {
         public int getRadius() { return radius; }
     }
 
+    // Vec2i simple integer vector record for polygon vertices
+    public record Vec2i(int x, int z) {}
+
+    /**
+     * Polygon area bounds using ray casting for containment test.
+     * Supports 3-32 vertices.
+     */
+    public static class PolygonBounds implements AreaBounds {
+        private final List<Vec2i> vertices;
+        private final AABB cachedBoundingBox;
+
+        public PolygonBounds(List<Vec2i> vertices) {
+            if (vertices == null || vertices.size() < 3) {
+                throw new IllegalArgumentException("Polygon requires at least 3 vertices");
+            }
+            if (vertices.size() > 32) {
+                throw new IllegalArgumentException("Polygon cannot have more than 32 vertices");
+            }
+            this.vertices = List.copyOf(vertices);
+            // Compute and cache bounding box
+            int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+            for (Vec2i v : vertices) {
+                if (v.x < minX) minX = v.x;
+                if (v.x > maxX) maxX = v.x;
+                if (v.z < minZ) minZ = v.z;
+                if (v.z > maxZ) maxZ = v.z;
+            }
+            this.cachedBoundingBox = new AABB(minX, 0, minZ, maxX + 1, 256, maxZ + 1);
+        }
+
+        @Override
+        public boolean contains(double x, double z) {
+            // Ray casting algorithm: count intersections of horizontal ray to the right
+            boolean inside = false;
+            int n = vertices.size();
+            for (int i = 0, j = n - 1; i < n; j = i++) {
+                Vec2i vi = vertices.get(i);
+                Vec2i vj = vertices.get(j);
+                if ((vi.z > z) != (vj.z > z) &&
+                    x < (vj.x - vi.x) * (z - vi.z) / (double)(vj.z - vi.z) + vi.x) {
+                    inside = !inside;
+                }
+            }
+            return inside;
+        }
+
+        @Override
+        public AABB getBoundingBox() {
+            return cachedBoundingBox;
+        }
+
+        @Override
+        public BoundsType getType() {
+            return BoundsType.POLYGON;
+        }
+
+        public List<Vec2i> getVertices() {
+            return vertices;
+        }
+    }
+
     public enum BoundsType {
-        RECTANGLE, CIRCLE
+        RECTANGLE, CIRCLE, POLYGON
     }
 }

@@ -99,6 +99,26 @@ public class SelectionCommands {
         player.displayClientMessage(MessageUtils.smartComponent(player, "selection.tutorial.end"), false);
     }
 
+    // ---- Polygon selection commands ----
+
+    public static int startPolygonSelection(CommandContext<CommandSourceStack> context) {
+        if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
+            MessageUtils.sendFailure(context.getSource(), "player.only_command");
+            return 0;
+        }
+        SelectionTool.startPolygonMode(player);
+        return 1;
+    }
+
+    public static int finishPolygonSelection(CommandContext<CommandSourceStack> context) {
+        if (!(context.getSource().getEntity() instanceof ServerPlayer player)) {
+            MessageUtils.sendFailure(context.getSource(), "player.only_command");
+            return 0;
+        }
+        SelectionTool.finishPolygon(player);
+        return 1;
+    }
+
     // ---- Reload configs ----
 
     public static int reloadConfigs(CommandContext<CommandSourceStack> context) {

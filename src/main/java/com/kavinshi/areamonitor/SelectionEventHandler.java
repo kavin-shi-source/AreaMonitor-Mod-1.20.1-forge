@@ -35,6 +35,13 @@ public class SelectionEventHandler {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
 
         if (SelectionTool.isHoldingSelectionTool(player)) {
+            // Auto-finish polygon if in polygon mode with enough vertices
+            SelectionPoints sel = SelectionTool.getPlayerSelection(player.getUUID());
+            if (sel != null && sel.isMultiPointMode() && sel.hasEnoughVerticesForPolygon()) {
+                SelectionTool.finishPolygon(player);
+                return;
+            }
+
             player.displayClientMessage(
                 MessageUtils.smartComponent(player, "selection.tool.instructions"),
                 false

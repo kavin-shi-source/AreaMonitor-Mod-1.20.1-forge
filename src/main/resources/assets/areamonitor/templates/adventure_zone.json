@@ -1,0 +1,24 @@
+{
+  "name": "adventure_zone",
+  "displayName": "Adventure Zone",
+  "enterMode": "adventure",
+  "leaveMode": "survival",
+  "protection": {
+    "blockBreak": true,
+    "blockPlace": true,
+    "blockInteract": true,
+    "pvp": false,
+    "explosion": false,
+    "entityDamage": false
+  },
+  "trigger": {
+    "enter": {
+      "commands": [],
+      "sound": null,
+      "titleMain": "Adventure Region",
+      "titleSub": "No building allowed",
+      "teleport": null
+    },
+    "leave": null
+  }
+}

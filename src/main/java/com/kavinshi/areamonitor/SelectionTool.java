@@ -12,6 +12,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -138,6 +140,12 @@ public class SelectionTool {
             player.getUUID(),
             k -> new SelectionPoints()
         );
+
+        // Check for polygon mode
+        if (selection.isMultiPointMode()) {
+            handlePolygonClick(player, pos, selection);
+            return;
+        }
 
         if (!selection.hasFirstPoint()) {
             selection.setFirstPoint(pos);
@@ -298,6 +306,10 @@ public class SelectionTool {
      */
     public static void createAreaFromSelection(ServerPlayer player, String areaName) {
         SelectionPoints selection = playerSelections.get(player.getUUID());
+        if (selection.isMultiPointMode() && selection.hasEnoughVerticesForPolygon()) {
+            createPolygonAreaFromSelection(player, areaName, selection);
+            return;
+        }
         if (selection == null || !selection.isComplete()) {
             player.displayClientMessage(
                 MessageUtils.smartComponent(player, "selection.error.no_points"),
@@ -347,6 +359,36 @@ public class SelectionTool {
                               net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 2.0f);
     }
 
+    private static void createPolygonAreaFromSelection(ServerPlayer player, String areaName, SelectionPoints selection) {
+        List<BlockPos> vertices = selection.getVertexPoints();
+        List<MonitorArea.Vec2i> vecList = new ArrayList<>();
+        for (BlockPos v : vertices) {
+            vecList.add(new MonitorArea.Vec2i(v.getX(), v.getZ()));
+        }
+
+        String currentDimension = player.level().dimension().location().toString();
+
+        MonitorArea area = new MonitorArea(areaName);
+        area.setDisplayName(areaName);
+        area.setDimension(currentDimension);
+        area.setBounds(new MonitorArea.PolygonBounds(vecList));
+
+        AreaManager.getInstance().addArea(area);
+
+        player.displayClientMessage(
+            MessageUtils.smartComponent(player, "selection.area.created", areaName).withStyle(net.minecraft.ChatFormatting.BOLD), false);
+        player.displayClientMessage(
+            MessageUtils.smartComponent(player, "selection.area.dimension", getDimensionDisplayName(currentDimension)), false);
+        player.displayClientMessage(
+            MessageUtils.smartComponent(player, "selection.polygon.vertex_count", vertices.size()), false);
+
+        showModeSetupGuide(player);
+        ConfigManager.saveAreasConfig();
+        playerSelections.remove(player.getUUID());
+        player.playNotifySound(net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.get(),
+                              net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 2.0f);
+    }
+
     /**
      * Show mode setup guide to player.
      */
@@ -384,6 +426,87 @@ public class SelectionTool {
                 true
             );
         }
+    }
+
+    /**
+     * Start polygon selection mode.
+     */
+    public static void startPolygonMode(ServerPlayer player) {
+        if (!player.hasPermissions(2)) {
+            player.displayClientMessage(
+                MessageUtils.smartComponent(player, "selection.tool.no_permission"), true);
+            return;
+        }
+        SelectionPoints selection = playerSelections.computeIfAbsent(
+            player.getUUID(), k -> new SelectionPoints());
+        selection.setMultiPointMode(true);
+        selection.clearVertices();
+        player.displayClientMessage(
+            MessageUtils.smartComponent(player, "selection.polygon.start").withStyle(net.minecraft.ChatFormatting.BOLD), false);
+        player.displayClientMessage(
+            MessageUtils.smartComponent(player, "selection.polygon.instructions"), false);
+    }
+
+    private static void handlePolygonClick(ServerPlayer player, BlockPos pos, SelectionPoints selection) {
+        selection.addVertexPoint(pos);
+        int count = selection.getVertexPoints().size();
+
+        showSelectionMarker(player, pos);
+
+        player.playNotifySound(net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.get(),
+                              net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f + count * 0.1f);
+
+        player.displayClientMessage(
+            net.minecraft.network.chat.Component.literal(
+                String.format(LocalizationManager.translate("selection.polygon.vertex_added"), count)),
+            false);
+
+        // Show line to previous vertex
+        if (count >= 2) {
+            BlockPos prev = selection.getVertexPoints().get(count - 2);
+            AreaVisualizer.drawLineBetween(player, prev, pos);
+        }
+
+        if (count >= 3) {
+            player.displayClientMessage(
+                MessageUtils.smartComponent(player, "selection.polygon.can_finish"), false);
+        }
+    }
+
+    /**
+     * Get player's current selection (for external access).
+     */
+    public static SelectionPoints getPlayerSelection(UUID playerId) {
+        return playerSelections.get(playerId);
+    }
+
+    /**
+     * Finish polygon selection and show summary.
+     */
+    public static void finishPolygon(ServerPlayer player) {
+        SelectionPoints selection = playerSelections.get(player.getUUID());
+        if (selection == null || !selection.isMultiPointMode() || !selection.hasEnoughVerticesForPolygon()) {
+            player.displayClientMessage(
+                MessageUtils.smartComponent(player, "selection.polygon.not_enough_vertices"), true);
+            return;
+        }
+
+        List<BlockPos> vertices = selection.getVertexPoints();
+
+        String currentDimension = player.level().dimension().location().toString();
+
+        player.displayClientMessage(
+            MessageUtils.smartComponent(player, "selection.polygon.complete").withStyle(net.minecraft.ChatFormatting.BOLD), false);
+        player.displayClientMessage(
+            MessageUtils.smartComponent(player, "selection.polygon.vertex_count", vertices.size()), false);
+        player.displayClientMessage(
+            MessageUtils.smartComponent(player, "selection.instructions.create_or_cancel"), false);
+        player.displayClientMessage(
+            MessageUtils.smartComponent(player, "selection.dimension.current",
+                getDimensionDisplayName(currentDimension)), false);
+
+        player.playNotifySound(net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.get(),
+                              net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 2.0f);
     }
 
     /**

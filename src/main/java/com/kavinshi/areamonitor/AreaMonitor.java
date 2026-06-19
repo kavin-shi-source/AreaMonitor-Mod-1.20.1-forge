@@ -75,6 +75,9 @@ public class AreaMonitor {
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
 
+        // Clear trigger locks for this tick (anti-recursion)
+        AreaTriggerManager.clearTickLocks();
+
         processPendingActions();
 
         PerformanceMonitor.onServerTick(minecraftServer);

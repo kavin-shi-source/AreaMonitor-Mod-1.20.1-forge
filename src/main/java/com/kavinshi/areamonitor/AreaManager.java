@@ -149,6 +149,9 @@ public class AreaManager {
         // Delayed game mode switch
         AreaMonitor.addPendingGameModeChange(player, area.getEnterMode());
 
+        // Execute enter triggers
+        AreaTriggerManager.executeEnterTriggers(player, area);
+
     }
 
     private void handleAreaLeave(ServerPlayer player, String areaName) {
@@ -162,6 +165,9 @@ public class AreaManager {
 
         // Delayed game mode switch (leaving area)
         AreaMonitor.addPendingGameModeChangeOnLeave(player, area.getLeaveMode());
+
+        // Execute leave triggers
+        AreaTriggerManager.executeLeaveTriggers(player, area);
 
     }
 

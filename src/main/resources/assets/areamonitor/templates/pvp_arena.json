@@ -1,0 +1,26 @@
+{
+  "name": "pvp_arena",
+  "displayName": "PVP Arena",
+  "enterMode": "adventure",
+  "leaveMode": "survival",
+  "protection": {
+    "blockBreak": false,
+    "blockPlace": false,
+    "blockInteract": false,
+    "pvp": true,
+    "explosion": true,
+    "entityDamage": false
+  },
+  "trigger": {
+    "enter": {
+      "commands": [],
+      "sound": "minecraft:entity.wither.spawn",
+      "soundVolume": 0.5,
+      "soundPitch": 1.0,
+      "titleMain": "PVP Region",
+      "titleSub": "Prepare to fight!",
+      "teleport": null
+    },
+    "leave": null
+  }
+}

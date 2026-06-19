@@ -95,6 +95,8 @@ public class AreaCommands {
             } else if (area.getBounds() instanceof MonitorArea.CircleBounds circle) {
                 coordinates = String.format("Center(%d, %d), Radius %d",
                     circle.getCenterX(), circle.getCenterZ(), circle.getRadius());
+            } else if (area.getBounds() instanceof MonitorArea.PolygonBounds poly) {
+                coordinates = String.format(LocalizationManager.translate("bounds.polygon"), poly.getVertices().size());
             }
 
             final int currentIndex = index++;
@@ -165,6 +167,9 @@ public class AreaCommands {
         } else if (area.getBounds() instanceof MonitorArea.CircleBounds circle) {
             String coords = String.format("Center(%d, %d), Radius %d",
                 circle.getCenterX(), circle.getCenterZ(), circle.getRadius());
+            MessageUtils.sendSuccess(context.getSource(), "area.coordinates_format", false, coords);
+        } else if (area.getBounds() instanceof MonitorArea.PolygonBounds poly) {
+            String coords = String.format(LocalizationManager.translate("bounds.polygon"), poly.getVertices().size());
             MessageUtils.sendSuccess(context.getSource(), "area.coordinates_format", false, coords);
         }
 

@@ -59,6 +59,8 @@ public class AreaVisualizer {
             collectRectangleBorderParticles(player, bounds, batch);
         } else if (area.getBounds() instanceof MonitorArea.CircleBounds bounds) {
             collectCircleBorderParticles(player, bounds, batch);
+        } else if (area.getBounds() instanceof MonitorArea.PolygonBounds poly) {
+            collectPolygonBorderParticles(player, poly, batch);
         }
 
         sendParticleBatch(player.level(), batch);
@@ -91,6 +93,23 @@ public class AreaVisualizer {
             double x = centerX + radius * Math.cos(angle);
             double z = centerZ + radius * Math.sin(angle);
             batch.add(new ParticleData(x, y, z, ParticleTypes.END_ROD));
+        }
+    }
+
+    /**
+     * Collect polygon border particles into batch.
+     */
+    private static void collectPolygonBorderParticles(ServerPlayer player, MonitorArea.PolygonBounds poly, List<ParticleData> batch) {
+        double y = player.getY();
+        List<MonitorArea.Vec2i> vertices = poly.getVertices();
+        int n = vertices.size();
+        for (int i = 0; i < n; i++) {
+            MonitorArea.Vec2i v1 = vertices.get(i);
+            MonitorArea.Vec2i v2 = vertices.get((i + 1) % n);
+            collectLineBetweenParticles(
+                new BlockPos(v1.x(), (int) y, v1.z()),
+                new BlockPos(v2.x(), (int) y, v2.z()),
+                y, ParticleTypes.END_ROD, batch);
         }
     }
 
@@ -241,6 +260,17 @@ public class AreaVisualizer {
                 }
             }
         }
+    }
+
+    /**
+     * Draw a line of particles between two block positions for a specific player.
+     */
+    public static void drawLineBetween(ServerPlayer player, BlockPos pos1, BlockPos pos2) {
+        Level level = player.level();
+        double y = player.getY();
+        List<ParticleData> batch = new ArrayList<>();
+        collectLineBetweenParticles(pos1, pos2, y, ParticleTypes.END_ROD, batch);
+        sendParticleBatch(level, batch);
     }
 
     /**

@@ -4,8 +4,14 @@ import com.kavinshi.areamonitor.commands.AreaCommands;
 import com.kavinshi.areamonitor.commands.BlacklistCommands;
 import com.kavinshi.areamonitor.commands.SelectionCommands;
 import com.kavinshi.areamonitor.commands.VisualCommands;
+import com.kavinshi.areamonitor.commands.ProtectionCommands;
+import com.kavinshi.areamonitor.commands.TemplateCommands;
+import com.kavinshi.areamonitor.commands.TriggerCommands;
 import com.kavinshi.areamonitor.commands.WhitelistCommands;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -28,6 +34,10 @@ import net.minecraftforge.fml.common.Mod;
  */
 @Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ExtendedCommands {
+
+    private static final java.util.List<String> PROTECTION_TYPES = java.util.List.of(
+        "blockBreak", "blockPlace", "blockInteract", "pvp", "explosion", "entityDamage"
+    );
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
@@ -239,6 +249,12 @@ public class ExtendedCommands {
                 .then(Commands.literal("tutorial")
                     .executes(SelectionCommands::showTutorial)
                 )
+                .then(Commands.literal("polygon")
+                    .then(Commands.literal("start")
+                        .executes(SelectionCommands::startPolygonSelection))
+                    .then(Commands.literal("finish")
+                        .executes(SelectionCommands::finishPolygonSelection))
+                )
             )
 
             // --- Config commands ---
@@ -249,6 +265,162 @@ public class ExtendedCommands {
                 .then(Commands.literal("generate")
                     .executes(SelectionCommands::generateConfigs)
                 )
+            )
+
+            // --- Protect commands ---
+            .then(Commands.literal("protect")
+                .then(Commands.argument("area", StringArgumentType.string())
+                    .suggests(AreaCommands::suggestAreaNames)
+                    .then(Commands.literal("all")
+                        .then(Commands.literal("on")
+                            .executes(context -> ProtectionCommands.setAllProtection(
+                                StringArgumentType.getString(context, "area"), true, context)))
+                        .then(Commands.literal("off")
+                            .executes(context -> ProtectionCommands.setAllProtection(
+                                StringArgumentType.getString(context, "area"), false, context))))
+                    .then(Commands.literal("info")
+                        .executes(context -> ProtectionCommands.showProtectionInfo(
+                            StringArgumentType.getString(context, "area"), context)))
+                    .then(Commands.argument("type", StringArgumentType.string())
+                        .suggests((context, builder) -> {
+                            for (String t : PROTECTION_TYPES) {
+                                builder.suggest(t);
+                            }
+                            return builder.buildFuture();
+                        })
+                        .then(Commands.literal("on")
+                            .executes(context -> ProtectionCommands.setProtection(
+                                StringArgumentType.getString(context, "area"),
+                                StringArgumentType.getString(context, "type"),
+                                true, context)))
+                        .then(Commands.literal("off")
+                            .executes(context -> ProtectionCommands.setProtection(
+                                StringArgumentType.getString(context, "area"),
+                                StringArgumentType.getString(context, "type"),
+                                false, context)))))
+            )
+
+            // --- Trigger commands ---
+            .then(Commands.literal("trigger")
+                .then(Commands.argument("area", StringArgumentType.string())
+                    .suggests(AreaCommands::suggestAreaNames)
+                    .then(Commands.literal("enter")
+                        .then(Commands.literal("cmd")
+                            .then(Commands.literal("add")
+                                .then(Commands.argument("command", StringArgumentType.greedyString())
+                                    .executes(context -> TriggerCommands.addCommand(
+                                        StringArgumentType.getString(context, "area"), true,
+                                        StringArgumentType.getString(context, "command"), context))))
+                            .then(Commands.literal("remove")
+                                .then(Commands.argument("index", IntegerArgumentType.integer(0))
+                                    .executes(context -> TriggerCommands.removeCommand(
+                                        StringArgumentType.getString(context, "area"), true,
+                                        IntegerArgumentType.getInteger(context, "index"), context))))
+                            .then(Commands.literal("list")
+                                .executes(context -> TriggerCommands.listCommands(
+                                    StringArgumentType.getString(context, "area"), true, context)))
+                            .then(Commands.literal("clear")
+                                .executes(context -> TriggerCommands.clearCommands(
+                                    StringArgumentType.getString(context, "area"), true, context))))
+                        .then(Commands.literal("sound")
+                            .then(Commands.argument("soundId", StringArgumentType.string())
+                                .executes(context -> TriggerCommands.setSound(
+                                    StringArgumentType.getString(context, "area"), true,
+                                    StringArgumentType.getString(context, "soundId"), 1.0f, 1.0f, context)))
+                            .then(Commands.literal("clear")
+                                .executes(context -> TriggerCommands.clearSound(
+                                    StringArgumentType.getString(context, "area"), true, context))))
+                        .then(Commands.literal("title")
+                            .then(Commands.argument("main", StringArgumentType.greedyString())
+                                .executes(context -> TriggerCommands.setTitle(
+                                    StringArgumentType.getString(context, "area"), true,
+                                    StringArgumentType.getString(context, "main"), null, context)))
+                            .then(Commands.literal("clear")
+                                .executes(context -> TriggerCommands.clearTitle(
+                                    StringArgumentType.getString(context, "area"), true, context))))
+                        .then(Commands.literal("tp")
+                            .then(Commands.argument("dim", StringArgumentType.string())
+                                .then(Commands.argument("x", DoubleArgumentType.doubleArg())
+                                    .then(Commands.argument("y", DoubleArgumentType.doubleArg())
+                                        .then(Commands.argument("z", DoubleArgumentType.doubleArg())
+                                            .executes(context -> TriggerCommands.setTp(
+                                                StringArgumentType.getString(context, "area"), true,
+                                                StringArgumentType.getString(context, "dim"),
+                                                DoubleArgumentType.getDouble(context, "x"),
+                                                DoubleArgumentType.getDouble(context, "y"),
+                                                DoubleArgumentType.getDouble(context, "z"), context))))))
+                            .then(Commands.literal("clear")
+                                .executes(context -> TriggerCommands.clearTp(
+                                    StringArgumentType.getString(context, "area"), true, context))))
+                        .then(Commands.literal("info")
+                            .executes(context -> TriggerCommands.showInfo(
+                                StringArgumentType.getString(context, "area"), true, context))))
+                    .then(Commands.literal("leave")
+                        .then(Commands.literal("cmd")
+                            .then(Commands.literal("add")
+                                .then(Commands.argument("command", StringArgumentType.greedyString())
+                                    .executes(context -> TriggerCommands.addCommand(
+                                        StringArgumentType.getString(context, "area"), false,
+                                        StringArgumentType.getString(context, "command"), context))))
+                            .then(Commands.literal("remove")
+                                .then(Commands.argument("index", IntegerArgumentType.integer(0))
+                                    .executes(context -> TriggerCommands.removeCommand(
+                                        StringArgumentType.getString(context, "area"), false,
+                                        IntegerArgumentType.getInteger(context, "index"), context))))
+                            .then(Commands.literal("list")
+                                .executes(context -> TriggerCommands.listCommands(
+                                    StringArgumentType.getString(context, "area"), false, context)))
+                            .then(Commands.literal("clear")
+                                .executes(context -> TriggerCommands.clearCommands(
+                                    StringArgumentType.getString(context, "area"), false, context))))
+                        .then(Commands.literal("sound")
+                            .then(Commands.argument("soundId", StringArgumentType.string())
+                                .executes(context -> TriggerCommands.setSound(
+                                    StringArgumentType.getString(context, "area"), false,
+                                    StringArgumentType.getString(context, "soundId"), 1.0f, 1.0f, context)))
+                            .then(Commands.literal("clear")
+                                .executes(context -> TriggerCommands.clearSound(
+                                    StringArgumentType.getString(context, "area"), false, context))))
+                        .then(Commands.literal("title")
+                            .then(Commands.argument("main", StringArgumentType.greedyString())
+                                .executes(context -> TriggerCommands.setTitle(
+                                    StringArgumentType.getString(context, "area"), false,
+                                    StringArgumentType.getString(context, "main"), null, context)))
+                            .then(Commands.literal("clear")
+                                .executes(context -> TriggerCommands.clearTitle(
+                                    StringArgumentType.getString(context, "area"), false, context))))
+                        .then(Commands.literal("tp")
+                            .then(Commands.argument("dim", StringArgumentType.string())
+                                .then(Commands.argument("x", DoubleArgumentType.doubleArg())
+                                    .then(Commands.argument("y", DoubleArgumentType.doubleArg())
+                                        .then(Commands.argument("z", DoubleArgumentType.doubleArg())
+                                            .executes(context -> TriggerCommands.setTp(
+                                                StringArgumentType.getString(context, "area"), false,
+                                                StringArgumentType.getString(context, "dim"),
+                                                DoubleArgumentType.getDouble(context, "x"),
+                                                DoubleArgumentType.getDouble(context, "y"),
+                                                DoubleArgumentType.getDouble(context, "z"), context))))))
+                            .then(Commands.literal("clear")
+                                .executes(context -> TriggerCommands.clearTp(
+                                    StringArgumentType.getString(context, "area"), false, context))))
+                        .then(Commands.literal("info")
+                            .executes(context -> TriggerCommands.showInfo(
+                                StringArgumentType.getString(context, "area"), false, context))))))
+
+            // --- Template commands ---
+            .then(Commands.literal("template")
+                .then(Commands.literal("list")
+                    .executes(TemplateCommands::listTemplates))
+                .then(Commands.literal("info")
+                    .then(Commands.argument("name", StringArgumentType.string())
+                        .executes(context -> TemplateCommands.showTemplateInfo(
+                            StringArgumentType.getString(context, "name"), context))))
+                .then(Commands.literal("create")
+                    .then(Commands.argument("template", StringArgumentType.string())
+                        .then(Commands.argument("areaName", StringArgumentType.string())
+                            .executes(context -> TemplateCommands.createFromTemplate(
+                                StringArgumentType.getString(context, "template"),
+                                StringArgumentType.getString(context, "areaName"), context)))))
             )
         );
     }
