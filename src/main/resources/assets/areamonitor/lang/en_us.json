@@ -316,5 +316,19 @@
   "gui.trigger_settings": "Trigger Settings",
   "gui.whitelist_settings": "Whitelist",
   "gui.restriction_settings": "Restrictions",
-  "gui.command_not_available": "This feature is available via CLI: %s"
+  "gui.command_not_available": "This feature is available via CLI: %s",
+  "gui.prot_enabled": "ON",
+  "gui.prot_disabled": "OFF",
+  "gui.prot_block_break": "Block Break",
+  "gui.prot_block_place": "Block Place",
+  "gui.prot_block_interact": "Block Interact",
+  "gui.prot_pvp": "PVP",
+  "gui.prot_explosion": "Explosion",
+  "gui.prot_entity_damage": "Entity Damage",
+  "gui.prot_enable_all": "Enable All",
+  "gui.prot_disable_all": "Disable All",
+  "gui.protection": "Protection",
+  "gui.status_monitoring": "Monitoring",
+  "gui.status_areas": "Areas",
+  "gui.toast_save_done": "Saved"
 }

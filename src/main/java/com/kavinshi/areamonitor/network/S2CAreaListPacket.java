@@ -63,7 +63,13 @@ public class S2CAreaListPacket {
         String enterMode,
         String leaveMode,
         String boundsType,
-        String displayName
+        String displayName,
+        boolean protBlockBreak,
+        boolean protBlockPlace,
+        boolean protBlockInteract,
+        boolean protPvp,
+        boolean protExplosion,
+        boolean protEntityDamage
     ) {
         public AreaEntry(MonitorArea area) {
             this(area.getName(),
@@ -72,7 +78,13 @@ public class S2CAreaListPacket {
                  area.getEnterMode().getName(),
                  area.getLeaveMode().getName(),
                  area.getBounds().getType().name(),
-                 area.getDisplayName());
+                 area.getDisplayName(),
+                 area.getProtection().isBlockBreak(),
+                 area.getProtection().isBlockPlace(),
+                 area.getProtection().isBlockInteract(),
+                 area.getProtection().isPvp(),
+                 area.getProtection().isExplosion(),
+                 area.getProtection().isEntityDamage());
         }
 
         public void encode(FriendlyByteBuf buf) {
@@ -83,18 +95,25 @@ public class S2CAreaListPacket {
             buf.writeUtf(leaveMode);
             buf.writeUtf(boundsType);
             buf.writeUtf(displayName);
+            // Encode 6 protection bools as bitmap byte
+            int protBits = (protBlockBreak ? 1 : 0) | (protBlockPlace ? 2 : 0)
+                | (protBlockInteract ? 4 : 0) | (protPvp ? 8 : 0)
+                | (protExplosion ? 16 : 0) | (protEntityDamage ? 32 : 0);
+            buf.writeByte(protBits);
         }
 
         public static AreaEntry decode(FriendlyByteBuf buf) {
-            return new AreaEntry(
-                buf.readUtf(),
-                buf.readBoolean(),
-                buf.readUtf(),
-                buf.readUtf(),
-                buf.readUtf(),
-                buf.readUtf(),
-                buf.readUtf()
-            );
+            String name = buf.readUtf();
+            boolean enabled = buf.readBoolean();
+            String dim = buf.readUtf();
+            String enter = buf.readUtf();
+            String leave = buf.readUtf();
+            String bounds = buf.readUtf();
+            String disp = buf.readUtf();
+            int bits = buf.readByte();
+            return new AreaEntry(name, enabled, dim, enter, leave, bounds, disp,
+                (bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0,
+                (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0);
         }
     }
 }

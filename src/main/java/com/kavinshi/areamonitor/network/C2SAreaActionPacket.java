@@ -112,6 +112,13 @@ public class C2SAreaActionPacket {
             if (obj.has("enabled") && !obj.get("enabled").isJsonNull()) {
                 area.setEnabled(obj.get("enabled").getAsBoolean());
             }
+            // Protection update
+            if (obj.has("protBlockBreak")) area.getProtection().setBlockBreak(obj.get("protBlockBreak").getAsBoolean());
+            if (obj.has("protBlockPlace")) area.getProtection().setBlockPlace(obj.get("protBlockPlace").getAsBoolean());
+            if (obj.has("protBlockInteract")) area.getProtection().setBlockInteract(obj.get("protBlockInteract").getAsBoolean());
+            if (obj.has("protPvp")) area.getProtection().setPvp(obj.get("protPvp").getAsBoolean());
+            if (obj.has("protExplosion")) area.getProtection().setExplosion(obj.get("protExplosion").getAsBoolean());
+            if (obj.has("protEntityDamage")) area.getProtection().setEntityDamage(obj.get("protEntityDamage").getAsBoolean());
             // Bounds update
             if (obj.has("boundsType") && !obj.get("boundsType").isJsonNull()) {
                 String type = obj.get("boundsType").getAsString();

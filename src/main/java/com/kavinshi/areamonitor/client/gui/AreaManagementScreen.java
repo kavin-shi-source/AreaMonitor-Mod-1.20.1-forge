@@ -166,24 +166,41 @@ public class AreaManagementScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics);
-        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 15, 0xFFFFFF);
+    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(g);
+        int cx = this.width / 2;
 
-        // Draw header
-        guiGraphics.drawString(this.font,
-            LocalizationManager.translate("gui.header_info"), LIST_LEFT + 5, LIST_TOP - 12, 0xAAAAAA);
-        guiGraphics.drawString(this.font,
-            LocalizationManager.translate("gui.header_action"), LIST_LEFT + LIST_WIDTH + 10, LIST_TOP - 12, 0xAAAAAA);
+        // Title bar background
+        g.fill(0, 0, this.width, 22, 0x30000000);
+        g.drawCenteredString(this.font,
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE),
+            cx, 6, 0xFFFFFF);
 
-        // Draw scroll info
+        // Column header background
+        g.fill(LIST_LEFT - 2, LIST_TOP - 14, LIST_LEFT + LIST_WIDTH + 120, LIST_TOP - 14 + 12, 0x20000000);
+        g.drawString(this.font,
+            LocalizationManager.translate("gui.header_info"),
+            LIST_LEFT + 3, LIST_TOP - 12, 0xAAAAAA);
+        g.drawString(this.font,
+            LocalizationManager.translate("gui.header_action"),
+            LIST_LEFT + LIST_WIDTH + 10, LIST_TOP - 12, 0xAAAAAA);
+
+        // Scroll info
         if (!areas.isEmpty()) {
             String info = (scrollOffset + 1) + "-" +
                 Math.min(scrollOffset + ITEMS_PER_PAGE, areas.size()) + " / " + areas.size();
-            guiGraphics.drawString(this.font, info, LIST_LEFT + LIST_WIDTH - 50, LIST_TOP - 12, 0xAAAAAA);
+            g.drawString(this.font, info, LIST_LEFT + LIST_WIDTH - 50, LIST_TOP - 12, 0x888888);
         }
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        // Status bar between list and buttons
+        int statusY = this.height - 70;
+        g.fill(0, statusY, this.width, statusY + 14, 0x20000000);
+        String status = LocalizationManager.translate("gui.status_monitoring") + ": " +
+            areas.size() + " " + LocalizationManager.translate("gui.status_areas");
+        g.drawCenteredString(this.font, Component.literal(status).withStyle(ChatFormatting.GRAY),
+            cx, statusY + 3, 0xAAAAAA);
+
+        super.render(g, mouseX, mouseY, partialTick);
     }
 
     @Override

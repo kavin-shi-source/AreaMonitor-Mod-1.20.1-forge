@@ -316,5 +316,19 @@
   "gui.trigger_settings": "触发器设置",
   "gui.whitelist_settings": "白名单",
   "gui.restriction_settings": "限制设置",
-  "gui.command_not_available": "此功能请使用命令: %s"
+  "gui.command_not_available": "此功能请使用命令: %s",
+  "gui.prot_enabled": "开",
+  "gui.prot_disabled": "关",
+  "gui.prot_block_break": "破坏方块",
+  "gui.prot_block_place": "放置方块",
+  "gui.prot_block_interact": "交互方块",
+  "gui.prot_pvp": "PVP",
+  "gui.prot_explosion": "爆炸",
+  "gui.prot_entity_damage": "实体伤害",
+  "gui.prot_enable_all": "全部启用",
+  "gui.prot_disable_all": "全部禁用",
+  "gui.protection": "保护",
+  "gui.status_monitoring": "监控",
+  "gui.status_areas": "区域数",
+  "gui.toast_save_done": "已保存"
 }

@@ -14,19 +14,17 @@ import net.minecraft.network.chat.Component;
 
 import java.util.List;
 
-/**
- * Full area edit panel.
- * Covers: display name, dimension, enter/leave mode, bounds (rectangle/circle), enabled toggle,
- * and quick links to Protection / Trigger / Whitelist / Restriction sub-panels (CLI fallback).
- */
 public class AreaEditPanel extends Screen {
 
     private final AreaManagementScreen parentScreen;
     private final S2CAreaListPacket.AreaEntry entry;
     private EditBox displayNameInput;
-    private EditBox bx1, bz1, bx2, bz2; // rectangle: minX,minZ,maxX,maxZ; circle: cx,cz (bx1,bz1), radius(bx2)
+    private EditBox bx1, bz1, bx2, bz2;
     private boolean enabled;
-    private boolean rectangleMode = true; // true=rectangle, false=circle
+    private boolean rectangleMode = true;
+
+    // Protection toggles
+    private boolean protBreak, protPlace, protInteract, protPvp, protExplosion, protDamage;
 
     private static final List<String> DIMENSIONS = List.of(
         "minecraft:overworld", "minecraft:the_nether", "minecraft:the_end");
@@ -36,9 +34,7 @@ public class AreaEditPanel extends Screen {
         "gameMode.survival", "gameMode.creative", "gameMode.adventure", "gameMode.spectator"
     };
 
-    private int dimIdx = 0;
-    private int enterIdx = 0;
-    private int leaveIdx = 0;
+    private int dimIdx = 0, enterIdx = 0, leaveIdx = 0;
 
     public AreaEditPanel(AreaManagementScreen parent, S2CAreaListPacket.AreaEntry entry) {
         super(Component.literal(LocalizationManager.translate("gui.edit_area") + ": " + entry.name()));
@@ -46,6 +42,12 @@ public class AreaEditPanel extends Screen {
         this.entry = entry;
         this.enabled = entry.enabled();
         this.rectangleMode = !"CIRCLE".equals(entry.boundsType());
+        this.protBreak = entry.protBlockBreak();
+        this.protPlace = entry.protBlockPlace();
+        this.protInteract = entry.protBlockInteract();
+        this.protPvp = entry.protPvp();
+        this.protExplosion = entry.protExplosion();
+        this.protDamage = entry.protEntityDamage();
 
         dimIdx = Math.max(0, DIMENSIONS.indexOf(entry.dimension()));
         enterIdx = Math.max(0, GAME_MODES.indexOf(entry.enterMode()));
@@ -56,187 +58,199 @@ public class AreaEditPanel extends Screen {
     protected void init() {
         super.init();
         int cx = this.width / 2;
-        int y = 32;
-        int lx = cx - 110; // label x
-        int vx = cx - 45;  // value x
-        int vw = 155;      // value width
+        int lx = cx - 120;
+        int vx = cx - 55;
+        int vw = 175;
+        int y = 30;
 
-        // === Section: Basic Info ===
-        drawSection(guiGraphics(), y - 8, "Basic");
+        // ===== Section 1: Basic Info =====
+        sectionY = y - 6;
+        addLabel(lx, y, "gui.display");
+        displayNameInput = addTextBox(vx, y, vw, entry.displayName() != null ? entry.displayName() : entry.name());
+        y += 24;
 
-        // Display Name
-        addStaticLabel(lx, y, "gui.display");
-        displayNameInput = new EditBox(this.font, vx, y, vw, 20,
-            Component.literal(LocalizationManager.translate("gui.area_name_hint")));
-        displayNameInput.setMaxLength(48);
-        displayNameInput.setValue(entry.displayName() != null ? entry.displayName() : entry.name());
-        addRenderableWidget(displayNameInput);
-        y += 26;
+        addLabel(lx, y, "gui.dimension");
+        addCycle(lx, vx, vw, y, dimIdx, DIMENSIONS, v -> { dimIdx = v; rebuild(); });
+        y += 24;
 
-        // Dimension
-        addStaticLabel(lx, y, "gui.dimension");
-        addCycleButtons(vx, vw, y, dimIdx, DIMENSIONS, null,
-            v -> { dimIdx = v; rebuild(); });
-        y += 26;
-
-        // Enter Mode
-        addStaticLabel(lx, y, "gui.enter_mode");
-        addCycleButtons(vx, vw, y, enterIdx,
+        addLabel(lx, y, "gui.enter_mode");
+        addCycle(lx, vx, vw, y, enterIdx,
             java.util.Arrays.stream(MODE_KEYS).map(LocalizationManager::translate).toList(),
-            GAME_MODES,
             v -> { enterIdx = v; rebuild(); });
-        y += 26;
+        y += 24;
 
-        // Leave Mode
-        addStaticLabel(lx, y, "gui.leave_mode");
-        addCycleButtons(vx, vw, y, leaveIdx,
+        addLabel(lx, y, "gui.leave_mode");
+        addCycle(lx, vx, vw, y, leaveIdx,
             java.util.Arrays.stream(MODE_KEYS).map(LocalizationManager::translate).toList(),
-            GAME_MODES,
             v -> { leaveIdx = v; rebuild(); });
-        y += 30;
+        y += 28;
 
-        // === Section: Bounds ===
-        drawSection(guiGraphics(), y - 8, "Bounds");
-        y += 6;
+        // ===== Section 2: Bounds =====
+        boundsSectionY = y - 6;
 
-        // Bounds type toggle
         addRenderableWidget(Button.builder(
             Component.literal(LocalizationManager.translate("gui.bounds") + ": " +
                 LocalizationManager.translate(rectangleMode ? "gui.bounds_rectangle" : "gui.bounds_circle")),
             b -> { rectangleMode = !rectangleMode; rebuild(); })
-            .pos(lx, y).size(vw + 65, 20).build());
-        y += 26;
+            .pos(lx, y).size(vw + 55, 20).build());
+        y += 24;
 
         if (rectangleMode) {
-            addStaticLabel(lx, y, "gui.bounds_min");
-            bx1 = addCoordInput(vx, y, "X"); bz1 = addCoordInput(vx + 70, y, "Z");
-            addUsePosButton(vx + 140, y, () -> { bx1.setValue(fmt(getPlayerX())); bz1.setValue(fmt(getPlayerZ())); });
-            y += 24;
-
-            addStaticLabel(lx, y, "gui.bounds_max");
-            bx2 = addCoordInput(vx, y, "X"); bz2 = addCoordInput(vx + 70, y, "Z");
-            addUsePosButton(vx + 140, y, () -> { bx2.setValue(fmt(getPlayerX())); bz2.setValue(fmt(getPlayerZ())); });
-            y += 28;
+            addLabel(lx, y, "gui.bounds_min");
+            bx1 = addCoord(vx, y); bz1 = addCoord(vx + 70, y);
+            addPosBtn(vx + 140, y, () -> { bx1.setValue(fmt(getPX())); bz1.setValue(fmt(getPZ())); });
+            y += 22;
+            addLabel(lx, y, "gui.bounds_max");
+            bx2 = addCoord(vx, y); bz2 = addCoord(vx + 70, y);
+            addPosBtn(vx + 140, y, () -> { bx2.setValue(fmt(getPX())); bz2.setValue(fmt(getPZ())); });
         } else {
-            addStaticLabel(lx, y, "gui.bounds_center");
-            bx1 = addCoordInput(vx, y, "X"); bz1 = addCoordInput(vx + 70, y, "Z");
-            addUsePosButton(vx + 140, y, () -> { bx1.setValue(fmt(getPlayerX())); bz1.setValue(fmt(getPlayerZ())); });
-            y += 24;
-
-            addStaticLabel(lx, y, "gui.bounds_radius");
-            bx2 = addCoordInput(vx, y, "R");
-            addRenderableWidget(bx2);
-            y += 28;
+            addLabel(lx, y, "gui.bounds_center");
+            bx1 = addCoord(vx, y); bz1 = addCoord(vx + 70, y);
+            addPosBtn(vx + 140, y, () -> { bx1.setValue(fmt(getPX())); bz1.setValue(fmt(getPZ())); });
+            y += 22;
+            addLabel(lx, y, "gui.bounds_radius");
+            bx2 = addCoord(vx, y); addRenderableWidget(bx2);
         }
-        y += 2;
+        y += 28;
+
+        // ===== Section 3: Protection =====
+        protectionSectionY = y - 6;
+        protY = y;
+
+        addRenderableWidget(Button.builder(
+            Component.literal(LocalizationManager.translate("gui.prot_enable_all")),
+            b -> { setAllProt(true); rebuild(); })
+            .pos(lx, y).size(70, 18).build());
+        addRenderableWidget(Button.builder(
+            Component.literal(LocalizationManager.translate("gui.prot_disable_all")),
+            b -> { setAllProt(false); rebuild(); })
+            .pos(lx + 78, y).size(70, 18).build());
+        y += 22;
+
+        // 6 protection toggles in 2 columns
+        addProtToggle(lx, y, "gui.prot_block_break", protBreak, v -> protBreak = v);
+        addProtToggle(lx + 110, y, "gui.prot_pvp", protPvp, v -> protPvp = v);
+        y += 18;
+        addProtToggle(lx, y, "gui.prot_block_place", protPlace, v -> protPlace = v);
+        addProtToggle(lx + 110, y, "gui.prot_explosion", protExplosion, v -> protExplosion = v);
+        y += 18;
+        addProtToggle(lx, y, "gui.prot_block_interact", protInteract, v -> protInteract = v);
+        addProtToggle(lx + 110, y, "gui.prot_entity_damage", protDamage, v -> protDamage = v);
+        y += 28;
 
         // Enabled toggle
         addRenderableWidget(Button.builder(
             Component.literal(LocalizationManager.translate(enabled ? "area.enabled" : "area.disabled")),
             b -> { enabled = !enabled; rebuild(); })
-            .pos(lx, y).size(vw + 65, 20).build());
+            .pos(lx, y).size(vw + 55, 20).build());
         y += 32;
 
-        // === Section: Other Settings ===
-        drawSection(guiGraphics(), y - 8, "Other");
-        y += 6;
+        // ===== Section 4: Other =====
+        otherSectionY = y - 6;
 
-        addQuickLink(lx, y, "gui.protection_settings",
-            "areamonitor protect " + entry.name() + " info");
-        y += 24;
-        addQuickLink(lx, y, "gui.trigger_settings",
-            "areamonitor trigger " + entry.name() + " enter info");
-        y += 24;
-        addQuickLink(lx, y, "gui.whitelist_settings",
-            "areamonitor whitelist list");
-        y += 24;
-        addQuickLink(lx, y, "gui.restriction_settings",
-            "areamonitor blacklist area " + entry.name() + " list");
-        y += 36;
+        addQuick(lx, y, "gui.protection_settings", "areamonitor protect " + entry.name() + " info"); y += 22;
+        addQuick(lx, y, "gui.trigger_settings", "areamonitor trigger " + entry.name() + " enter info"); y += 22;
+        addQuick(lx, y, "gui.whitelist_settings", "areamonitor whitelist list"); y += 22;
+        addQuick(lx, y, "gui.restriction_settings", "areamonitor blacklist area " + entry.name() + " list");
+        y += 34;
 
         // Save / Cancel
         addRenderableWidget(Button.builder(
-            Component.literal(LocalizationManager.translate("gui.save")), b -> onSave())
-            .pos(lx, y).size(75, 20).build());
+            Component.literal("[" + LocalizationManager.translate("gui.save") + "]").withStyle(ChatFormatting.GREEN),
+            b -> onSave()).pos(lx, y).size(70, 20).build());
         addRenderableWidget(Button.builder(
-            Component.literal(LocalizationManager.translate("gui.cancel")), b -> onClose())
-            .pos(lx + 85, y).size(75, 20).build());
+            Component.literal("[" + LocalizationManager.translate("gui.cancel") + "]").withStyle(ChatFormatting.GRAY),
+            b -> onClose()).pos(lx + 80, y).size(70, 20).build());
     }
 
-    // --- helper methods ---
+    // ===== Layout state for render sections =====
+    private int sectionY, boundsSectionY, protectionSectionY, otherSectionY, protY;
 
-    private void addStaticLabel(int x, int y, String key) {
+    // ===== Widget helpers =====
+
+    private void addLabel(int x, int y, String key) {
         addRenderableWidget(Button.builder(
-            Component.literal(LocalizationManager.translate(key) + ":"),
+            Component.literal(LocalizationManager.translate(key)).withStyle(ChatFormatting.GRAY),
             b -> {}).pos(x, y).size(60, 20).build());
     }
 
-    private void addCycleButtons(int x, int w, int y, int idx, List<String> options,
-                                  List<String> rawValues, java.util.function.IntConsumer onChange) {
-        List<String> display = rawValues != null ? rawValues : options;
-        addRenderableWidget(Button.builder(Component.literal("\u25C0"),
-            b -> { int v = (idx - 1 + options.size()) % options.size(); onChange.accept(v); })
-            .pos(x, y).size(20, 20).build());
-        addRenderableWidget(Button.builder(
-            Component.literal(display.get(idx)), b -> {})
-            .pos(x + 23, y).size(w - 48, 20).build());
-        addRenderableWidget(Button.builder(Component.literal("\u25B6"),
-            b -> { int v = (idx + 1) % options.size(); onChange.accept(v); })
-            .pos(x + w - 23, y).size(20, 20).build());
+    private EditBox addTextBox(int x, int y, int w, String val) {
+        EditBox box = new EditBox(this.font, x, y, w, 18, Component.empty());
+        box.setMaxLength(48);
+        box.setValue(val);
+        addRenderableWidget(box);
+        return box;
     }
 
-    private EditBox addCoordInput(int x, int y, String hint) {
-        EditBox box = new EditBox(this.font, x, y, 64, 18, Component.literal(hint));
+    private EditBox addCoord(int x, int y) {
+        EditBox box = new EditBox(this.font, x, y, 66, 18, Component.empty());
         box.setMaxLength(9);
         box.setValue("0");
         addRenderableWidget(box);
         return box;
     }
 
-    private void addUsePosButton(int x, int y, Runnable action) {
+    private void addPosBtn(int x, int y, Runnable action) {
         addRenderableWidget(Button.builder(
             Component.literal(LocalizationManager.translate("gui.bounds_use_pos")),
-            b -> action.run())
-            .pos(x, y).size(50, 18).build());
+            b -> action.run()).pos(x, y).size(50, 18).build());
     }
 
-    private void addQuickLink(int x, int y, String labelKey, String command) {
+    private void addCycle(int lx, int vx, int vw, int y, int idx, List<String> options,
+                          java.util.function.IntConsumer onChange) {
+        addRenderableWidget(Button.builder(Component.literal("\u25C0").withStyle(ChatFormatting.DARK_GRAY),
+            b -> onChange.accept((idx - 1 + options.size()) % options.size()))
+            .pos(vx, y).size(20, 20).build());
+        addRenderableWidget(Button.builder(Component.literal(options.get(idx)),
+            b -> {}).pos(vx + 22, y).size(vw - 44, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("\u25B6").withStyle(ChatFormatting.DARK_GRAY),
+            b -> onChange.accept((idx + 1) % options.size()))
+            .pos(vx + vw - 22, y).size(20, 20).build());
+    }
+
+    private void addProtToggle(int x, int y, String labelKey, boolean val,
+                                java.util.function.Consumer<Boolean> setter) {
         addRenderableWidget(Button.builder(
-            Component.literal("▶ " + LocalizationManager.translate(labelKey)),
-            b -> {
-                if (this.minecraft != null && this.minecraft.player != null) {
-                    this.minecraft.player.connection.sendCommand(command);
-                }
-            })
+            Component.literal(LocalizationManager.translate(labelKey) + "  " +
+                (val
+                    ? LocalizationManager.translate("gui.prot_enabled")
+                    : LocalizationManager.translate("gui.prot_disabled"))),
+            b -> { setter.accept(!val); rebuild(); })
+            .pos(x, y).size(105, 17).build());
+    }
+
+    private void addQuick(int x, int y, String key, String cmd) {
+        addRenderableWidget(Button.builder(
+            Component.literal("+ " + LocalizationManager.translate(key)).withStyle(ChatFormatting.DARK_GRAY),
+            b -> { if (this.minecraft != null && this.minecraft.player != null)
+                this.minecraft.player.connection.sendCommand(cmd); })
             .pos(x, y).size(220, 20).build());
     }
 
-    private void drawSection(GuiGraphics g, int y, String section) {
-        // Rendered as text separator in render(), coordinate stored for render method
+    private void setAllProt(boolean v) {
+        protBreak = protPlace = protInteract = protPvp = protExplosion = protDamage = v;
     }
 
-    private double getPlayerX() { return this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getX() : 0; }
-    private double getPlayerZ() { return this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getZ() : 0; }
+    // ===== Data helpers =====
+    private double getPX() { return this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getX() : 0; }
+    private double getPZ() { return this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getZ() : 0; }
     private String fmt(double v) { return String.valueOf((int) Math.floor(v)); }
-    private GuiGraphics guiGraphics() { return null; }
-
-    private void rebuild() {
-        this.clearWidgets();
-        init();
-    }
+    private void rebuild() { this.clearWidgets(); init(); }
 
     private void onSave() {
         var json = new com.google.gson.JsonObject();
         String dn = displayNameInput != null ? displayNameInput.getValue().trim() : "";
-        if (!dn.isEmpty() && !dn.equals(entry.name())) {
-            json.addProperty("displayName", dn);
-        }
+        if (!dn.isEmpty() && !dn.equals(entry.name())) json.addProperty("displayName", dn);
         json.addProperty("dimension", DIMENSIONS.get(dimIdx));
         json.addProperty("enterMode", GAME_MODES.get(enterIdx));
         json.addProperty("leaveMode", GAME_MODES.get(leaveIdx));
         json.addProperty("enabled", enabled);
-
-        // Bounds
+        json.addProperty("protBlockBreak", protBreak);
+        json.addProperty("protBlockPlace", protPlace);
+        json.addProperty("protBlockInteract", protInteract);
+        json.addProperty("protPvp", protPvp);
+        json.addProperty("protExplosion", protExplosion);
+        json.addProperty("protEntityDamage", protDamage);
         json.addProperty("boundsType", rectangleMode ? "RECTANGLE" : "CIRCLE");
         try {
             if (rectangleMode && bx1 != null && bz1 != null && bx2 != null && bz2 != null) {
@@ -250,7 +264,6 @@ public class AreaEditPanel extends Screen {
                 json.addProperty("radius", Integer.parseInt(bx2.getValue()));
             }
         } catch (NumberFormatException ignored) {}
-
         ModNetwork.sendToServer(new C2SAreaActionPacket(
             C2SAreaActionPacket.Action.UPDATE, entry.name(), json.toString()));
         onClose();
@@ -265,19 +278,32 @@ public class AreaEditPanel extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(guiGraphics);
-        guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 12, 0xFFFFFF);
-
-        // Section separators rendered as horizontal lines via text
+    public void render(GuiGraphics g, int mx, int my, float pt) {
+        this.renderBackground(g);
         int cx = this.width / 2;
 
-        guiGraphics.drawString(this.font, "── Basic ──", cx - 25, 40, 0x888888);
-        guiGraphics.drawString(this.font, "── Bounds ──", cx - 28,
-            32 + 26*4 + 6, 0x888888);
-        guiGraphics.drawString(this.font, "── Other ──", cx - 25, 
-            32 + 26*4 + 6 + 26 + 2 + 26*2 + 28 + 32 + 2, 0x888888);
+        // Title
+        g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFFFFF);
 
-        super.render(guiGraphics, mouseX, mouseY, partialTick);
+        // Section backgrounds and headers
+        int lx = cx - 124;
+        int rw = 250;
+
+        drawSection(g, "  Basic  ", lx, sectionY, rw, 26*4 + 4, 0);
+        drawSection(g, "  Bounds  ", lx, boundsSectionY, rw, 26 + 22 + 28 + 2, 0);
+        drawSection(g, "  Protection  ", lx, protectionSectionY, rw, 20 + 22 + 18*3 + 28 + 4, protY);
+        drawSection(g, "  Other  ", lx, otherSectionY, rw, 22*4 + 34, 0);
+
+        super.render(g, mx, my, pt);
+    }
+
+    private void drawSection(GuiGraphics g, String title, int x, int y, int w, int h, int yOff) {
+        // Semi-transparent background
+        g.fill(x, y, x + w, y + h, 0x18181818);
+        // Separator line at top
+        g.fill(x, y, x + w, y + 1, 0x60888888);
+        // Section title
+        g.drawString(this.font, Component.literal(title).withStyle(ChatFormatting.DARK_GRAY),
+            x + 4, y + 1, 0x888888);
     }
 }
