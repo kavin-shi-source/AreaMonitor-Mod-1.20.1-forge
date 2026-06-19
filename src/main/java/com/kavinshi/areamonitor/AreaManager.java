@@ -188,7 +188,7 @@ public class AreaManager {
 
 
     public Set<String> getCurrentAreas(ServerPlayer player) {
-        return playerAreas.getOrDefault(player.getUUID(), new HashSet<>());
+        return playerAreas.getOrDefault(player.getUUID(), EMPTY_AREA_SET);
     }
 
     public void clearPlayerData(UUID playerId) {

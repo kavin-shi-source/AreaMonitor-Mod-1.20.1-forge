@@ -101,14 +101,7 @@ public class ExtendedCommands {
                 )
                 .then(Commands.literal("delete")
                     .then(Commands.argument("name", StringArgumentType.string())
-                        .suggests((context, builder) -> {
-                            for (String areaName : AreaManager.getInstance().getAreaNames()) {
-                                if (areaName.startsWith(builder.getRemaining().toLowerCase())) {
-                                    builder.suggest(areaName);
-                                }
-                            }
-                            return builder.buildFuture();
-                        })
+                        .suggests(ExtendedCommands::suggestAreaNames)
                         .executes(context -> deleteArea(
                             StringArgumentType.getString(context, "name"),
                             context
@@ -119,14 +112,7 @@ public class ExtendedCommands {
                 )
                 .then(Commands.literal("toggle")
                     .then(Commands.argument("name", StringArgumentType.string())
-                        .suggests((context, builder) -> {
-                            for (String areaName : AreaManager.getInstance().getAreaNames()) {
-                                if (areaName.startsWith(builder.getRemaining().toLowerCase())) {
-                                    builder.suggest(areaName);
-                                }
-                            }
-                            return builder.buildFuture();
-                        })
+                        .suggests(ExtendedCommands::suggestAreaNames)
                         .executes(context -> toggleArea(
                             StringArgumentType.getString(context, "name"),
                             context
@@ -134,14 +120,7 @@ public class ExtendedCommands {
                 )
                 .then(Commands.literal("info")
                     .then(Commands.argument("name", StringArgumentType.string())
-                        .suggests((context, builder) -> {
-                            for (String areaName : AreaManager.getInstance().getAreaNames()) {
-                                if (areaName.startsWith(builder.getRemaining().toLowerCase())) {
-                                    builder.suggest(areaName);
-                                }
-                            }
-                            return builder.buildFuture();
-                        })
+                        .suggests(ExtendedCommands::suggestAreaNames)
                         .executes(context -> showAreaInfo(
                             StringArgumentType.getString(context, "name"),
                             context
@@ -149,14 +128,7 @@ public class ExtendedCommands {
                 )
                 .then(Commands.literal("setEnterMode")
                     .then(Commands.argument("areaName", StringArgumentType.string())
-                        .suggests((context, builder) -> {
-                            for (String areaName : AreaManager.getInstance().getAreaNames()) {
-                                if (areaName.startsWith(builder.getRemaining().toLowerCase())) {
-                                    builder.suggest(areaName);
-                                }
-                            }
-                            return builder.buildFuture();
-                        })
+                        .suggests(ExtendedCommands::suggestAreaNames)
                         .then(Commands.argument("mode", StringArgumentType.string())
                             .suggests((context, builder) -> {
                                 for (String mode : GAME_MODES) {
@@ -174,14 +146,7 @@ public class ExtendedCommands {
                 )
                 .then(Commands.literal("setLeaveMode")
                     .then(Commands.argument("areaName", StringArgumentType.string())
-                        .suggests((context, builder) -> {
-                            for (String areaName : AreaManager.getInstance().getAreaNames()) {
-                                if (areaName.startsWith(builder.getRemaining().toLowerCase())) {
-                                    builder.suggest(areaName);
-                                }
-                            }
-                            return builder.buildFuture();
-                        })
+                        .suggests(ExtendedCommands::suggestAreaNames)
                         .then(Commands.argument("mode", StringArgumentType.string())
                             .suggests((context, builder) -> {
                                 for (String mode : GAME_MODES) {
@@ -206,14 +171,7 @@ public class ExtendedCommands {
                 )
                 .then(Commands.literal("show")
                     .then(Commands.argument("area", StringArgumentType.string())
-                        .suggests((context, builder) -> {
-                            for (String areaName : AreaManager.getInstance().getAreaNames()) {
-                                if (areaName.startsWith(builder.getRemaining().toLowerCase())) {
-                                    builder.suggest(areaName);
-                                }
-                            }
-                            return builder.buildFuture();
-                        })
+                        .suggests(ExtendedCommands::suggestAreaNames)
                         .executes(context -> showAreaVisual(
                             StringArgumentType.getString(context, "area"),
                             context
@@ -236,14 +194,7 @@ public class ExtendedCommands {
                 )
                 .then(Commands.literal("area")
                     .then(Commands.argument("areaName", StringArgumentType.string())
-                        .suggests((context, builder) -> {
-                            for (String areaName : AreaManager.getInstance().getAreaNames()) {
-                                if (areaName.startsWith(builder.getRemaining().toLowerCase())) {
-                                    builder.suggest(areaName);
-                                }
-                            }
-                            return builder.buildFuture();
-                        })
+                        .suggests(ExtendedCommands::suggestAreaNames)
                         .then(Commands.literal("add")
                             .then(Commands.argument("item", StringArgumentType.greedyString())
                                 .suggests(ExtendedCommands::suggestItems)
@@ -670,6 +621,16 @@ public class ExtendedCommands {
     // 获取物品显示名称
     private static String getItemDisplayName(Item item) {
         return new ItemStack(item).getHoverName().getString();
+    }
+
+    // 区域名称建议提供者，被多个命令参数的 suggests 复用
+    private static CompletableFuture<Suggestions> suggestAreaNames(CommandContext<CommandSourceStack> context, SuggestionsBuilder builder) {
+        for (String areaName : AreaManager.getInstance().getAreaNames()) {
+            if (areaName.startsWith(builder.getRemaining().toLowerCase())) {
+                builder.suggest(areaName);
+            }
+        }
+        return builder.buildFuture();
     }
 
     // 物品名称建议索引缓存，按首字符分组以提高补全性能

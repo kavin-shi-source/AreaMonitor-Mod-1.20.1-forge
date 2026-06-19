@@ -146,6 +146,6 @@ public class MonitorArea {
     }
 
     public enum BoundsType {
-        RECTANGLE, CIRCLE, POLYGON
+        RECTANGLE, CIRCLE
     }
 }

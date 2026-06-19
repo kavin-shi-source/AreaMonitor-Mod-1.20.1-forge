@@ -1,9 +1,6 @@
 package com.kavinshi.areamonitor;
 
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
-import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
-import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
@@ -30,14 +27,10 @@ public class AreaMonitor {
     private static final Map<UUID, PlayerState> playerStates = new ConcurrentHashMap<>();
     private static volatile MinecraftServer minecraftServer;
     private static final AtomicInteger tickCounter = new AtomicInteger(0);
-    private static final int TITLE_FADE_IN_TICKS = 10;
-    private static final int TITLE_STAY_TICKS = 30;
-    private static final int TITLE_FADE_OUT_TICKS = 10;
     private static final long GAME_MODE_SWITCH_DELAY_MS = 1000L;
     private static final long PENDING_ACTION_TIMEOUT_MS = 10000L;  // 10 seconds timeout for pending actions
 
     private static class PlayerState {
-        boolean wasInArea = false;
         int lastX = Integer.MAX_VALUE;
         int lastZ = Integer.MAX_VALUE;
 
@@ -101,7 +94,7 @@ public class AreaMonitor {
             return;
         }
 
-        var players = minecraftServer.getPlayerList().getPlayers();
+        List<ServerPlayer> players = minecraftServer.getPlayerList().getPlayers();
         if (ConfigManager.CONFIG.debugMode.get()) {
             AreaMonitorMod.LOGGER.debug("AreaMonitor: Checking {} players", players.size());
         }
@@ -222,24 +215,6 @@ public class AreaMonitor {
                 }
             }
         }, System.currentTimeMillis() + GAME_MODE_SWITCH_DELAY_MS));
-    }
-
-    private static void showTitle(ServerPlayer player, Component title, Component subtitle) {
-        try {
-            player.connection.send(new ClientboundSetTitlesAnimationPacket(TITLE_FADE_IN_TICKS, TITLE_STAY_TICKS, TITLE_FADE_OUT_TICKS));
-
-            if (title != null) {
-                player.connection.send(new ClientboundSetTitleTextPacket(title));
-            }
-
-            if (subtitle != null) {
-                player.connection.send(new ClientboundSetSubtitleTextPacket(subtitle));
-            }
-        } catch (Exception e) {
-            // Log full stack trace for debugging network issues
-            AreaMonitorMod.LOGGER.debug("Failed to show title to player {}",
-                player.getName().getString(), e);
-        }
     }
 
     @SubscribeEvent

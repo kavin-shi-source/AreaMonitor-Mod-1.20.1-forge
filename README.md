@@ -5,7 +5,7 @@
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-black.svg)](https://github.com/kavin-shi-source/AreaMonitor-Mod-1.20.1-forge)
 ![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-green.svg)
 ![Forge](https://img.shields.io/badge/Forge-Compatible-blue.svg)
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
+![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)
 
 一个用于监控特定区域并自动切换玩家游戏模式的 Minecraft Forge 模组。
 
@@ -61,4 +61,4 @@
 
 ## 许可证
 
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE.txt) 文件。
+本项目采用 GPL-3.0 许可证 - 详见 [LICENSE](LICENSE.txt) 文件。

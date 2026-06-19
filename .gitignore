@@ -39,3 +39,4 @@ src/test/
 # Compressed files
 *.gz
 *.log
+*3.md
