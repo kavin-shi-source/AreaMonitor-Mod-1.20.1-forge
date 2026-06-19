@@ -61,15 +61,15 @@ public class SelectionTool {
      */
     private static net.minecraft.world.item.Item getSelectionToolItem() {
         String itemId = ConfigManager.CONFIG.selectionToolItemId.get();
-        try {
-            ResourceLocation location = ResourceLocation.tryParse(itemId);
-            if (location != null) {
-                net.minecraft.world.item.Item item = BuiltInRegistries.ITEM.get(location);
-                if (item != Items.AIR) {
-                    return item;
-                }
+        ResourceLocation location = ResourceLocation.tryParse(itemId);
+        if (location != null) {
+            net.minecraft.world.item.Item item = BuiltInRegistries.ITEM.get(location);
+            if (item != Items.AIR) {
+                return item;
+            } else {
+                AreaMonitorMod.LOGGER.warn("Invalid selection tool item ID in config: {}, falling back to wooden_axe", itemId);
             }
-        } catch (Exception e) {
+        } else {
             AreaMonitorMod.LOGGER.warn("Invalid selection tool item ID in config: {}, falling back to wooden_axe", itemId);
         }
         return Items.WOODEN_AXE;
