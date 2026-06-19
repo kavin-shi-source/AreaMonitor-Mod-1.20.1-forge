@@ -431,10 +431,10 @@ public class ExtendedCommands {
                         context.getSource().getPlayerOrException();
                     ModNetwork.sendToPlayer(new S2COpenManagementScreenPacket(), player);
                     context.getSource().sendSystemMessage(
-                        Component.literal("Opening area management GUI. ")
+                        Component.literal(LocalizationManager.translate("gui.opening") + " ")
                             .withStyle(ChatFormatting.GREEN)
                             .append(Component.literal(
-                                "(If GUI doesn't open, the client-side mod is not installed. Use commands instead.)")
+                                LocalizationManager.translate("gui.no_client_mod"))
                                 .withStyle(ChatFormatting.GRAY)));
                     return 1;
                 })

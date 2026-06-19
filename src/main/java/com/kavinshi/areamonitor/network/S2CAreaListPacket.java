@@ -62,7 +62,8 @@ public class S2CAreaListPacket {
         String dimension,
         String enterMode,
         String leaveMode,
-        String boundsType
+        String boundsType,
+        String displayName
     ) {
         public AreaEntry(MonitorArea area) {
             this(area.getName(),
@@ -70,7 +71,8 @@ public class S2CAreaListPacket {
                  area.getDimension(),
                  area.getEnterMode().getName(),
                  area.getLeaveMode().getName(),
-                 area.getBounds().getType().name());
+                 area.getBounds().getType().name(),
+                 area.getDisplayName());
         }
 
         public void encode(FriendlyByteBuf buf) {
@@ -80,12 +82,14 @@ public class S2CAreaListPacket {
             buf.writeUtf(enterMode);
             buf.writeUtf(leaveMode);
             buf.writeUtf(boundsType);
+            buf.writeUtf(displayName);
         }
 
         public static AreaEntry decode(FriendlyByteBuf buf) {
             return new AreaEntry(
                 buf.readUtf(),
                 buf.readBoolean(),
+                buf.readUtf(),
                 buf.readUtf(),
                 buf.readUtf(),
                 buf.readUtf(),

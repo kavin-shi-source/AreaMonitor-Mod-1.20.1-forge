@@ -4,6 +4,8 @@ import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.C2SRequestAreaListPacket;
 import com.kavinshi.areamonitor.network.ModNetwork;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
+import com.kavinshi.areamonitor.LocalizationManager;
+import com.kavinshi.areamonitor.client.gui.panel.AreaEditPanel;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -31,7 +33,7 @@ public class AreaManagementScreen extends Screen {
     private static final int LIST_WIDTH = 280;
 
     public AreaManagementScreen() {
-        super(Component.literal("Area Monitor Management"));
+        super(Component.literal(LocalizationManager.translate("gui.title")));
     }
 
     @Override
@@ -59,32 +61,32 @@ public class AreaManagementScreen extends Screen {
         if (creating) {
             // Name input field above the buttons
             nameInput = new EditBox(this.font, centerX - 110, this.height - 58, 220, 18,
-                Component.literal("Area name"));
+                Component.literal(LocalizationManager.translate("gui.area_name_hint")));
             nameInput.setMaxLength(48);
             addRenderableWidget(nameInput);
 
             addRenderableWidget(
-                Button.builder(Component.literal("Create"), b -> onCreateConfirm())
+                Button.builder(Component.literal(LocalizationManager.translate("gui.create")), b -> onCreateConfirm())
                     .pos(centerX - 110, btnY).size(70, 20).build());
             addRenderableWidget(
-                Button.builder(Component.literal("Cancel"), b -> {
+                Button.builder(Component.literal(LocalizationManager.translate("gui.cancel")), b -> {
                     creating = false;
                     rebuildRows();
                 }).pos(centerX - 30, btnY).size(70, 20).build());
         } else {
             addRenderableWidget(
-                Button.builder(Component.literal("Create New Area"), b -> {
+                Button.builder(Component.literal(LocalizationManager.translate("gui.create_new_area")), b -> {
                     creating = true;
                     rebuildRows();
                 }).pos(centerX - 110, btnY).size(70, 20).build());
             addRenderableWidget(
-                Button.builder(Component.literal("Refresh"), b -> onRefresh())
+                Button.builder(Component.literal(LocalizationManager.translate("gui.refresh")), b -> onRefresh())
                     .pos(centerX - 30, btnY).size(70, 20).build());
         }
 
         // Close button (always visible, same row)
         addRenderableWidget(
-            Button.builder(Component.literal("Close"), b -> onClose())
+            Button.builder(Component.literal(LocalizationManager.translate("gui.close")), b -> onClose())
                 .pos(centerX + 50, btnY).size(70, 20).build());
 
         int visible = Math.min(Math.max(0, areas.size() - scrollOffset), ITEMS_PER_PAGE);
@@ -102,12 +104,21 @@ public class AreaManagementScreen extends Screen {
                     .append(Component.literal(entry.name() + " ").withStyle(ChatFormatting.WHITE))
                     .append(Component.literal("[" + entry.dimension() + "] " + entry.boundsType())
                         .withStyle(ChatFormatting.GRAY));
-            addRenderableWidget(new AreaRowButton(LIST_LEFT, y, LIST_WIDTH, ITEM_HEIGHT - 2,
+            // Info-only row button (click does nothing — edit/delete are separate buttons)
+            addRenderableWidget(new AreaRowButton(LIST_LEFT, y, LIST_WIDTH - 75, ITEM_HEIGHT - 2,
                 label, entry.name(), this));
 
+            // Edit button
+            addRenderableWidget(new AreaEditButton(LIST_LEFT + LIST_WIDTH - 70, y,
+                20, ITEM_HEIGHT - 2, entry, this));
+
             // Toggle button
-            addRenderableWidget(new AreaToggleButton(LIST_LEFT + LIST_WIDTH + 4, y,
+            addRenderableWidget(new AreaToggleButton(LIST_LEFT + LIST_WIDTH - 45, y,
                 50, ITEM_HEIGHT - 2, entry.name(), entry.enabled(), this));
+
+            // Delete button with confirmation
+            addRenderableWidget(new AreaDeleteButton(LIST_LEFT + LIST_WIDTH + 10, y,
+                20, ITEM_HEIGHT - 2, entry.name(), this));
         }
     }
 
@@ -120,6 +131,16 @@ public class AreaManagementScreen extends Screen {
     }
 
     void onRefresh() {
+        ModNetwork.sendToServer(new C2SRequestAreaListPacket());
+    }
+
+    void onEdit(S2CAreaListPacket.AreaEntry entry) {
+        if (this.minecraft != null) {
+            this.minecraft.setScreen(new AreaEditPanel(this, entry));
+        }
+    }
+
+    public void updateAfterEdit() {
         ModNetwork.sendToServer(new C2SRequestAreaListPacket());
     }
 
@@ -150,9 +171,10 @@ public class AreaManagementScreen extends Screen {
         guiGraphics.drawCenteredString(this.font, this.title, this.width / 2, 15, 0xFFFFFF);
 
         // Draw header
-        String header = "Name / Info";
-        guiGraphics.drawString(this.font, header, LIST_LEFT + 5, LIST_TOP - 12, 0xAAAAAA);
-        guiGraphics.drawString(this.font, "Action", LIST_LEFT + LIST_WIDTH + 10, LIST_TOP - 12, 0xAAAAAA);
+        guiGraphics.drawString(this.font,
+            LocalizationManager.translate("gui.header_info"), LIST_LEFT + 5, LIST_TOP - 12, 0xAAAAAA);
+        guiGraphics.drawString(this.font,
+            LocalizationManager.translate("gui.header_action"), LIST_LEFT + LIST_WIDTH + 10, LIST_TOP - 12, 0xAAAAAA);
 
         // Draw scroll info
         if (!areas.isEmpty()) {
@@ -183,7 +205,7 @@ public class AreaManagementScreen extends Screen {
         final AreaManagementScreen parent;
 
         AreaRowButton(int x, int y, int w, int h, Component msg, String areaName, AreaManagementScreen parent) {
-            super(x, y, w, h, msg, b -> parent.onDelete(areaName), DEFAULT_NARRATION);
+            super(x, y, w, h, msg, b -> {}, DEFAULT_NARRATION); // Click does nothing
             this.areaName = areaName;
             this.parent = parent;
         }
@@ -195,10 +217,54 @@ public class AreaManagementScreen extends Screen {
 
         AreaToggleButton(int x, int y, int w, int h, String areaName, boolean enabled, AreaManagementScreen parent) {
             super(x, y, w, h,
-                Component.literal(enabled ? "Disable" : "Enable"),
+                Component.literal(LocalizationManager.translate(enabled ? "gui.disable" : "gui.enable")),
                 b -> parent.onToggle(areaName),
                 DEFAULT_NARRATION);
             this.areaName = areaName;
+            this.parent = parent;
+        }
+    }
+
+    static class AreaDeleteButton extends Button {
+        private final String areaName;
+        private final AreaManagementScreen parent;
+        private boolean confirming = false;
+
+        AreaDeleteButton(int x, int y, int w, int h, String areaName, AreaManagementScreen parent) {
+            super(x, y, w, h,
+                Component.literal(LocalizationManager.translate("gui.delete")).withStyle(ChatFormatting.DARK_GRAY),
+                b -> {},
+                DEFAULT_NARRATION);
+            this.areaName = areaName;
+            this.parent = parent;
+        }
+
+        @Override
+        public void onPress() {
+            if (!confirming) {
+                confirming = true;
+                setMessage(Component.literal(LocalizationManager.translate("gui.delete_confirm")).withStyle(ChatFormatting.RED));
+            } else {
+                parent.onDelete(areaName);
+            }
+        }
+
+        public void resetConfirmation() {
+            confirming = false;
+            setMessage(Component.literal(LocalizationManager.translate("gui.delete")).withStyle(ChatFormatting.DARK_GRAY));
+        }
+    }
+
+    static class AreaEditButton extends Button {
+        final S2CAreaListPacket.AreaEntry entry;
+        final AreaManagementScreen parent;
+
+        AreaEditButton(int x, int y, int w, int h, S2CAreaListPacket.AreaEntry entry, AreaManagementScreen parent) {
+            super(x, y, w, h,
+                Component.literal("⚙").withStyle(ChatFormatting.DARK_GRAY),
+                b -> parent.onEdit(entry),
+                DEFAULT_NARRATION);
+            this.entry = entry;
             this.parent = parent;
         }
     }
