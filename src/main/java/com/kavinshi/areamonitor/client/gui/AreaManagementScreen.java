@@ -6,6 +6,7 @@ import com.kavinshi.areamonitor.network.ModNetwork;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.LocalizationManager;
 import com.kavinshi.areamonitor.client.gui.panel.AreaEditPanel;
+import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -126,8 +127,7 @@ public class AreaManagementScreen extends Screen {
     }
 
     private void glassBtn(String text, int x, int y, int w, Runnable action) {
-        addRenderableWidget(Button.builder(Component.literal(text), b -> action.run())
-            .pos(x, y).size(w, 20).build());
+        addRenderableWidget(GlassButton.create(x, y, w, 20, text, b -> action.run()));
     }
 
     void onToggle(String name) {
@@ -278,7 +278,7 @@ public class AreaManagementScreen extends Screen {
             cx, ty + 5, 0xFFFFFF);
     }
 
-    // ===== Static inner widget classes =====
+    // ===== Static inner widget classes (glass-styled) =====
 
     static class AreaRowButton extends Button {
         final String areaName;
@@ -286,6 +286,10 @@ public class AreaManagementScreen extends Screen {
         AreaRowButton(int x, int y, int w, int h, Component msg, String areaName, AreaManagementScreen parent) {
             super(x, y, w, h, msg, b -> {}, DEFAULT_NARRATION);
             this.areaName = areaName; this.parent = parent;
+        }
+        @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
+            g.drawString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
+                getX() + 2, getY() + (height - 8) / 2, 0xCCCCCC);
         }
     }
 
@@ -295,6 +299,12 @@ public class AreaManagementScreen extends Screen {
                 Component.literal("\u2699").withStyle(ChatFormatting.GRAY),
                 b -> parent.onEdit(entry), DEFAULT_NARRATION);
         }
+        @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
+            g.fill(getX(), getY(), getX() + width, getY() + height, isHoveredOrFocused() ? 0x60000000 : 0x30000000);
+            g.fill(getX(), getY(), getX() + width, getY() + 1, 0x30FFFFFF);
+            g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
+                getX() + width / 2, getY() + (height - 8) / 2, isHoveredOrFocused() ? 0xFFFFFF : 0x888888);
+        }
     }
 
     static class AreaToggleButton extends Button {
@@ -302,9 +312,16 @@ public class AreaManagementScreen extends Screen {
             super(x, y, w, h,
                 Component.literal(enabled
                     ? LocalizationManager.translate("gui.disable")
-                    : LocalizationManager.translate("gui.enable"))
-                    .withStyle(enabled ? ChatFormatting.RED : ChatFormatting.GREEN),
+                    : LocalizationManager.translate("gui.enable")),
                 b -> parent.onToggle(name), DEFAULT_NARRATION);
+        }
+        @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
+            int c = getMessage().getString().equals(LocalizationManager.translate("gui.enable"))
+                ? 0x4000AA00 : 0x40AA0000;
+            g.fill(getX(), getY(), getX() + width, getY() + height, isHoveredOrFocused() ? c | 0x20000000 : c);
+            g.fill(getX(), getY(), getX() + width, getY() + 1, 0x40FFFFFF);
+            g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
+                getX() + width / 2, getY() + (height - 8) / 2, 0xCCCCCC);
         }
     }
 
@@ -318,14 +335,20 @@ public class AreaManagementScreen extends Screen {
                 b -> {}, DEFAULT_NARRATION);
             this.areaName = areaName; this.parent = parent;
         }
-        @Override
-        public void onPress() {
+        @Override public void onPress() {
             if (!confirming) {
                 confirming = true;
                 setMessage(Component.literal("\u2715?").withStyle(ChatFormatting.RED));
             } else {
                 parent.onDelete(areaName);
             }
+        }
+        @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
+            int bg = confirming ? 0x60AA0000 : isHoveredOrFocused() ? 0x60000000 : 0x30000000;
+            g.fill(getX(), getY(), getX() + width, getY() + height, bg);
+            g.fill(getX(), getY(), getX() + width, getY() + 1, 0x30FFFFFF);
+            g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
+                getX() + width / 2, getY() + (height - 8) / 2, confirming ? 0xFF4444 : 0x888888);
         }
     }
 }

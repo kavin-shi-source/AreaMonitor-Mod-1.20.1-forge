@@ -2,6 +2,7 @@ package com.kavinshi.areamonitor.client.gui.panel;
 
 import com.kavinshi.areamonitor.LocalizationManager;
 import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
+import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.network.ModNetwork;
@@ -137,19 +138,15 @@ public class RestrictionEditPanel extends Screen {
     }
 
     private void addGlassBtn(int x, int y, int w, String text, Runnable action) {
-        addRenderableWidget(Button.builder(Component.literal(text), b -> action.run())
-            .pos(x, y).size(w, 20).build());
+        addRenderableWidget(GlassButton.create(x, y, w, 20, text, b -> action.run()));
     }
 
     private void addBtn(int x, int y, int w, String text, Runnable action) {
-        addRenderableWidget(Button.builder(Component.literal(text), b -> action.run())
-            .pos(x, y).size(w, 20).build());
+        addRenderableWidget(GlassButton.create(x, y, w, 20, text, b -> action.run()));
     }
 
     private void addRemovable(int x, int y, String text, Runnable remove) {
-        addRenderableWidget(Button.builder(
-            Component.literal("  \u2022 " + text + "  \u2715"), b -> remove.run())
-            .pos(x, y).size(160, 18).build());
+        addRenderableWidget(GlassButton.create(x, y, 160, 18, "  \u2022 " + text + "  \u2715", b -> remove.run()));
     }
 
     private boolean getBool(JsonObject o, String k, boolean def) {

@@ -2,6 +2,7 @@ package com.kavinshi.areamonitor.client.gui.panel;
 
 import com.kavinshi.areamonitor.LocalizationManager;
 import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
+import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.network.ModNetwork;
@@ -101,8 +102,7 @@ public class WhitelistEditPanel extends Screen {
     }
 
     private void addButton(int x, int y, int w, String text, Runnable action) {
-        addRenderableWidget(Button.builder(Component.literal(text), b -> action.run())
-            .pos(x, y).size(w, 20).build());
+        addRenderableWidget(GlassButton.create(x, y, w, 20, text, b -> action.run()));
     }
 
     private void rebuild() { this.clearWidgets(); init(); }

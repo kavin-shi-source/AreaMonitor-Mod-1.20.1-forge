@@ -5,6 +5,7 @@ import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.network.ModNetwork;
+import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import com.google.gson.*;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
@@ -160,8 +161,7 @@ public class TriggerEditPanel extends Screen {
     }
 
     private void addButton(int x, int y, int w, String text, Runnable action) {
-        addRenderableWidget(Button.builder(Component.literal(text), b -> action.run())
-            .pos(x, y).size(w, 18).build());
+        addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> action.run()));
     }
 
     private void addLabel2(int x, int y, String text) {

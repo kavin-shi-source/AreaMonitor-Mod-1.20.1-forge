@@ -5,6 +5,7 @@ import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.network.ModNetwork;
+import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -162,12 +163,10 @@ public class AreaEditPanel extends Screen {
         y += 34;
 
         // Save / Cancel
-        addRenderableWidget(Button.builder(
-            Component.literal("[" + LocalizationManager.translate("gui.save") + "]").withStyle(ChatFormatting.GREEN),
-            b -> onSave()).pos(lx, y).size(70, 20).build());
-        addRenderableWidget(Button.builder(
-            Component.literal("[" + LocalizationManager.translate("gui.cancel") + "]").withStyle(ChatFormatting.GRAY),
-            b -> onClose()).pos(lx + 80, y).size(70, 20).build());
+        addRenderableWidget(GlassButton.create(lx, y, 70, 20,
+            "[" + LocalizationManager.translate("gui.save") + "]", b -> onSave()));
+        addRenderableWidget(GlassButton.create(lx + 80, y, 70, 20,
+            "[" + LocalizationManager.translate("gui.cancel") + "]", b -> onClose()));
     }
 
     // === Section position tracking ===
@@ -193,51 +192,42 @@ public class AreaEditPanel extends Screen {
     }
 
     private void addPosBtn(int x, int y, Runnable action) {
-        addRenderableWidget(Button.builder(
-            Component.literal(LocalizationManager.translate("gui.bounds_use_pos")),
-            b -> action.run()).pos(x, y).size(50, 18).build());
+        addRenderableWidget(GlassButton.create(x, y, 50, 18,
+            LocalizationManager.translate("gui.bounds_use_pos"), b -> action.run()));
     }
 
     private void addGlassBtn(String text, int x, int y, int w, Runnable action) {
-        addRenderableWidget(Button.builder(Component.literal(text), b -> action.run())
-            .pos(x, y).size(w, 20).build());
+        addRenderableWidget(GlassButton.create(x, y, w, 20, text, b -> action.run()));
     }
 
     private void addCycle(int vx, int vw, int y, int idx, List<String> options,
                           java.util.function.IntConsumer onChange) {
-        addRenderableWidget(Button.builder(
-            Component.literal("\u25C0").withStyle(ChatFormatting.DARK_GRAY),
-            b -> onChange.accept((idx - 1 + options.size()) % options.size()))
-            .pos(vx, y).size(20, 20).build());
-        addRenderableWidget(Button.builder(Component.literal(options.get(idx)), b -> {})
-            .pos(vx + 22, y).size(vw - 44, 20).build());
-        addRenderableWidget(Button.builder(
-            Component.literal("\u25B6").withStyle(ChatFormatting.DARK_GRAY),
-            b -> onChange.accept((idx + 1) % options.size()))
-            .pos(vx + vw - 22, y).size(20, 20).build());
+        addRenderableWidget(GlassButton.create(vx, y, 20, 20, "\u25C0",
+            b -> onChange.accept((idx - 1 + options.size()) % options.size())));
+        addRenderableWidget(GlassButton.create(vx + 22, y, vw - 44, 20, options.get(idx), b -> {}));
+        addRenderableWidget(GlassButton.create(vx + vw - 22, y, 20, 20, "\u25B6",
+            b -> onChange.accept((idx + 1) % options.size())));
     }
 
     private void addProtToggle(int x, int y, String key, boolean val,
                                 java.util.function.Consumer<Boolean> setter) {
-        addRenderableWidget(Button.builder(
-            Component.literal(LocalizationManager.translate(key) + "  " +
-                (val ? LocalizationManager.translate("gui.prot_enabled") : LocalizationManager.translate("gui.prot_disabled"))),
-            b -> { setter.accept(!val); rebuild(); }).pos(x, y).size(105, 17).build());
+        addRenderableWidget(GlassButton.create(x, y, 105, 17,
+            LocalizationManager.translate(key) + "  " +
+                (val ? LocalizationManager.translate("gui.prot_enabled") : LocalizationManager.translate("gui.prot_disabled")),
+            b -> { setter.accept(!val); rebuild(); }));
     }
 
     private void addQuickR(int x, int y, String key, Runnable action) {
-        addRenderableWidget(Button.builder(
-            Component.literal("+ " + LocalizationManager.translate(key)).withStyle(ChatFormatting.DARK_GRAY),
-            b -> action.run())
-            .pos(x, y).size(220, 20).build());
+        addRenderableWidget(GlassButton.create(x, y, 220, 20,
+            "+ " + LocalizationManager.translate(key), b -> action.run()));
     }
 
     private void addQuickC(int x, int y, String key, String cmd) {
-        addRenderableWidget(Button.builder(
-            Component.literal("+ " + LocalizationManager.translate(key)).withStyle(ChatFormatting.DARK_GRAY),
-            b -> { if (this.minecraft != null && this.minecraft.player != null)
-                this.minecraft.player.connection.sendCommand(cmd); })
-            .pos(x, y).size(220, 20).build());
+        addRenderableWidget(GlassButton.create(x, y, 220, 20,
+            "+ " + LocalizationManager.translate(key), b -> {
+                if (this.minecraft != null && this.minecraft.player != null)
+                    this.minecraft.player.connection.sendCommand(cmd);
+            }));
     }
 
     private List<String> toModeNames() {
