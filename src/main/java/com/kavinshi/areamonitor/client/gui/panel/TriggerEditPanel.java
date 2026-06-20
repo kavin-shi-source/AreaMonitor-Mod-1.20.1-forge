@@ -42,9 +42,8 @@ public class TriggerEditPanel extends Screen {
         super.init(); sections.clear(); labels.clear(); enterCmds.clear(); leaveCmds.clear();
         ww = Math.min(this.width * 78 / 100, 560); wh = Math.min(this.height * 82 / 100, 480);
         wx = (this.width - ww) / 2; wy = (this.height - wh) / 2;
-        lx = wx + 8; vx = lx + 85; panelW = Math.min(272, ww - 32);
+        lx = wx + 8; vx = lx + 85; panelW = ww - 45;
         int y = wy + 36;
-
         JsonObject enterJ = safeParse(entry.enterTriggerJson());
         JsonObject leaveJ = safeParse(entry.leaveTriggerJson());
 
@@ -68,11 +67,12 @@ public class TriggerEditPanel extends Screen {
             java.util.function.Consumer<EditBox> tM, java.util.function.Consumer<EditBox> tS,
             java.util.function.Consumer<EditBox> tD, java.util.function.Consumer<EditBox> tX, java.util.function.Consumer<EditBox> tY, java.util.function.Consumer<EditBox> tZ) {
         zbtn(lx, y, panelW, "▶ " + LocalizationManager.translate("command.commands") + " (" + label + ")", () -> {}); y += 20;
+        final int cmdW = Math.min(panelW - 100, 300);
         if (json.has("commands") && json.get("commands").isJsonArray())
-            for (var e : json.getAsJsonArray("commands")) { cmds.add(zbox(vx, y, 150, e.getAsString())); y += 18; }
-        if (cmds.isEmpty()) cmds.add(zbox(vx, y, 150, ""));
+            for (var e : json.getAsJsonArray("commands")) { cmds.add(zbox(vx, y, cmdW, e.getAsString())); y += 18; }
+        if (cmds.isEmpty()) cmds.add(zbox(vx, y, cmdW, ""));
         final int addY = y;
-        zbtn(vx + 155, y - 18, 44, "+ " + LocalizationManager.translate("command.add"), () -> { cmds.add(zbox(vx, addY, 150, "")); rebuild(); });
+        zbtn(vx + cmdW + 5, y - 18, 44, "+ " + LocalizationManager.translate("command.add"), () -> { cmds.add(zbox(vx, addY, cmdW, "")); rebuild(); });
         y += 6;
 
         // Sound row
@@ -141,7 +141,7 @@ public class TriggerEditPanel extends Screen {
         g.fill(wx + 3, wy + 28, wx + ww - 3, wy + 29, BORDER_GOLD);
         g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), wx + ww / 2, wy + 9, 0xFFF5DEB3);
 
-        int secW = vx - lx + panelW + 4;
+        int secW = Math.min(vx - lx + panelW + 4, ww - 16);
         for (Section s : sections) {
             g.fill(lx - 4, s.y, lx + secW, s.y + s.h, 0x30C4A882);
             g.fill(lx - 4, s.y, lx + secW, s.y + 1, BORDER_GOLD);

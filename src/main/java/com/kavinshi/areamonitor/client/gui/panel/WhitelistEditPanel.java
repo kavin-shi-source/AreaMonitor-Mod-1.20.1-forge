@@ -44,9 +44,9 @@ public class WhitelistEditPanel extends Screen {
         lx = wx + 8;
         int y = wy + 36;
 
-        nameInput = new EditBox(this.font, lx, y, 160, 16, Component.empty());
+        nameInput = new EditBox(this.font, lx, y, 256, 16, Component.empty());
         nameInput.setMaxLength(16); addRenderableWidget(nameInput);
-        zbtn(lx + 165, y, 40, LocalizationManager.translate("command.add"), () -> {
+        zbtn(lx + 262, y, 40, LocalizationManager.translate("command.add"), () -> {
             String nm = nameInput.getValue().trim();
             if (!nm.isEmpty() && !players.contains(nm.toLowerCase())) { players.add(nm.toLowerCase()); nameInput.setValue(""); sendUpdate(); rebuild(); }
         });
@@ -56,10 +56,10 @@ public class WhitelistEditPanel extends Screen {
         int shown = Math.min(players.size(), visible);
         for (int i = 0; i < shown; i++) {
             final int idx = i; String p = players.get(i);
-            zbtn(lx, y, 158, "  \u2022 " + p + "  \u2715", () -> { players.remove(idx); sendUpdate(); rebuild(); });
+            zbtn(lx, y, 256, "  \u2022 " + p + "  \u2715", () -> { players.remove(idx); sendUpdate(); rebuild(); });
             y += 20;
         }
-        if (players.size() > visible) zbtn(lx, y, 158, "... " + (players.size() - visible) + " more", () -> {});
+        if (players.size() > visible) zbtn(lx, y, 256, "... " + (players.size() - visible) + " more", () -> {});
         y += 10;
 
         int btnY = Math.max(y, wy + wh - 38);
@@ -87,7 +87,7 @@ public class WhitelistEditPanel extends Screen {
         g.fill(wx + 3, wy + 28, wx + ww - 3, wy + 29, BORDER_GOLD);
         g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), wx + ww / 2, wy + 9, 0xFFF5DEB3);
 
-        int panelX = lx - 4, panelY = wy + 32, panelW = 226, panelH = wy + wh - 76 - panelY;
+        int panelX = lx - 4, panelY = wy + 32, panelW = ww - 12, panelH = wy + wh - 76 - panelY;
         g.fill(panelX, panelY, panelX + panelW, panelY + panelH, 0x30C4A882);
         g.fill(panelX, panelY, panelX + panelW, panelY + 1, BORDER_GOLD);
         g.drawString(this.font, Component.literal("  Players").withStyle(ChatFormatting.DARK_GRAY), lx + 2, wy + 34, 0xFF8B6914);

@@ -50,30 +50,31 @@ public class RestrictionEditPanel extends Screen {
         int y = wy + 36;
 
         // Item Blacklist
-        zbtn(lx, y, 260, LocalizationManager.translate("gui.restriction_items") +
+        final int secW = Math.min(ww - 55, 320);
+        zbtn(lx, y, secW, LocalizationManager.translate("gui.restriction_items") +
             (enableItemBlacklist ? " " + LocalizationManager.translate("gui.prot_enabled") : " " + LocalizationManager.translate("gui.prot_disabled")) +
             (itemsExp ? "  \u25BC" : "  \u25B6"), () -> { itemsExp = !itemsExp; rebuild(); }); y += 20;
         if (itemsExp) {
             zbtn(lx, y, 74, LocalizationManager.translate(enableItemBlacklist ? "gui.disable" : "gui.enable"), () -> { enableItemBlacklist = !enableItemBlacklist; rebuild(); }); y += 20;
             if (enableItemBlacklist) {
-                addItemBox = new EditBox(this.font, lx, y, 150, 16, Component.empty()); addItemBox.setMaxLength(100); addRenderableWidget(addItemBox);
-                zbtn(lx + 155, y, 36, "+", () -> { String v = addItemBox.getValue().trim().toLowerCase(); if (!v.isEmpty() && !blockedItems.contains(v)) { blockedItems.add(v); addItemBox.setValue(""); sendUpdate(); rebuild(); } }); y += 20;
+                addItemBox = new EditBox(this.font, lx, y, 198, 16, Component.empty()); addItemBox.setMaxLength(100); addRenderableWidget(addItemBox);
+                zbtn(lx + 203, y, 36, "+", () -> { String v = addItemBox.getValue().trim().toLowerCase(); if (!v.isEmpty() && !blockedItems.contains(v)) { blockedItems.add(v); addItemBox.setValue(""); sendUpdate(); rebuild(); } }); y += 20;
                 int max = Math.min(blockedItems.size(), 6);
-                for (int i = 0; i < max; i++) { final int idx = i; zbtn(lx + 6, y, 150, "  \u2022 " + blockedItems.get(i) + "  \u2715", () -> { blockedItems.remove(idx); sendUpdate(); rebuild(); }); y += 18; }
+                for (int i = 0; i < max; i++) { final int idx = i; zbtn(lx + 6, y, 198, "  \u2022 " + blockedItems.get(i) + "  \u2715", () -> { blockedItems.remove(idx); sendUpdate(); rebuild(); }); y += 18; }
             }
         }
         y += 8;
 
         // Cmd restrictions
-        zbtn(lx, y, 260, LocalizationManager.translate("gui.restriction_commands") +
+        zbtn(lx, y, secW, LocalizationManager.translate("gui.restriction_commands") +
             (blockTeleportCommands ? " " + LocalizationManager.translate("gui.prot_enabled") : " " + LocalizationManager.translate("gui.prot_disabled")) +
             (cmdsExp ? "  \u25BC" : "  \u25B6"), () -> { cmdsExp = !cmdsExp; rebuild(); }); y += 20;
         if (cmdsExp) {
             zbtn(lx, y, 74, LocalizationManager.translate(blockTeleportCommands ? "gui.disable" : "gui.enable"), () -> { blockTeleportCommands = !blockTeleportCommands; rebuild(); }); y += 20;
-            addCmdBox = new EditBox(this.font, lx, y, 150, 16, Component.empty()); addCmdBox.setMaxLength(100); addRenderableWidget(addCmdBox);
-            zbtn(lx + 155, y, 36, "+", () -> { String v = addCmdBox.getValue().trim(); if (!v.isEmpty() && !blockedCommands.contains(v)) { blockedCommands.add(v); addCmdBox.setValue(""); sendUpdate(); rebuild(); } }); y += 20;
+            addCmdBox = new EditBox(this.font, lx, y, 198, 16, Component.empty()); addCmdBox.setMaxLength(100); addRenderableWidget(addCmdBox);
+            zbtn(lx + 203, y, 36, "+", () -> { String v = addCmdBox.getValue().trim(); if (!v.isEmpty() && !blockedCommands.contains(v)) { blockedCommands.add(v); addCmdBox.setValue(""); sendUpdate(); rebuild(); } }); y += 20;
             int max = Math.min(blockedCommands.size(), 5);
-            for (int i = 0; i < max; i++) { final int idx = i; zbtn(lx + 6, y, 150, "  \u2022 " + blockedCommands.get(i) + "  \u2715", () -> { blockedCommands.remove(idx); sendUpdate(); rebuild(); }); y += 18; }
+            for (int i = 0; i < max; i++) { final int idx = i; zbtn(lx + 6, y, 198, "  \u2022 " + blockedCommands.get(i) + "  \u2715", () -> { blockedCommands.remove(idx); sendUpdate(); rebuild(); }); y += 18; }
         }
         y += 10;
 

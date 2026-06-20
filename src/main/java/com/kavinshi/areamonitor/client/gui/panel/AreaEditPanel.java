@@ -61,10 +61,10 @@ public class AreaEditPanel extends Screen {
         wh = Math.min(this.height * 82 / 100, 480);
         wx = (this.width - ww) / 2;
         wy = (this.height - wh) / 2;
-        lx = wx + 8;                       // left margin inside window
-        vx = lx + 70;                      // value column start
-        vw = Math.min(170, ww - 110);      // value column width
-        int y = wy + 36;                   // first row below title bar
+        lx = wx + 8;
+        vx = lx + 70;
+        vw = Math.min(ww - 110, 320);  // fill most of window width
+        int y = wy + 36;
 
         // === Basic ===
         int top = y - 4;
@@ -97,11 +97,11 @@ public class AreaEditPanel extends Screen {
             zbtn(lx, y, 68, LocalizationManager.translate("gui.prot_enable_all"), () -> { setAllProt(true); rebuild(); });
             zbtn(lx + 72, y, 68, LocalizationManager.translate("gui.prot_disable_all"), () -> { setAllProt(false); rebuild(); }); y += 20;
             zprot(lx, y, "gui.prot_block_break", protBreak, v -> protBreak = v);
-            zprot(lx + 112, y, "gui.prot_pvp", protPvp, v -> protPvp = v); y += 17;
+            zprot(lx + 120, y, "gui.prot_pvp", protPvp, v -> protPvp = v); y += 17;
             zprot(lx, y, "gui.prot_block_place", protPlace, v -> protPlace = v);
-            zprot(lx + 112, y, "gui.prot_explosion", protExplosion, v -> protExplosion = v); y += 17;
+            zprot(lx + 120, y, "gui.prot_explosion", protExplosion, v -> protExplosion = v); y += 17;
             zprot(lx, y, "gui.prot_block_interact", protInteract, v -> protInteract = v);
-            zprot(lx + 112, y, "gui.prot_entity_damage", protDamage, v -> protDamage = v);
+            zprot(lx + 120, y, "gui.prot_entity_damage", protDamage, v -> protDamage = v);
         }
         y += 8;
         zbtn(lx, y, vw + 40, LocalizationManager.translate(enabled ? "area.enabled" : "area.disabled"), () -> { enabled = !enabled; rebuild(); }); y += 28;
