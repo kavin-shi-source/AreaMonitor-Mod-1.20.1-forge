@@ -35,6 +35,10 @@ public class AreaManagementScreen extends Screen {
     private boolean creating = false;
     private EditBox nameInput;
 
+    // Toast feedback
+    private String toastMessage = "";
+    private long toastEndMs = 0;
+
     // Dynamic layout (recalculated in init)
     private int itemHeight = 24;
     private int itemsPerPage = 8;
@@ -119,9 +123,17 @@ public class AreaManagementScreen extends Screen {
             .pos(x, y).size(w, 20).build());
     }
 
-    void onToggle(String name) { ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.TOGGLE, name)); }
-    void onDelete(String name) { ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.DELETE, name)); }
-    void onRefresh()            { ModNetwork.sendToServer(new C2SRequestAreaListPacket()); }
+    void onToggle(String name) {
+        ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.TOGGLE, name));
+        showToast(LocalizationManager.translate("gui.toast_saved"));
+    }
+    void onDelete(String name) {
+        ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.DELETE, name));
+        showToast(LocalizationManager.translate("gui.toast_deleted"));
+    }
+    void onRefresh() {
+        ModNetwork.sendToServer(new C2SRequestAreaListPacket());
+    }
 
     void onEdit(S2CAreaListPacket.AreaEntry entry) {
         if (this.minecraft != null) this.minecraft.setScreen(new AreaEditPanel(this, entry));
@@ -134,6 +146,7 @@ public class AreaManagementScreen extends Screen {
             String name = nameInput.getValue().trim();
             if (!name.isEmpty()) {
                 ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.CREATE, name));
+                showToast(LocalizationManager.translate("gui.toast_created"));
                 creating = false; nameInput = null; rebuildRows();
             }
         }
@@ -192,6 +205,9 @@ public class AreaManagementScreen extends Screen {
         g.drawCenteredString(this.font,
             Component.literal(status).withStyle(ChatFormatting.GRAY), cx, statusY + 4, TEXT_DIM);
 
+        // === Toast ===
+        renderToast(g, cx);
+
         super.render(g, mx, my, pt);
     }
 
@@ -203,6 +219,34 @@ public class AreaManagementScreen extends Screen {
             scrollOffset++; rebuildRows();
         }
         return true;
+    }
+
+    // ===== Toast =====
+
+    private void showToast(String msg) {
+        this.toastMessage = msg;
+        this.toastEndMs = System.currentTimeMillis() + 2000;
+    }
+
+    private void renderToast(GuiGraphics g, int cx) {
+        if (toastMessage.isEmpty() || System.currentTimeMillis() > toastEndMs) {
+            if (!toastMessage.isEmpty()) toastMessage = "";
+            return;
+        }
+        long remaining = toastEndMs - System.currentTimeMillis();
+        int alpha = remaining > 500 ? 0xA0 : (int)(0xA0 * remaining / 500);
+        int bg = (alpha << 24) | 0x000000;
+        int brd = ((Math.min(alpha + 0x20, 0xFF)) << 24) | 0xFFFFFF;
+
+        int tw = this.font.width(toastMessage) + 24;
+        int tx = cx - tw / 2;
+        int ty = this.height / 2 - 10;
+
+        g.fill(tx, ty, tx + tw, ty + 20, bg);
+        g.fill(tx, ty, tx + tw, ty + 1, brd);
+        g.fill(tx, ty + 19, tx + tw, ty + 20, brd);
+        g.drawCenteredString(this.font, Component.literal(toastMessage).withStyle(ChatFormatting.WHITE),
+            cx, ty + 5, 0xFFFFFF);
     }
 
     // ===== Static inner widget classes =====

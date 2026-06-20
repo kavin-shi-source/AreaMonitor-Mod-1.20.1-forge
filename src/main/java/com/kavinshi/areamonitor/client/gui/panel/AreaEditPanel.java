@@ -150,9 +150,11 @@ public class AreaEditPanel extends Screen {
         // ===== Section 4: Other =====
         sections.add(new SectionPos("  Other  ", y - 6, 22 * 4 + 36));
 
-        addQuick(lx, y, "gui.trigger_settings", "areamonitor trigger " + entry.name() + " enter info"); y += 22;
-        addQuick(lx, y, "gui.whitelist_settings", "areamonitor whitelist list"); y += 22;
-        addQuick(lx, y, "gui.restriction_settings", "areamonitor blacklist area " + entry.name() + " list");
+        addQuickR(lx, y, "gui.trigger_settings", () -> {
+            if (this.minecraft != null) this.minecraft.setScreen(new TriggerEditPanel(parentScreen, entry));
+        }); y += 22;
+        addQuickC(lx, y, "gui.whitelist_settings", "areamonitor whitelist list"); y += 22;
+        addQuickC(lx, y, "gui.restriction_settings", "areamonitor blacklist area " + entry.name() + " list");
         y += 34;
 
         // Save / Cancel
@@ -219,7 +221,14 @@ public class AreaEditPanel extends Screen {
             b -> { setter.accept(!val); rebuild(); }).pos(x, y).size(105, 17).build());
     }
 
-    private void addQuick(int x, int y, String key, String cmd) {
+    private void addQuickR(int x, int y, String key, Runnable action) {
+        addRenderableWidget(Button.builder(
+            Component.literal("+ " + LocalizationManager.translate(key)).withStyle(ChatFormatting.DARK_GRAY),
+            b -> action.run())
+            .pos(x, y).size(220, 20).build());
+    }
+
+    private void addQuickC(int x, int y, String key, String cmd) {
         addRenderableWidget(Button.builder(
             Component.literal("+ " + LocalizationManager.translate(key)).withStyle(ChatFormatting.DARK_GRAY),
             b -> { if (this.minecraft != null && this.minecraft.player != null)

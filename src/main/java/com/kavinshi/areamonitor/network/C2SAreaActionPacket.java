@@ -3,6 +3,7 @@ package com.kavinshi.areamonitor.network;
 import com.kavinshi.areamonitor.AreaManager;
 import com.kavinshi.areamonitor.ConfigManager;
 import com.kavinshi.areamonitor.MonitorArea;
+import com.kavinshi.areamonitor.TriggerConfig;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import net.minecraft.network.FriendlyByteBuf;
@@ -134,8 +135,26 @@ public class C2SAreaActionPacket {
                         obj.get("radius").getAsInt()));
                 }
             }
+            // Trigger update
+            if (obj.has("enterTrigger")) updateTrigger(area.getEnterTrigger(), obj.getAsJsonObject("enterTrigger"));
+            if (obj.has("leaveTrigger")) updateTrigger(area.getLeaveTrigger(), obj.getAsJsonObject("leaveTrigger"));
         } catch (Exception e) {
             com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.error("Failed to apply area update", e);
         }
+    }
+
+    private static void updateTrigger(TriggerConfig tc, JsonObject obj) {
+        if (tc == null || obj == null) return;
+        if (obj.has("commands")) tc.getCommands().clear();
+        if (obj.has("commands") && obj.get("commands").isJsonArray()) {
+            for (var e : obj.getAsJsonArray("commands"))
+                tc.getCommands().add(e.getAsString());
+        }
+        if (obj.has("soundEvent")) tc.setSoundEvent(obj.get("soundEvent").isJsonNull() ? null : obj.get("soundEvent").getAsString());
+        if (obj.has("soundVolume")) tc.setSoundVolume(obj.get("soundVolume").getAsFloat());
+        if (obj.has("soundPitch")) tc.setSoundPitch(obj.get("soundPitch").getAsFloat());
+        if (obj.has("titleMain")) tc.setTitleMain(obj.get("titleMain").isJsonNull() ? null : obj.get("titleMain").getAsString());
+        if (obj.has("titleSub")) tc.setTitleSub(obj.get("titleSub").isJsonNull() ? null : obj.get("titleSub").getAsString());
+        if (obj.has("teleportTarget")) tc.setTeleportTarget(obj.get("teleportTarget").isJsonNull() ? null : obj.get("teleportTarget").getAsString());
     }
 }

@@ -1,6 +1,8 @@
 package com.kavinshi.areamonitor.network;
 
 import com.kavinshi.areamonitor.MonitorArea;
+import com.kavinshi.areamonitor.TriggerConfig;
+import com.google.gson.Gson;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.network.NetworkEvent;
 
@@ -69,8 +71,12 @@ public class S2CAreaListPacket {
         boolean protBlockInteract,
         boolean protPvp,
         boolean protExplosion,
-        boolean protEntityDamage
+        boolean protEntityDamage,
+        String enterTriggerJson,
+        String leaveTriggerJson
     ) {
+        private static final Gson TGSON = new Gson();
+
         public AreaEntry(MonitorArea area) {
             this(area.getName(),
                  area.isEnabled(),
@@ -84,7 +90,9 @@ public class S2CAreaListPacket {
                  area.getProtection().isBlockInteract(),
                  area.getProtection().isPvp(),
                  area.getProtection().isExplosion(),
-                 area.getProtection().isEntityDamage());
+                 area.getProtection().isEntityDamage(),
+                 area.hasEnterTrigger() ? TGSON.toJson(area.getEnterTrigger()) : null,
+                 area.hasLeaveTrigger() ? TGSON.toJson(area.getLeaveTrigger()) : null);
         }
 
         public void encode(FriendlyByteBuf buf) {
@@ -95,11 +103,12 @@ public class S2CAreaListPacket {
             buf.writeUtf(leaveMode);
             buf.writeUtf(boundsType);
             buf.writeUtf(displayName);
-            // Encode 6 protection bools as bitmap byte
             int protBits = (protBlockBreak ? 1 : 0) | (protBlockPlace ? 2 : 0)
                 | (protBlockInteract ? 4 : 0) | (protPvp ? 8 : 0)
                 | (protExplosion ? 16 : 0) | (protEntityDamage ? 32 : 0);
             buf.writeByte(protBits);
+            writeNullableJson(buf, enterTriggerJson);
+            writeNullableJson(buf, leaveTriggerJson);
         }
 
         public static AreaEntry decode(FriendlyByteBuf buf) {
@@ -113,7 +122,18 @@ public class S2CAreaListPacket {
             int bits = buf.readByte();
             return new AreaEntry(name, enabled, dim, enter, leave, bounds, disp,
                 (bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0,
-                (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0);
+                (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0,
+                readNullableJson(buf), readNullableJson(buf));
+        }
+
+        private static void writeNullableJson(FriendlyByteBuf buf, String json) {
+            boolean has = json != null && !json.isEmpty();
+            buf.writeBoolean(has);
+            if (has) buf.writeUtf(json);
+        }
+
+        private static String readNullableJson(FriendlyByteBuf buf) {
+            return buf.readBoolean() ? buf.readUtf() : null;
         }
     }
 }
