@@ -1,7 +1,6 @@
 package com.kavinshi.areamonitor.client.gui.panel;
 
 import com.kavinshi.areamonitor.LocalizationManager;
-import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
 import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
@@ -29,7 +28,7 @@ public class RestrictionEditPanel extends Screen {
     private static final int BORDER_FAINT  = 0x20FFFFFF;
     private static final Gson GSON = new Gson();
 
-    private final AreaManagementScreen parentScreen;
+    private final Screen returnScreen;
     private final S2CAreaListPacket.AreaEntry entry;
 
     private boolean enableItemBlacklist = true;
@@ -40,9 +39,9 @@ public class RestrictionEditPanel extends Screen {
     private boolean itemsSectionExpanded = true;
     private boolean cmdsSectionExpanded = true;
 
-    public RestrictionEditPanel(AreaManagementScreen parent, S2CAreaListPacket.AreaEntry entry) {
+    public RestrictionEditPanel(Screen returnScreen, S2CAreaListPacket.AreaEntry entry) {
         super(Component.literal(LocalizationManager.translate("gui.restriction_settings") + ": " + entry.name()));
-        this.parentScreen = parent;
+        this.returnScreen = returnScreen;
         this.entry = entry;
         if (entry.restrictionsJson() != null) {
             try {
@@ -179,10 +178,7 @@ public class RestrictionEditPanel extends Screen {
 
     @Override
     public void onClose() {
-        if (this.minecraft != null) {
-            this.minecraft.setScreen(parentScreen);
-            parentScreen.updateAfterEdit();
-        }
+        if (this.minecraft != null) this.minecraft.setScreen(returnScreen);
     }
 
     @Override

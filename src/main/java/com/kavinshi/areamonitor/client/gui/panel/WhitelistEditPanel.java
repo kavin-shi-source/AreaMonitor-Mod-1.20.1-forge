@@ -1,7 +1,6 @@
 package com.kavinshi.areamonitor.client.gui.panel;
 
 import com.kavinshi.areamonitor.LocalizationManager;
-import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
 import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
@@ -29,14 +28,14 @@ public class WhitelistEditPanel extends Screen {
     private static final int BORDER_FAINT  = 0x20FFFFFF;
     private static final Gson GSON = new Gson();
 
-    private final AreaManagementScreen parentScreen;
+    private final Screen returnScreen;
     private final S2CAreaListPacket.AreaEntry entry;
     private final List<String> players = new ArrayList<>();
     private EditBox nameInput;
 
-    public WhitelistEditPanel(AreaManagementScreen parent, S2CAreaListPacket.AreaEntry entry) {
+    public WhitelistEditPanel(Screen returnScreen, S2CAreaListPacket.AreaEntry entry) {
         super(Component.literal(LocalizationManager.translate("gui.whitelist_settings") + ": " + entry.name()));
-        this.parentScreen = parent;
+        this.returnScreen = returnScreen;
         this.entry = entry;
         // Load existing players from JSON
         if (entry.whitelistJson() != null) {
@@ -118,10 +117,7 @@ public class WhitelistEditPanel extends Screen {
 
     @Override
     public void onClose() {
-        if (this.minecraft != null) {
-            this.minecraft.setScreen(parentScreen);
-            parentScreen.updateAfterEdit();
-        }
+        if (this.minecraft != null) this.minecraft.setScreen(returnScreen);
     }
 
     @Override
