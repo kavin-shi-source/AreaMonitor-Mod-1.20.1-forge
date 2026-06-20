@@ -17,20 +17,29 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Client-side GUI for managing monitor areas.
- * Only accessible when the player client has this mod installed.
+ * Client-side GUI for managing monitor areas — Glass Morphism theme.
  */
 public class AreaManagementScreen extends Screen {
+
+    // === Glass Morphism palette ===
+    private static final int GLASS_DARK   = 0xA0000000; // title bar
+    private static final int GLASS_PANEL  = 0x60000000; // section bg
+    private static final int GLASS_SUBTLE = 0x30000000; // sub-bg
+    private static final int BORDER_FAINT = 0x20FFFFFF; // subtle border
+    private static final int BORDER_SOFT  = 0x40FFFFFF; // visible border
+    private static final int TEXT_DIM     = 0xB0B0B0B0; // secondary text
+    private static final int ROW_ODD      = 0x0CFFFFFF; // alternating row
 
     private List<S2CAreaListPacket.AreaEntry> areas = new ArrayList<>();
     private int scrollOffset = 0;
     private boolean creating = false;
     private EditBox nameInput;
-    private static final int ITEMS_PER_PAGE = 8;
-    private static final int ITEM_HEIGHT = 28;
-    private static final int LIST_TOP = 40;
-    private static final int LIST_LEFT = 30;
-    private static final int LIST_WIDTH = 280;
+
+    // Dynamic layout (recalculated in init)
+    private int itemHeight = 24;
+    private int itemsPerPage = 8;
+    private int listLeft, listTop, listWidth;
+    private int btnY;
 
     public AreaManagementScreen() {
         super(Component.literal(LocalizationManager.translate("gui.title")));
@@ -39,11 +48,17 @@ public class AreaManagementScreen extends Screen {
     @Override
     protected void init() {
         super.init();
-
-        // Request area list from server
+        calculateLayout();
         ModNetwork.sendToServer(new C2SRequestAreaListPacket());
-
         rebuildRows();
+    }
+
+    private void calculateLayout() {
+        listLeft   = this.width / 8;
+        listWidth  = Math.min(this.width - listLeft * 2 - 120, 420);
+        listTop    = 42;
+        itemsPerPage = Math.max(3, (this.height - 158) / itemHeight);
+        btnY = this.height - 35;
     }
 
     public void updateAreaList(List<S2CAreaListPacket.AreaEntry> newAreas) {
@@ -54,235 +69,190 @@ public class AreaManagementScreen extends Screen {
 
     private void rebuildRows() {
         this.clearWidgets();
-
-        int centerX = this.width / 2;
-        int btnY = this.height - 35;
+        int cx = this.width / 2;
 
         if (creating) {
-            // Name input field above the buttons
-            nameInput = new EditBox(this.font, centerX - 110, this.height - 58, 220, 18,
+            nameInput = new EditBox(this.font, cx - 110, btnY - 23, 220, 18,
                 Component.literal(LocalizationManager.translate("gui.area_name_hint")));
             nameInput.setMaxLength(48);
             addRenderableWidget(nameInput);
 
-            addRenderableWidget(
-                Button.builder(Component.literal(LocalizationManager.translate("gui.create")), b -> onCreateConfirm())
-                    .pos(centerX - 110, btnY).size(70, 20).build());
-            addRenderableWidget(
-                Button.builder(Component.literal(LocalizationManager.translate("gui.cancel")), b -> {
-                    creating = false;
-                    rebuildRows();
-                }).pos(centerX - 30, btnY).size(70, 20).build());
+            glassBtn(LocalizationManager.translate("gui.create"), cx - 110, btnY, 70, this::onCreateConfirm);
+            glassBtn(LocalizationManager.translate("gui.cancel"), cx - 30, btnY, 70, () -> {
+                creating = false; rebuildRows(); });
         } else {
-            addRenderableWidget(
-                Button.builder(Component.literal(LocalizationManager.translate("gui.create_new_area")), b -> {
-                    creating = true;
-                    rebuildRows();
-                }).pos(centerX - 110, btnY).size(70, 20).build());
-            addRenderableWidget(
-                Button.builder(Component.literal(LocalizationManager.translate("gui.refresh")), b -> onRefresh())
-                    .pos(centerX - 30, btnY).size(70, 20).build());
+            glassBtn(LocalizationManager.translate("gui.create_new_area"), cx - 110, btnY, 70, () -> {
+                creating = true; rebuildRows(); });
+            glassBtn(LocalizationManager.translate("gui.refresh"), cx - 30, btnY, 70, this::onRefresh);
         }
+        glassBtn(LocalizationManager.translate("gui.close"), cx + 50, btnY, 70, this::onClose);
 
-        // Close button (always visible, same row)
-        addRenderableWidget(
-            Button.builder(Component.literal(LocalizationManager.translate("gui.close")), b -> onClose())
-                .pos(centerX + 50, btnY).size(70, 20).build());
-
-        int visible = Math.min(Math.max(0, areas.size() - scrollOffset), ITEMS_PER_PAGE);
+        // Area rows
+        int visible = Math.min(Math.max(0, areas.size() - scrollOffset), itemsPerPage);
         for (int i = 0; i < visible; i++) {
             int idx = scrollOffset + i;
             S2CAreaListPacket.AreaEntry entry = areas.get(idx);
-            int y = LIST_TOP + 4 + i * ITEM_HEIGHT;
+            int y = listTop + 2 + i * itemHeight;
 
             Component label = entry.enabled()
-                ? Component.literal("✔ ").withStyle(ChatFormatting.GREEN)
+                ? Component.literal("\u2714 ").withStyle(ChatFormatting.GREEN)
                     .append(Component.literal(entry.name() + " ").withStyle(ChatFormatting.WHITE))
                     .append(Component.literal("[" + entry.dimension() + "] " + entry.boundsType())
                         .withStyle(ChatFormatting.GRAY))
-                : Component.literal("✘ ").withStyle(ChatFormatting.RED)
+                : Component.literal("\u2718 ").withStyle(ChatFormatting.RED)
                     .append(Component.literal(entry.name() + " ").withStyle(ChatFormatting.WHITE))
                     .append(Component.literal("[" + entry.dimension() + "] " + entry.boundsType())
                         .withStyle(ChatFormatting.GRAY));
-            // Info-only row button (click does nothing — edit/delete are separate buttons)
-            addRenderableWidget(new AreaRowButton(LIST_LEFT, y, LIST_WIDTH - 75, ITEM_HEIGHT - 2,
-                label, entry.name(), this));
 
-            // Edit button
-            addRenderableWidget(new AreaEditButton(LIST_LEFT + LIST_WIDTH - 70, y,
-                20, ITEM_HEIGHT - 2, entry, this));
-
-            // Toggle button
-            addRenderableWidget(new AreaToggleButton(LIST_LEFT + LIST_WIDTH - 45, y,
-                50, ITEM_HEIGHT - 2, entry.name(), entry.enabled(), this));
-
-            // Delete button with confirmation
-            addRenderableWidget(new AreaDeleteButton(LIST_LEFT + LIST_WIDTH + 10, y,
-                20, ITEM_HEIGHT - 2, entry.name(), this));
+            int infoW = listWidth - 75;
+            addRenderableWidget(new AreaRowButton(listLeft, y, infoW, itemHeight - 2, label, entry.name(), this));
+            addRenderableWidget(new AreaEditButton(listLeft + infoW + 5, y, 20, itemHeight - 2, entry, this));
+            addRenderableWidget(new AreaToggleButton(listLeft + infoW + 30, y, 50, itemHeight - 2,
+                entry.name(), entry.enabled(), this));
+            addRenderableWidget(new AreaDeleteButton(listLeft + infoW + 85, y, 20, itemHeight - 2,
+                entry.name(), this));
         }
     }
 
-    void onToggle(String areaName) {
-        ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.TOGGLE, areaName));
+    private void glassBtn(String text, int x, int y, int w, Runnable action) {
+        addRenderableWidget(Button.builder(Component.literal(text), b -> action.run())
+            .pos(x, y).size(w, 20).build());
     }
 
-    void onDelete(String areaName) {
-        ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.DELETE, areaName));
-    }
-
-    void onRefresh() {
-        ModNetwork.sendToServer(new C2SRequestAreaListPacket());
-    }
+    void onToggle(String name) { ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.TOGGLE, name)); }
+    void onDelete(String name) { ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.DELETE, name)); }
+    void onRefresh()            { ModNetwork.sendToServer(new C2SRequestAreaListPacket()); }
 
     void onEdit(S2CAreaListPacket.AreaEntry entry) {
-        if (this.minecraft != null) {
-            this.minecraft.setScreen(new AreaEditPanel(this, entry));
-        }
+        if (this.minecraft != null) this.minecraft.setScreen(new AreaEditPanel(this, entry));
     }
 
-    public void updateAfterEdit() {
-        ModNetwork.sendToServer(new C2SRequestAreaListPacket());
-    }
+    public void updateAfterEdit() { ModNetwork.sendToServer(new C2SRequestAreaListPacket()); }
 
     void onCreateConfirm() {
         if (nameInput != null) {
             String name = nameInput.getValue().trim();
             if (!name.isEmpty()) {
                 ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.CREATE, name));
-                creating = false;
-                nameInput = null;
-                rebuildRows();
+                creating = false; nameInput = null; rebuildRows();
             }
         }
     }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 257 && creating && nameInput != null && nameInput.isFocused()) { // Enter key
-            onCreateConfirm();
-            return true;
+        if (keyCode == 257 && creating && nameInput != null && nameInput.isFocused()) {
+            onCreateConfirm(); return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
-    public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g);
         int cx = this.width / 2;
 
-        // Title bar background
-        g.fill(0, 0, this.width, 22, 0x30000000);
+        // === Title bar (glass dark) ===
+        g.fill(0, 0, this.width, 24, GLASS_DARK);
+        g.fill(0, 23, this.width, 24, BORDER_SOFT);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE),
-            cx, 6, 0xFFFFFF);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 6, 0xFFFFFF);
 
-        // Column header background
-        g.fill(LIST_LEFT - 2, LIST_TOP - 14, LIST_LEFT + LIST_WIDTH + 120, LIST_TOP - 14 + 12, 0x20000000);
-        g.drawString(this.font,
-            LocalizationManager.translate("gui.header_info"),
-            LIST_LEFT + 3, LIST_TOP - 12, 0xAAAAAA);
-        g.drawString(this.font,
-            LocalizationManager.translate("gui.header_action"),
-            LIST_LEFT + LIST_WIDTH + 10, LIST_TOP - 12, 0xAAAAAA);
+        // === Column header (glass panel) ===
+        int hdrW = listWidth + 110;
+        int hdrY = listTop - 14;
+        g.fill(listLeft - 4, hdrY, listLeft + hdrW, hdrY + 13, GLASS_PANEL);
+        g.fill(listLeft - 4, hdrY + 12, listLeft + hdrW, hdrY + 13, BORDER_FAINT);
+        g.drawString(this.font, LocalizationManager.translate("gui.header_info"),
+            listLeft, listTop - 12, TEXT_DIM);
+        g.drawString(this.font, LocalizationManager.translate("gui.header_action"),
+            listLeft + listWidth - 65, listTop - 12, TEXT_DIM);
 
-        // Scroll info
         if (!areas.isEmpty()) {
             String info = (scrollOffset + 1) + "-" +
-                Math.min(scrollOffset + ITEMS_PER_PAGE, areas.size()) + " / " + areas.size();
-            g.drawString(this.font, info, LIST_LEFT + LIST_WIDTH - 50, LIST_TOP - 12, 0x888888);
+                Math.min(scrollOffset + itemsPerPage, areas.size()) + " / " + areas.size();
+            g.drawString(this.font, info, listLeft + listWidth - 50, listTop - 12, TEXT_DIM);
         }
 
-        // Status bar between list and buttons
-        int statusY = this.height - 70;
-        g.fill(0, statusY, this.width, statusY + 14, 0x20000000);
+        // === Alternating row backgrounds (glass subtle) ===
+        int visible = Math.min(Math.max(0, areas.size() - scrollOffset), itemsPerPage);
+        for (int i = 0; i < visible; i++) {
+            if (i % 2 == 1) {
+                g.fill(listLeft, listTop + i * itemHeight,
+                    listLeft + listWidth + 105, listTop + (i + 1) * itemHeight - 1, ROW_ODD);
+            }
+        }
+
+        // === Status bar (glass dark + border) ===
+        int statusY = this.height - 72;
+        g.fill(0, statusY, this.width, statusY + 16, GLASS_DARK);
+        g.fill(0, statusY, this.width, statusY + 1, BORDER_SOFT);
         String status = LocalizationManager.translate("gui.status_monitoring") + ": " +
             areas.size() + " " + LocalizationManager.translate("gui.status_areas");
-        g.drawCenteredString(this.font, Component.literal(status).withStyle(ChatFormatting.GRAY),
-            cx, statusY + 3, 0xAAAAAA);
+        g.drawCenteredString(this.font,
+            Component.literal(status).withStyle(ChatFormatting.GRAY), cx, statusY + 4, TEXT_DIM);
 
-        super.render(g, mouseX, mouseY, partialTick);
+        super.render(g, mx, my, pt);
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mx, double my, double delta) {
         if (delta > 0 && scrollOffset > 0) {
-            scrollOffset--;
-            rebuildRows();
-        } else if (delta < 0 && scrollOffset < areas.size() - ITEMS_PER_PAGE) {
-            scrollOffset++;
-            rebuildRows();
+            scrollOffset--; rebuildRows();
+        } else if (delta < 0 && scrollOffset < areas.size() - itemsPerPage) {
+            scrollOffset++; rebuildRows();
         }
         return true;
     }
 
-    // ---- Inner classes for custom buttons ----
+    // ===== Static inner widget classes =====
 
     static class AreaRowButton extends Button {
         final String areaName;
         final AreaManagementScreen parent;
-
         AreaRowButton(int x, int y, int w, int h, Component msg, String areaName, AreaManagementScreen parent) {
-            super(x, y, w, h, msg, b -> {}, DEFAULT_NARRATION); // Click does nothing
-            this.areaName = areaName;
-            this.parent = parent;
-        }
-    }
-
-    static class AreaToggleButton extends Button {
-        final String areaName;
-        final AreaManagementScreen parent;
-
-        AreaToggleButton(int x, int y, int w, int h, String areaName, boolean enabled, AreaManagementScreen parent) {
-            super(x, y, w, h,
-                Component.literal(LocalizationManager.translate(enabled ? "gui.disable" : "gui.enable")),
-                b -> parent.onToggle(areaName),
-                DEFAULT_NARRATION);
-            this.areaName = areaName;
-            this.parent = parent;
-        }
-    }
-
-    static class AreaDeleteButton extends Button {
-        private final String areaName;
-        private final AreaManagementScreen parent;
-        private boolean confirming = false;
-
-        AreaDeleteButton(int x, int y, int w, int h, String areaName, AreaManagementScreen parent) {
-            super(x, y, w, h,
-                Component.literal(LocalizationManager.translate("gui.delete")).withStyle(ChatFormatting.DARK_GRAY),
-                b -> {},
-                DEFAULT_NARRATION);
-            this.areaName = areaName;
-            this.parent = parent;
-        }
-
-        @Override
-        public void onPress() {
-            if (!confirming) {
-                confirming = true;
-                setMessage(Component.literal(LocalizationManager.translate("gui.delete_confirm")).withStyle(ChatFormatting.RED));
-            } else {
-                parent.onDelete(areaName);
-            }
-        }
-
-        public void resetConfirmation() {
-            confirming = false;
-            setMessage(Component.literal(LocalizationManager.translate("gui.delete")).withStyle(ChatFormatting.DARK_GRAY));
+            super(x, y, w, h, msg, b -> {}, DEFAULT_NARRATION);
+            this.areaName = areaName; this.parent = parent;
         }
     }
 
     static class AreaEditButton extends Button {
-        final S2CAreaListPacket.AreaEntry entry;
-        final AreaManagementScreen parent;
-
         AreaEditButton(int x, int y, int w, int h, S2CAreaListPacket.AreaEntry entry, AreaManagementScreen parent) {
             super(x, y, w, h,
-                Component.literal("⚙").withStyle(ChatFormatting.DARK_GRAY),
-                b -> parent.onEdit(entry),
-                DEFAULT_NARRATION);
-            this.entry = entry;
-            this.parent = parent;
+                Component.literal("\u2699").withStyle(ChatFormatting.GRAY),
+                b -> parent.onEdit(entry), DEFAULT_NARRATION);
+        }
+    }
+
+    static class AreaToggleButton extends Button {
+        AreaToggleButton(int x, int y, int w, int h, String name, boolean enabled, AreaManagementScreen parent) {
+            super(x, y, w, h,
+                Component.literal(enabled
+                    ? LocalizationManager.translate("gui.disable")
+                    : LocalizationManager.translate("gui.enable"))
+                    .withStyle(enabled ? ChatFormatting.RED : ChatFormatting.GREEN),
+                b -> parent.onToggle(name), DEFAULT_NARRATION);
+        }
+    }
+
+    static class AreaDeleteButton extends Button {
+        private boolean confirming = false;
+        private final String areaName;
+        private final AreaManagementScreen parent;
+        AreaDeleteButton(int x, int y, int w, int h, String areaName, AreaManagementScreen parent) {
+            super(x, y, w, h,
+                Component.literal("\u2715").withStyle(ChatFormatting.GRAY),
+                b -> {}, DEFAULT_NARRATION);
+            this.areaName = areaName; this.parent = parent;
+        }
+        @Override
+        public void onPress() {
+            if (!confirming) {
+                confirming = true;
+                setMessage(Component.literal("\u2715?").withStyle(ChatFormatting.RED));
+            } else {
+                parent.onDelete(areaName);
+            }
         }
     }
 }
