@@ -101,7 +101,7 @@ public class AreaManagementScreen extends Screen {
         int cx = winX + winW / 2;
 
         // Search bar
-        searchInput = new EditBox(this.font, listLeft, listTop - 22, 120, 14, Component.literal("Search..."));
+        searchInput = new EditBox(this.font, listLeft, listTop - 22, 120, 14, Component.literal(LocalizationManager.translate("gui.search")));
         searchInput.setMaxLength(32);
         searchInput.setValue(searchTerm);
         searchInput.setResponder(s -> { searchTerm = s; applyFilterAndSort(); scrollOffset = 0; rebuildRows(); });

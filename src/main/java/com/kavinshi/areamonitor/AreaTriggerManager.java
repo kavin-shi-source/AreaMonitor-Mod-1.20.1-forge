@@ -243,15 +243,30 @@ public class AreaTriggerManager {
                     for (var stack : player.getInventory().items) {
                         if (stack.getItem() == item) { hasItem = true; break; }
                     }
+                    if (!hasItem) {
+                        for (var stack : player.getInventory().armor) {
+                            if (stack.getItem() == item) { hasItem = true; break; }
+                        }
+                    }
+                    if (!hasItem) {
+                        for (var stack : player.getInventory().offhand) {
+                            if (stack.getItem() == item) { hasItem = true; break; }
+                        }
+                    }
                     if (!hasItem) return false;
                 }
             }
         }
 
-        // timeMin/timeMax: check game time
+        // timeMin/timeMax: check game time (supports cross-midnight ranges)
         long time = player.level().getDayTime() % 24000;
-        if (c.timeMin != null && time < c.timeMin) return false;
-        if (c.timeMax != null && time > c.timeMax) return false;
+        if (c.timeMin != null && c.timeMax != null) {
+            if (c.timeMin <= c.timeMax && (time < c.timeMin || time > c.timeMax)) return false;
+            if (c.timeMin > c.timeMax && (time < c.timeMin && time > c.timeMax)) return false;
+        } else {
+            if (c.timeMin != null && time < c.timeMin) return false;
+            if (c.timeMax != null && time > c.timeMax) return false;
+        }
 
         // weather
         if (c.weather != null) {
