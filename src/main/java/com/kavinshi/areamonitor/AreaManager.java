@@ -152,6 +152,9 @@ public class AreaManager {
         // Execute enter triggers
         AreaTriggerManager.executeEnterTriggers(player, area);
 
+        // Record stats
+        area.recordEntry(player.getGameProfile().getName());
+
     }
 
     private void handleAreaLeave(ServerPlayer player, String areaName) {

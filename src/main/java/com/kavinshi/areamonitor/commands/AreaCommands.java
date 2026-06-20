@@ -19,7 +19,12 @@ import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.GameType;
+import net.minecraftforge.fml.loading.FMLPaths;
 
+import java.io.*;
+import java.nio.file.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -388,5 +393,53 @@ public class AreaCommands {
 
     private static RestrictionSettings copyRestrictions(RestrictionSettings src) {
         return GSON.fromJson(GSON.toJsonTree(src), RestrictionSettings.class);
+    }
+
+    // ==== Stats ====
+
+    public static int showStats(CommandContext<CommandSourceStack> context) {
+        var areas = AreaManager.getInstance().getAllAreas();
+        context.getSource().sendSystemMessage(
+            Component.literal("§6=== Area Stats ==="));
+        for (MonitorArea a : areas) {
+            String lastTime = a.getLastVisitTime() > 0
+                ? new SimpleDateFormat("HH:mm:ss").format(new Date(a.getLastVisitTime()))
+                : "-";
+            context.getSource().sendSystemMessage(
+                Component.literal(String.format("  §e%s §7| entries: §f%d §7| last: §f%s @ %s",
+                    a.getName(), a.getEntryCount(), a.getLastVisitor(), lastTime)));
+        }
+        context.getSource().sendSystemMessage(
+            Component.literal("§7Total areas: " + areas.size()));
+        return 1;
+    }
+
+    // ==== Backup ====
+
+    public static int backupConfigs(CommandContext<CommandSourceStack> context) {
+        try {
+            Path configDir = FMLPaths.CONFIGDIR.get().resolve("areamonitor");
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            Path backupDir = configDir.resolve("backups").resolve("backup_" + timestamp);
+            Files.createDirectories(backupDir);
+
+            String[] files = {"areas.json", "blacklist.json"};
+            int copied = 0;
+            for (String f : files) {
+                Path src = configDir.resolve(f);
+                if (Files.exists(src)) {
+                    Files.copy(src, backupDir.resolve(f));
+                    copied++;
+                }
+            }
+            context.getSource().sendSystemMessage(
+                Component.literal("§a✓ Backup created: " + backupDir.getFileName() + " (" + copied + " files)"));
+            context.getSource().sendSystemMessage(
+                Component.literal("§7  " + backupDir));
+        } catch (Exception e) {
+            context.getSource().sendSystemMessage(
+                Component.literal("§cBackup failed: " + e.getMessage()));
+        }
+        return 1;
     }
 }

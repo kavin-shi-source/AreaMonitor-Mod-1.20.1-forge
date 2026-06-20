@@ -9,6 +9,7 @@ import net.minecraft.world.phys.AABB;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MonitorArea {
     private final String name;
@@ -28,6 +29,10 @@ public class MonitorArea {
     private boolean scheduleWasDisabledBySchedule = false; // transient runtime state
     private Integer scheduleTimeMin = null; // 0-24000 game ticks
     private Integer scheduleTimeMax = null; // 0-24000 game ticks
+    // Stats (runtime only, not persisted)
+    private final AtomicInteger entryCount = new AtomicInteger(0);
+    private String lastVisitor = "-";
+    private long lastVisitTime = 0;
 
     public MonitorArea(String name) {
         this.name = name;
@@ -104,6 +109,16 @@ public class MonitorArea {
     public void setScheduleTimeMin(Integer v) { this.scheduleTimeMin = v; }
     public Integer getScheduleTimeMax() { return scheduleTimeMax; }
     public void setScheduleTimeMax(Integer v) { this.scheduleTimeMax = v; }
+
+    // === Stats ===
+    public int getEntryCount() { return entryCount.get(); }
+    public String getLastVisitor() { return lastVisitor; }
+    public long getLastVisitTime() { return lastVisitTime; }
+    public void recordEntry(String playerName) {
+        entryCount.incrementAndGet();
+        lastVisitor = playerName;
+        lastVisitTime = System.currentTimeMillis();
+    }
 
     /**
      * Evaluate schedule: returns true if area should be enabled based on current game time.

@@ -449,6 +449,16 @@ public class ExtendedCommands {
                             .executes(context -> TriggerCommands.showInfo(
                                 StringArgumentType.getString(context, "area"), false, context))))))
 
+            // --- Stats command ---
+            .then(Commands.literal("stats")
+                .executes(AreaCommands::showStats)
+            )
+
+            // --- Backup command ---
+            .then(Commands.literal("backup")
+                .executes(AreaCommands::backupConfigs)
+            )
+
             // --- GUI command ---
             .then(Commands.literal("gui")
                 .executes(context -> {

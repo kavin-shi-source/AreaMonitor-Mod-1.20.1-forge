@@ -20,6 +20,8 @@
 - **GUI 搜索排序 (v2.1.0-dev)**: 区域列表支持名称模糊搜索和升降序排序
  - **区域调度 (v2.2.0-dev)**: 按游戏内时间段自动启用/禁用区域，支持跨午夜时间范围
  - **区域导出/导入/克隆 (v2.2.0-dev)**: `/areamonitor area export/import/clone` 命令支持区域数据迁移与复制
+ - **区域统计 (v2.2.0-dev)**: `/areamonitor stats` 显示每个区域的进入次数、最后访客、最后访问时间
+ - **配置备份 (v2.2.0-dev)**: `/areamonitor backup` 将配置备份到 config/areamonitor/backups/ 目录
 
 ### 修复
 - 快速链接命令多余前导斜杠修复（`sendCommand` 自动添加 `/`）
