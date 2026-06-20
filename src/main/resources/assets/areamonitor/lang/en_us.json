@@ -349,5 +349,7 @@
   "trigger.potion_set": "§aTrigger potion set: %s",
   "trigger.potion_cleared": "§aTrigger potion cleared",
   "trigger.cooldown_set": "§aTrigger cooldown set to %d ticks",
-  "trigger.debounce_set": "§aTrigger debounce set to %d ticks"
+  "trigger.debounce_set": "§aTrigger debounce set to %d ticks",
+  "gui.prot_whitelist": "Protection Whitelist",
+  "gui.search": "Search..."
 }

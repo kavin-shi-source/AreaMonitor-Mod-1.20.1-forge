@@ -19,6 +19,7 @@ public class MonitorArea {
     private GameType leaveMode;
     private boolean enabled;
     private List<String> whitelist;
+    private List<String> protectionWhitelist; // per-area protection bypass
     private RestrictionSettings restrictions;
     private ProtectionSettings protection = new ProtectionSettings();
     private TriggerConfig enterTrigger = null;
@@ -33,6 +34,7 @@ public class MonitorArea {
         this.leaveMode = GameType.SURVIVAL;
         this.enabled = true;
         this.whitelist = new CopyOnWriteArrayList<>();
+        this.protectionWhitelist = new CopyOnWriteArrayList<>();
         this.restrictions = new RestrictionSettings();
         this.protection = new ProtectionSettings();
     }
@@ -64,6 +66,15 @@ public class MonitorArea {
             lowercaseList.add(name.toLowerCase());
         }
         this.whitelist = new CopyOnWriteArrayList<>(lowercaseList);
+    }
+
+    public List<String> getProtectionWhitelist() { return protectionWhitelist; }
+    public void setProtectionWhitelist(List<String> whitelist) {
+        List<String> lowercaseList = new ArrayList<>();
+        for (String name : whitelist) {
+            lowercaseList.add(name.toLowerCase());
+        }
+        this.protectionWhitelist = new CopyOnWriteArrayList<>(lowercaseList);
     }
 
     public RestrictionSettings getRestrictions() { return restrictions; }

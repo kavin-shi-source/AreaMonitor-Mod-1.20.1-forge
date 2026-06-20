@@ -78,7 +78,8 @@ public class S2CAreaListPacket {
         String enterTriggerJson,
         String leaveTriggerJson,
         String whitelistJson,
-        String restrictionsJson
+        String restrictionsJson,
+        String protWhitelistJson
     ) {
         private static final Gson TGSON = new Gson();
 
@@ -102,7 +103,8 @@ public class S2CAreaListPacket {
                  area.hasEnterTrigger() ? TGSON.toJson(area.getEnterTrigger()) : null,
                  area.hasLeaveTrigger() ? TGSON.toJson(area.getLeaveTrigger()) : null,
                  area.getWhitelist().isEmpty() ? null : TGSON.toJson(area.getWhitelist()),
-                 TGSON.toJson(area.getRestrictions()));
+                 TGSON.toJson(area.getRestrictions()),
+                 area.getProtectionWhitelist().isEmpty() ? null : TGSON.toJson(area.getProtectionWhitelist()));
         }
 
         public void encode(FriendlyByteBuf buf) {
@@ -123,6 +125,7 @@ public class S2CAreaListPacket {
             writeNullableJson(buf, leaveTriggerJson);
             writeNullableJson(buf, whitelistJson);
             writeNullableJson(buf, restrictionsJson);
+            writeNullableJson(buf, protWhitelistJson);
         }
 
         public static AreaEntry decode(FriendlyByteBuf buf) {
@@ -139,7 +142,7 @@ public class S2CAreaListPacket {
                 (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0,
                 (bits & 64) != 0, (bits & 128) != 0, (bits & 256) != 0,
                 readNullableJson(buf), readNullableJson(buf),
-                readNullableJson(buf), readNullableJson(buf));
+                readNullableJson(buf), readNullableJson(buf), readNullableJson(buf));
         }
 
         private static void writeNullableJson(FriendlyByteBuf buf, String json) {

@@ -349,5 +349,7 @@
   "trigger.potion_set": "§a已设置触发药水效果: %s",
   "trigger.potion_cleared": "§a触发药水效果已清除",
   "trigger.cooldown_set": "§a触发器冷却时间设置为 %d 刻",
-  "trigger.debounce_set": "§a触发器延时设置为 %d 刻"
+  "trigger.debounce_set": "§a触发器延时设置为 %d 刻",
+  "gui.prot_whitelist": "保护白名单",
+  "gui.search": "搜索..."
 }

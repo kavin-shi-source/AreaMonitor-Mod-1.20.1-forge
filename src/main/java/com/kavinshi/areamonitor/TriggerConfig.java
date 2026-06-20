@@ -27,6 +27,7 @@ public class TriggerConfig {
     private int cooldownTicks = 0;
     @SerializedName("debounce")
     private int debounceTicks = 0;
+    private TriggerCondition condition = new TriggerCondition();
 
     // Getters and Setters
     public List<String> getCommands() { return commands; }
@@ -65,11 +66,36 @@ public class TriggerConfig {
     public int getDebounceTicks() { return debounceTicks; }
     public void setDebounceTicks(int v) { this.debounceTicks = v; }
 
+    public TriggerCondition getCondition() { return condition; }
+    public void setCondition(TriggerCondition v) { this.condition = v != null ? v : new TriggerCondition(); }
+
     /**
      * Check if this trigger has any actionable configuration.
      */
     public boolean hasAnyAction() {
         return !commands.isEmpty() || soundEvent != null || titleMain != null
             || teleportTarget != null || actionBar != null || potion != null;
+    }
+
+    /**
+     * Condition that must be met for the trigger to fire.
+     * All non-null fields are AND-ed together.
+     */
+    public static class TriggerCondition {
+        /** Player must have this item (resource location). */
+        public String playerHasItem = null;
+        /** Min game time (0-24000 ticks). */
+        public Integer timeMin = null;
+        /** Max game time (0-24000 ticks). */
+        public Integer timeMax = null;
+        /** Required weather: "clear", "rain", "thunder". */
+        public String weather = null;
+        /** Minimum online players on the server. */
+        public Integer minPlayers = null;
+
+        public boolean isActive() {
+            return playerHasItem != null || timeMin != null || timeMax != null
+                || weather != null || minPlayers != null;
+        }
     }
 }

@@ -132,9 +132,12 @@ public class AreaProtectionManager {
         if (currentAreas.isEmpty()) return false;
 
         AreaManager am = AreaManager.getInstance();
+        String playerName = player.getGameProfile().getName().toLowerCase();
         for (String areaName : currentAreas) {
             MonitorArea area = am.getArea(areaName);
             if (area == null || !area.isEnabled()) continue;
+            // Per-area protection whitelist: player bypasses protection but still gets game mode changes
+            if (area.getProtectionWhitelist().contains(playerName)) continue;
             ProtectionSettings p = area.getProtection();
             switch (protectionType) {
                 case "blockBreak": if (p.isBlockBreak()) return true; break;

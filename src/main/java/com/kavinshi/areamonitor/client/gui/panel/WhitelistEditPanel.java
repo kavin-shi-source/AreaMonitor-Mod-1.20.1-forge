@@ -24,15 +24,21 @@ public class WhitelistEditPanel extends Screen {
     private final Screen returnScreen;
     private final AreaManagementScreen mainScreen;
     private final S2CAreaListPacket.AreaEntry entry;
+    private final boolean protMode;  // true = protection whitelist, false = global whitelist
     private final List<String> players = new ArrayList<>();
     private EditBox nameInput;
     private int wx, wy, ww, wh, lx;
 
     public WhitelistEditPanel(Screen returnScreen, AreaManagementScreen mainScreen, S2CAreaListPacket.AreaEntry entry) {
-        super(Component.literal(LocalizationManager.translate("gui.whitelist_settings") + ": " + entry.name()));
-        this.returnScreen = returnScreen; this.mainScreen = mainScreen; this.entry = entry;
-        if (entry.whitelistJson() != null) try {
-            JsonArray arr = GSON.fromJson(entry.whitelistJson(), JsonArray.class);
+        this(returnScreen, mainScreen, entry, false);
+    }
+
+    public WhitelistEditPanel(Screen returnScreen, AreaManagementScreen mainScreen, S2CAreaListPacket.AreaEntry entry, boolean protMode) {
+        super(Component.literal(LocalizationManager.translate(protMode ? "gui.prot_whitelist" : "gui.whitelist_settings") + ": " + entry.name()));
+        this.returnScreen = returnScreen; this.mainScreen = mainScreen; this.entry = entry; this.protMode = protMode;
+        String json = protMode ? entry.protWhitelistJson() : entry.whitelistJson();
+        if (json != null) try {
+            JsonArray arr = GSON.fromJson(json, JsonArray.class);
             for (var e : arr) players.add(e.getAsString());
         } catch (Exception ignored) {}
     }
@@ -73,7 +79,8 @@ public class WhitelistEditPanel extends Screen {
     private void rebuild() { clearWidgets(); init(); }
     private void sendUpdate() {
         var json = new JsonObject(); JsonArray arr = new JsonArray();
-        for (String p : players) arr.add(p); json.add("whitelist", arr);
+        for (String p : players) arr.add(p);
+        json.add(protMode ? "protWhitelist" : "whitelist", arr);
         ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.UPDATE, entry.name(), json.toString()));
     }
 

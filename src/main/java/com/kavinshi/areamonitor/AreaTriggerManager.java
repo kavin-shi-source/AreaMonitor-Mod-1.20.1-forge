@@ -135,6 +135,9 @@ public class AreaTriggerManager {
      * Execute all configured trigger actions for a player.
      */
     private static void executeTrigger(ServerPlayer player, TriggerConfig config) {
+        // 0. Check conditions
+        if (!checkConditions(player, config.getCondition())) return;
+
         // 1. Execute commands
         MinecraftServer server = player.getServer();
         if (server != null && !config.getCommands().isEmpty()) {
@@ -222,5 +225,47 @@ public class AreaTriggerManager {
                 AreaMonitorMod.LOGGER.error("Error teleporting player via trigger", e);
             }
         }
+    }
+
+    /**
+     * Evaluate trigger conditions. Returns true if all conditions pass.
+     */
+    private static boolean checkConditions(ServerPlayer player, TriggerConfig.TriggerCondition c) {
+        if (c == null || !c.isActive()) return true;
+
+        // playerHasItem: check inventory
+        if (c.playerHasItem != null && !c.playerHasItem.isEmpty()) {
+            ResourceLocation itemId = ResourceLocation.tryParse(c.playerHasItem);
+            if (itemId != null) {
+                var item = BuiltInRegistries.ITEM.get(itemId);
+                if (item != null) {
+                    boolean hasItem = false;
+                    for (var stack : player.getInventory().items) {
+                        if (stack.getItem() == item) { hasItem = true; break; }
+                    }
+                    if (!hasItem) return false;
+                }
+            }
+        }
+
+        // timeMin/timeMax: check game time
+        long time = player.level().getDayTime() % 24000;
+        if (c.timeMin != null && time < c.timeMin) return false;
+        if (c.timeMax != null && time > c.timeMax) return false;
+
+        // weather
+        if (c.weather != null) {
+            String actual = player.level().isThundering() ? "thunder" :
+                player.level().isRaining() ? "rain" : "clear";
+            if (!actual.equals(c.weather)) return false;
+        }
+
+        // minPlayers
+        if (c.minPlayers != null) {
+            var server = player.getServer();
+            if (server != null && server.getPlayerCount() < c.minPlayers) return false;
+        }
+
+        return true;
     }
 }

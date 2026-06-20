@@ -35,9 +35,13 @@ public class AreaManagementScreen extends Screen {
     private static final int ACCENT_RED    = 0x608C3E3E; // muted red
 
     private List<S2CAreaListPacket.AreaEntry> areas = new ArrayList<>();
+    private List<S2CAreaListPacket.AreaEntry> filteredAreas = new ArrayList<>();
     private int scrollOffset = 0;
     private boolean creating = false;
     private EditBox nameInput;
+    private EditBox searchInput;
+    private String searchTerm = "";
+    private boolean sortAsc = true; // toggle sort direction
 
     // Toast feedback
     private String toastMessage = "";
@@ -69,7 +73,7 @@ public class AreaManagementScreen extends Screen {
         winY = (this.height - winH) / 2;
         listLeft   = winX + 12;
         listWidth  = Math.min(winW - 24 - 100, 380);
-        listTop    = winY + 44;
+        listTop    = winY + 52; // extra room for search bar
         itemsPerPage = Math.max(3, (winH - 120) / itemHeight);
         btnY = winY + winH - 40;
     }
@@ -77,12 +81,35 @@ public class AreaManagementScreen extends Screen {
     public void updateAreaList(List<S2CAreaListPacket.AreaEntry> newAreas) {
         this.areas = newAreas;
         this.scrollOffset = 0;
+        applyFilterAndSort();
         rebuildRows();
+    }
+
+    private void applyFilterAndSort() {
+        // Sort
+        filteredAreas = new ArrayList<>(areas);
+        filteredAreas.sort((a, b) -> sortAsc ? a.name().compareToIgnoreCase(b.name()) : b.name().compareToIgnoreCase(a.name()));
+        // Filter
+        if (!searchTerm.isEmpty()) {
+            String term = searchTerm.toLowerCase();
+            filteredAreas.removeIf(e -> !e.name().toLowerCase().contains(term));
+        }
     }
 
     private void rebuildRows() {
         this.clearWidgets();
         int cx = winX + winW / 2;
+
+        // Search bar
+        searchInput = new EditBox(this.font, listLeft, listTop - 22, 120, 14, Component.literal("Search..."));
+        searchInput.setMaxLength(32);
+        searchInput.setValue(searchTerm);
+        searchInput.setResponder(s -> { searchTerm = s; applyFilterAndSort(); scrollOffset = 0; rebuildRows(); });
+        addRenderableWidget(searchInput);
+
+        // Sort toggle
+        String sortIcon = sortAsc ? "\u25B2" : "\u25BC"; // ▲ / ▼
+        glassBtn(sortIcon, listLeft + 126, listTop - 24, 22, () -> { sortAsc = !sortAsc; applyFilterAndSort(); rebuildRows(); });
 
         if (creating) {
             nameInput = new EditBox(this.font, cx - 110, btnY - 23, 220, 18,
@@ -98,10 +125,10 @@ public class AreaManagementScreen extends Screen {
         glassBtn(LocalizationManager.translate("gui.close"), cx + 50, btnY, 70, this::onClose);
 
         // Area rows
-        int visible = Math.min(Math.max(0, areas.size() - scrollOffset), itemsPerPage);
+        int visible = Math.min(Math.max(0, filteredAreas.size() - scrollOffset), itemsPerPage);
         for (int i = 0; i < visible; i++) {
             int idx = scrollOffset + i;
-            S2CAreaListPacket.AreaEntry entry = areas.get(idx);
+            S2CAreaListPacket.AreaEntry entry = filteredAreas.get(idx);
             int y = listTop + 2 + i * itemHeight;
             int infoW = listWidth - 70;
 
@@ -188,16 +215,16 @@ public class AreaManagementScreen extends Screen {
         g.fill(listLeft - 4, listTop - 1, listLeft + hdrW, listTop, BORDER_GOLD);
         g.drawString(this.font, LocalizationManager.translate("gui.header_info"), listLeft, listTop - 13, TEXT_DIM);
         g.drawString(this.font, LocalizationManager.translate("gui.header_action"), listLeft + listWidth - 50, listTop - 13, TEXT_DIM);
-        if (!areas.isEmpty()) {
-            String info = (scrollOffset + 1) + "-" + Math.min(scrollOffset + itemsPerPage, areas.size()) + " / " + areas.size();
+        if (!filteredAreas.isEmpty()) {
+            String info = (scrollOffset + 1) + "-" + Math.min(scrollOffset + itemsPerPage, filteredAreas.size()) + " / " + filteredAreas.size();
             g.drawString(this.font, info, listLeft + listWidth + 10, listTop - 13, TEXT_DIM);
         }
 
         // === Area rows ===
-        int visible = Math.min(Math.max(0, areas.size() - scrollOffset), itemsPerPage);
+        int visible = Math.min(Math.max(0, filteredAreas.size() - scrollOffset), itemsPerPage);
         for (int i = 0; i < visible; i++) {
             int idx = scrollOffset + i;
-            S2CAreaListPacket.AreaEntry entry = areas.get(idx);
+            S2CAreaListPacket.AreaEntry entry = filteredAreas.get(idx);
             int rowY = listTop + i * itemHeight;
             int rowBg = (i % 2 == 0) ? 0 : ROW_ALT;
             g.fill(listLeft - 2, rowY, listLeft + listWidth + 85, rowY + itemHeight - 1, rowBg);
@@ -228,7 +255,7 @@ public class AreaManagementScreen extends Screen {
     public boolean mouseScrolled(double mx, double my, double delta) {
         if (delta > 0 && scrollOffset > 0) {
             scrollOffset--; rebuildRows();
-        } else if (delta < 0 && scrollOffset < areas.size() - itemsPerPage) {
+        } else if (delta < 0 && scrollOffset < filteredAreas.size() - itemsPerPage) {
             scrollOffset++; rebuildRows();
         }
         return true;

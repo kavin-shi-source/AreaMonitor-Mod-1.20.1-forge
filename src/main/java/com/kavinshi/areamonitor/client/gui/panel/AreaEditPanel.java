@@ -120,6 +120,8 @@ public class AreaEditPanel extends Screen {
             () -> { if (this.minecraft != null) this.minecraft.setScreen(new TriggerEditPanel(AreaEditPanel.this, parentScreen, entry)); }); y += 20;
         zbtn(lx, y, vw + 40, "+ " + LocalizationManager.translate("gui.whitelist_settings"),
             () -> { if (this.minecraft != null) this.minecraft.setScreen(new WhitelistEditPanel(AreaEditPanel.this, parentScreen, entry)); }); y += 20;
+        zbtn(lx, y, vw + 40, "+ " + LocalizationManager.translate("gui.prot_whitelist"),
+            () -> { if (this.minecraft != null) this.minecraft.setScreen(new WhitelistEditPanel(AreaEditPanel.this, parentScreen, entry, true)); }); y += 20;
         zbtn(lx, y, vw + 40, "+ " + LocalizationManager.translate("gui.restriction_settings"),
             () -> { if (this.minecraft != null) this.minecraft.setScreen(new RestrictionEditPanel(AreaEditPanel.this, parentScreen, entry)); });
         y += 28;

@@ -148,6 +148,12 @@ public class C2SAreaActionPacket {
                 for (var e : obj.getAsJsonArray("whitelist"))
                     area.getWhitelist().add(e.getAsString().toLowerCase());
             }
+            // Protection whitelist update
+            if (obj.has("protWhitelist") && obj.get("protWhitelist").isJsonArray()) {
+                area.getProtectionWhitelist().clear();
+                for (var e : obj.getAsJsonArray("protWhitelist"))
+                    area.getProtectionWhitelist().add(e.getAsString().toLowerCase());
+            }
             // Restrictions update
             if (obj.has("restrictions")) updateRestrictions(area.getRestrictions(), obj.getAsJsonObject("restrictions"));
         } catch (Exception e) {
@@ -174,6 +180,11 @@ public class C2SAreaActionPacket {
         if (obj.has("potionAmplifier")) tc.setPotionAmplifier(obj.get("potionAmplifier").getAsInt());
         if (obj.has("cooldownTicks")) tc.setCooldownTicks(obj.get("cooldownTicks").getAsInt());
         if (obj.has("debounceTicks")) tc.setDebounceTicks(obj.get("debounceTicks").getAsInt());
+        // Condition update
+        if (obj.has("condition")) {
+            TriggerConfig.TriggerCondition cond = GSON.fromJson(obj.get("condition"), TriggerConfig.TriggerCondition.class);
+            if (cond != null) tc.setCondition(cond);
+        }
     }
 
     private static void updateRestrictions(RestrictionSettings rs, JsonObject obj) {
