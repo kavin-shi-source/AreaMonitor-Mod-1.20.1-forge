@@ -79,7 +79,8 @@ public class S2CAreaListPacket {
         String leaveTriggerJson,
         String whitelistJson,
         String restrictionsJson,
-        String protWhitelistJson
+        String protWhitelistJson,
+        String scheduleJson
     ) {
         private static final Gson TGSON = new Gson();
 
@@ -104,7 +105,8 @@ public class S2CAreaListPacket {
                  area.hasLeaveTrigger() ? TGSON.toJson(area.getLeaveTrigger()) : null,
                  area.getWhitelist().isEmpty() ? null : TGSON.toJson(area.getWhitelist()),
                  TGSON.toJson(area.getRestrictions()),
-                 area.getProtectionWhitelist().isEmpty() ? null : TGSON.toJson(area.getProtectionWhitelist()));
+                 area.getProtectionWhitelist().isEmpty() ? null : TGSON.toJson(area.getProtectionWhitelist()),
+                 scheduleToJson(area));
         }
 
         public void encode(FriendlyByteBuf buf) {
@@ -126,6 +128,7 @@ public class S2CAreaListPacket {
             writeNullableJson(buf, whitelistJson);
             writeNullableJson(buf, restrictionsJson);
             writeNullableJson(buf, protWhitelistJson);
+            writeNullableJson(buf, scheduleJson);
         }
 
         public static AreaEntry decode(FriendlyByteBuf buf) {
@@ -141,7 +144,7 @@ public class S2CAreaListPacket {
                 (bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0,
                 (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0,
                 (bits & 64) != 0, (bits & 128) != 0, (bits & 256) != 0,
-                readNullableJson(buf), readNullableJson(buf),
+                readNullableJson(buf), readNullableJson(buf), readNullableJson(buf),
                 readNullableJson(buf), readNullableJson(buf), readNullableJson(buf));
         }
 
@@ -153,6 +156,15 @@ public class S2CAreaListPacket {
 
         private static String readNullableJson(FriendlyByteBuf buf) {
             return buf.readBoolean() ? buf.readUtf() : null;
+        }
+
+        private static String scheduleToJson(MonitorArea area) {
+            if (!area.isScheduleEnabled()) return null;
+            var obj = new com.google.gson.JsonObject();
+            obj.addProperty("enabled", true);
+            if (area.getScheduleTimeMin() != null) obj.addProperty("timeMin", area.getScheduleTimeMin());
+            if (area.getScheduleTimeMax() != null) obj.addProperty("timeMax", area.getScheduleTimeMax());
+            return obj.toString();
         }
     }
 }

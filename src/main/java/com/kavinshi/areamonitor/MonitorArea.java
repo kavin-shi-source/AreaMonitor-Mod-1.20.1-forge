@@ -24,6 +24,10 @@ public class MonitorArea {
     private ProtectionSettings protection = new ProtectionSettings();
     private TriggerConfig enterTrigger = null;
     private TriggerConfig leaveTrigger = null;
+    private boolean scheduleEnabled = false;
+    private boolean scheduleWasDisabledBySchedule = false; // transient runtime state
+    private Integer scheduleTimeMin = null; // 0-24000 game ticks
+    private Integer scheduleTimeMax = null; // 0-24000 game ticks
 
     public MonitorArea(String name) {
         this.name = name;
@@ -90,6 +94,31 @@ public class MonitorArea {
 
     public boolean hasEnterTrigger() { return enterTrigger != null && enterTrigger.hasAnyAction(); }
     public boolean hasLeaveTrigger() { return leaveTrigger != null && leaveTrigger.hasAnyAction(); }
+
+    // === Schedule ===
+    public boolean isScheduleEnabled() { return scheduleEnabled; }
+    public void setScheduleEnabled(boolean v) { this.scheduleEnabled = v; }
+    public boolean isScheduleWasDisabledBySchedule() { return scheduleWasDisabledBySchedule; }
+    public void setScheduleWasDisabledBySchedule(boolean v) { this.scheduleWasDisabledBySchedule = v; }
+    public Integer getScheduleTimeMin() { return scheduleTimeMin; }
+    public void setScheduleTimeMin(Integer v) { this.scheduleTimeMin = v; }
+    public Integer getScheduleTimeMax() { return scheduleTimeMax; }
+    public void setScheduleTimeMax(Integer v) { this.scheduleTimeMax = v; }
+
+    /**
+     * Evaluate schedule: returns true if area should be enabled based on current game time.
+     */
+    public boolean evaluateSchedule(long gameTime) {
+        if (!scheduleEnabled || scheduleTimeMin == null || scheduleTimeMax == null) return enabled;
+        long time = gameTime % 24000;
+        int min = scheduleTimeMin, max = scheduleTimeMax;
+        if (min <= max) {
+            return time >= min && time <= max;
+        } else {
+            // cross-midnight
+            return time >= min || time <= max;
+        }
+    }
 
     public boolean isPlayerInArea(PlayerPosition position) {
         if (!position.getDimension().equals(dimension)) {

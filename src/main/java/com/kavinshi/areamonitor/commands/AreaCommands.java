@@ -5,8 +5,14 @@ import com.kavinshi.areamonitor.AreaMonitorMod;
 import com.kavinshi.areamonitor.ConfigManager;
 import com.kavinshi.areamonitor.LocalizationManager;
 import com.kavinshi.areamonitor.MonitorArea;
+import com.kavinshi.areamonitor.ProtectionSettings;
+import com.kavinshi.areamonitor.TriggerConfig;
+import com.kavinshi.areamonitor.model.RestrictionSettings;
 import com.kavinshi.areamonitor.util.GameModeUtils;
 import com.kavinshi.areamonitor.util.MessageUtils;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
@@ -23,6 +29,7 @@ import java.util.concurrent.CompletableFuture;
  */
 public class AreaCommands {
     public static final List<String> GAME_MODES = List.of("survival", "creative", "adventure", "spectator");
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private AreaCommands() {}
 
@@ -229,5 +236,148 @@ public class AreaCommands {
         MessageUtils.sendSuccess(context.getSource(), "area.leave_mode_set", true, areaName, modeLower);
 
         return 1;
+    }
+
+    // ==== Export / Import / Clone ====
+
+    public static int exportArea(String areaName, CommandContext<CommandSourceStack> context) {
+        MonitorArea area = AreaManager.getInstance().getArea(areaName);
+        if (area == null) {
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
+            return 0;
+        }
+        var json = areaToJson(area);
+        context.getSource().sendSystemMessage(
+            Component.literal("§6=== Export: " + areaName + " ==="));
+        context.getSource().sendSystemMessage(
+            Component.literal(GSON.toJson(json)));
+        return 1;
+    }
+
+    public static int importArea(String areaName, String jsonStr, CommandContext<CommandSourceStack> context) {
+        if (AreaManager.getInstance().getArea(areaName) != null) {
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.exists", areaName);
+            return 0;
+        }
+        try {
+            JsonObject obj = GSON.fromJson(jsonStr, JsonObject.class);
+            MonitorArea area = new MonitorArea(areaName);
+            applyJsonToArea(area, obj);
+            AreaManager.getInstance().addArea(area);
+            ConfigManager.saveAreasConfig();
+            context.getSource().sendSystemMessage(
+                Component.literal("§a✓ Area '" + areaName + "' imported successfully"));
+        } catch (Exception e) {
+            context.getSource().sendSystemMessage(
+                Component.literal("§cFailed to import area: " + e.getMessage()));
+            return 0;
+        }
+        return 1;
+    }
+
+    public static int cloneArea(String srcName, String targetName, CommandContext<CommandSourceStack> context) {
+        MonitorArea src = AreaManager.getInstance().getArea(srcName);
+        if (src == null) {
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", srcName);
+            return 0;
+        }
+        if (AreaManager.getInstance().getArea(targetName) != null) {
+            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.exists", targetName);
+            return 0;
+        }
+        MonitorArea clone = new MonitorArea(targetName);
+        clone.setDisplayName(targetName);
+        clone.setDimension(src.getDimension());
+        clone.setBounds(src.getBounds());
+        clone.setEnterMode(src.getEnterMode());
+        clone.setLeaveMode(src.getLeaveMode());
+        clone.setEnabled(src.isEnabled());
+        clone.setProtection(copyProtection(src.getProtection()));
+        clone.setEnterTrigger(copyTrigger(src.getEnterTrigger()));
+        clone.setLeaveTrigger(copyTrigger(src.getLeaveTrigger()));
+        clone.setRestrictions(copyRestrictions(src.getRestrictions()));
+        AreaManager.getInstance().addArea(clone);
+        ConfigManager.saveAreasConfig();
+        context.getSource().sendSystemMessage(
+            Component.literal("§a✓ Cloned '" + srcName + "' → '" + targetName + "'"));
+        return 1;
+    }
+
+    private static JsonObject areaToJson(MonitorArea area) {
+        var j = new JsonObject();
+        j.addProperty("displayName", area.getDisplayName());
+        j.addProperty("dimension", area.getDimension());
+        j.addProperty("enterMode", area.getEnterMode().getName());
+        j.addProperty("leaveMode", area.getLeaveMode().getName());
+        j.addProperty("enabled", area.isEnabled());
+        // bounds
+        if (area.getBounds() instanceof MonitorArea.RectangleBounds r) {
+            j.addProperty("boundsType", "RECTANGLE");
+            j.addProperty("minX", r.getMinX()); j.addProperty("minZ", r.getMinZ());
+            j.addProperty("maxX", r.getMaxX()); j.addProperty("maxZ", r.getMaxZ());
+        } else if (area.getBounds() instanceof MonitorArea.CircleBounds c) {
+            j.addProperty("boundsType", "CIRCLE");
+            j.addProperty("centerX", c.getCenterX()); j.addProperty("centerZ", c.getCenterZ());
+            j.addProperty("radius", c.getRadius());
+        }
+        j.add("protection", GSON.toJsonTree(area.getProtection()));
+        if (area.hasEnterTrigger()) j.add("enterTrigger", GSON.toJsonTree(area.getEnterTrigger()));
+        if (area.hasLeaveTrigger()) j.add("leaveTrigger", GSON.toJsonTree(area.getLeaveTrigger()));
+        j.add("whitelist", GSON.toJsonTree(area.getWhitelist()));
+        j.add("restrictions", GSON.toJsonTree(area.getRestrictions()));
+        j.add("protectionWhitelist", GSON.toJsonTree(area.getProtectionWhitelist()));
+        if (area.isScheduleEnabled()) {
+            var sched = new JsonObject();
+            sched.addProperty("enabled", true);
+            if (area.getScheduleTimeMin() != null) sched.addProperty("timeMin", area.getScheduleTimeMin());
+            if (area.getScheduleTimeMax() != null) sched.addProperty("timeMax", area.getScheduleTimeMax());
+            j.add("schedule", sched);
+        }
+        return j;
+    }
+
+    private static void applyJsonToArea(MonitorArea area, JsonObject obj) {
+        if (obj.has("displayName")) area.setDisplayName(obj.get("displayName").getAsString());
+        if (obj.has("dimension")) area.setDimension(obj.get("dimension").getAsString());
+        if (obj.has("enterMode")) area.setEnterMode(GameType.byName(obj.get("enterMode").getAsString()));
+        if (obj.has("leaveMode")) area.setLeaveMode(GameType.byName(obj.get("leaveMode").getAsString()));
+        if (obj.has("enabled")) area.setEnabled(obj.get("enabled").getAsBoolean());
+        if (obj.has("boundsType")) {
+            String t = obj.get("boundsType").getAsString();
+            if ("RECTANGLE".equals(t) && obj.has("minX"))
+                area.setBounds(new MonitorArea.RectangleBounds(obj.get("minX").getAsInt(), obj.get("minZ").getAsInt(), obj.get("maxX").getAsInt(), obj.get("maxZ").getAsInt()));
+            else if ("CIRCLE".equals(t) && obj.has("centerX"))
+                area.setBounds(new MonitorArea.CircleBounds(obj.get("centerX").getAsInt(), obj.get("centerZ").getAsInt(), obj.get("radius").getAsInt()));
+        }
+        if (obj.has("protection")) area.setProtection(GSON.fromJson(obj.get("protection"), ProtectionSettings.class));
+        if (obj.has("enterTrigger")) area.setEnterTrigger(GSON.fromJson(obj.get("enterTrigger"), TriggerConfig.class));
+        if (obj.has("leaveTrigger")) area.setLeaveTrigger(GSON.fromJson(obj.get("leaveTrigger"), TriggerConfig.class));
+        if (obj.has("whitelist") && obj.get("whitelist").isJsonArray()) {
+            area.getWhitelist().clear();
+            for (var e : obj.getAsJsonArray("whitelist")) area.getWhitelist().add(e.getAsString().toLowerCase());
+        }
+        if (obj.has("restrictions")) area.setRestrictions(GSON.fromJson(obj.get("restrictions"), RestrictionSettings.class));
+        if (obj.has("protectionWhitelist") && obj.get("protectionWhitelist").isJsonArray()) {
+            for (var e : obj.getAsJsonArray("protectionWhitelist")) area.getProtectionWhitelist().add(e.getAsString().toLowerCase());
+        }
+    }
+
+    private static ProtectionSettings copyProtection(ProtectionSettings src) {
+        var p = new ProtectionSettings();
+        p.setBlockBreak(src.isBlockBreak()); p.setBlockPlace(src.isBlockPlace());
+        p.setBlockInteract(src.isBlockInteract()); p.setPvp(src.isPvp());
+        p.setExplosion(src.isExplosion()); p.setEntityDamage(src.isEntityDamage());
+        p.setContainerInteract(src.isContainerInteract()); p.setFluidPlace(src.isFluidPlace());
+        p.setItemDrop(src.isItemDrop());
+        return p;
+    }
+
+    private static TriggerConfig copyTrigger(TriggerConfig src) {
+        if (src == null || !src.hasAnyAction()) return null;
+        return GSON.fromJson(GSON.toJsonTree(src), TriggerConfig.class);
+    }
+
+    private static RestrictionSettings copyRestrictions(RestrictionSettings src) {
+        return GSON.fromJson(GSON.toJsonTree(src), RestrictionSettings.class);
     }
 }

@@ -77,15 +77,14 @@ v2.0.4 ──→ v2.1.0 ──→ v2.2.0 ──→ v3.0.0
 > 目标：增加面向服务器管理员的实用高级功能。
 
 ### 区域调度
-- [ ] **时间调度**：区域按时间段自动启用/禁用（如 PVP 仅在周末开启）
+- [x] **时间调度**：区域按时间段自动启用/禁用（如 PVP 仅在周末开启）
 - [ ] **条件激活**：基于在线人数 / 特定玩家存在 / 服务器状态的条件激活
 - [ ] **区域链**：区域间顺序触发（A 区 → B 区 → C 区单向流）
 
 ### 数据与导入导出
-- [ ] **区域导出**：`/areamonitor area export <名称>` 导出单个区域为 JSON
-- [ ] **区域导入**：`/areamonitor area import <文件>` 从 JSON 导入区域
-- [ ] **全量备份**：`/areamonitor backup` 一键备份所有配置
-- [ ] **区域克隆**：`/areamonitor area clone <源> <目标>` 快速复制区域配置
+- [x] **区域导出**：`/areamonitor area export <名称>` 导出单个区域为 JSON
+ - [x] **区域导入**：`/areamonitor area import <名称> <JSON>` 从 JSON 导入区域
+ - [x] **区域克隆**：`/areamonitor area clone <源> <目标>` 快速复制区域配置
 
 ### 第三方集成
 - [ ] **WorldEdit 选区兼容**：`//wand` 选区直接用于创建 AreaMonitor 区域

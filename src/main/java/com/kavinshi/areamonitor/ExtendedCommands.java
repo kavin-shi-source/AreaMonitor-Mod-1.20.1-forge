@@ -165,8 +165,32 @@ public class ExtendedCommands {
                                 StringArgumentType.getString(context, "mode"),
                                 context
                             ))))
+                    )
+                    .then(Commands.literal("export")
+                        .then(Commands.argument("name", StringArgumentType.string())
+                            .suggests(AreaCommands::suggestAreaNames)
+                            .executes(context -> AreaCommands.exportArea(
+                                StringArgumentType.getString(context, "name"),
+                                context
+                            ))))
+                    .then(Commands.literal("import")
+                        .then(Commands.argument("name", StringArgumentType.string())
+                            .then(Commands.argument("json", StringArgumentType.greedyString())
+                                .executes(context -> AreaCommands.importArea(
+                                    StringArgumentType.getString(context, "name"),
+                                    StringArgumentType.getString(context, "json"),
+                                    context
+                                )))))
+                    .then(Commands.literal("clone")
+                        .then(Commands.argument("source", StringArgumentType.string())
+                            .suggests(AreaCommands::suggestAreaNames)
+                            .then(Commands.argument("target", StringArgumentType.string())
+                                .executes(context -> AreaCommands.cloneArea(
+                                    StringArgumentType.getString(context, "source"),
+                                    StringArgumentType.getString(context, "target"),
+                                    context
+                                )))))
                 )
-            )
 
             // --- Visual commands ---
             .then(Commands.literal("visual")

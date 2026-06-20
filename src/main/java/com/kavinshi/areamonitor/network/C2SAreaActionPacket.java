@@ -154,6 +154,8 @@ public class C2SAreaActionPacket {
                 for (var e : obj.getAsJsonArray("protWhitelist"))
                     area.getProtectionWhitelist().add(e.getAsString().toLowerCase());
             }
+            // Schedule update
+            if (obj.has("schedule")) applySchedule(area, obj.getAsJsonObject("schedule"));
             // Restrictions update
             if (obj.has("restrictions")) updateRestrictions(area.getRestrictions(), obj.getAsJsonObject("restrictions"));
         } catch (Exception e) {
@@ -201,5 +203,19 @@ public class C2SAreaActionPacket {
             for (var e : obj.getAsJsonArray("blockedCommands"))
                 rs.getBlockedCommands().add(e.getAsString());
         }
+    }
+
+    private static void applySchedule(MonitorArea area, JsonObject obj) {
+        if (obj == null || obj.isJsonNull()) {
+            area.setScheduleEnabled(false);
+            return;
+        }
+        area.setScheduleEnabled(obj.has("enabled") && obj.get("enabled").getAsBoolean());
+        if (obj.has("timeMin") && !obj.get("timeMin").isJsonNull())
+            area.setScheduleTimeMin(obj.get("timeMin").getAsInt());
+        else area.setScheduleTimeMin(null);
+        if (obj.has("timeMax") && !obj.get("timeMax").isJsonNull())
+            area.setScheduleTimeMax(obj.get("timeMax").getAsInt());
+        else area.setScheduleTimeMax(null);
     }
 }

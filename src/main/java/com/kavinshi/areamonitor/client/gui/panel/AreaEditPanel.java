@@ -24,9 +24,11 @@ public class AreaEditPanel extends Screen {
     private final S2CAreaListPacket.AreaEntry entry;
     private EditBox displayNameInput;
     private EditBox bx1, bz1, bx2, bz2;
-    private boolean enabled, rectangleMode = true, protectionExpanded = false;
+    private boolean enabled, rectangleMode = true, protectionExpanded = false, schedExpanded = false;
     private boolean protBreak, protPlace, protInteract, protPvp, protExplosion, protDamage;
     private boolean protContainer, protFluid, protItemDrop;
+    private boolean schedEnabled;
+    private EditBox schedMin, schedMax;
 
     private static final List<String> DIMENSIONS = List.of("minecraft:overworld", "minecraft:the_nether", "minecraft:the_end");
     private static final List<String> GAME_MODES = List.of("survival", "creative", "adventure", "spectator");
@@ -53,6 +55,11 @@ public class AreaEditPanel extends Screen {
         this.protExplosion = entry.protExplosion(); this.protDamage = entry.protEntityDamage();
         this.protContainer = entry.protContainerInteract(); this.protFluid = entry.protFluidPlace();
         this.protItemDrop = entry.protItemDrop();
+        // schedule
+        if (entry.scheduleJson() != null) try {
+            var sched = new com.google.gson.Gson().fromJson(entry.scheduleJson(), com.google.gson.JsonObject.class);
+            schedEnabled = sched.has("enabled") && sched.get("enabled").getAsBoolean();
+        } catch (Exception ignored) { schedEnabled = false; }
         dimIdx = Math.max(0, DIMENSIONS.indexOf(entry.dimension()));
         enterIdx = Math.max(0, GAME_MODES.indexOf(entry.enterMode()));
         leaveIdx = Math.max(0, GAME_MODES.indexOf(entry.leaveMode()));
@@ -114,6 +121,21 @@ public class AreaEditPanel extends Screen {
         zbtn(lx, y, vw + 40, LocalizationManager.translate(enabled ? "area.enabled" : "area.disabled"), () -> { enabled = !enabled; rebuild(); }); y += 28;
         sections.add(new SectionPos("  Protection  ", top, y - top));
 
+        // === Schedule (collapsible) ===
+        top = y - 4;
+        String schedFold = schedExpanded ? "  \u25BC" : "  \u25B6";
+        String schedLabel = "  Schedule" + (schedEnabled ? " \u2714" : " \u2718");
+        zbtn(lx, y, vw + 40, schedLabel + schedFold,
+            () -> { schedExpanded = !schedExpanded; rebuild(); }); y += 20;
+        if (schedExpanded) {
+            zbtn(lx, y, vw + 40, LocalizationManager.translate(schedEnabled ? "area.enabled" : "area.disabled"),
+                () -> { schedEnabled = !schedEnabled; rebuild(); }); y += 20;
+            addLabel("gui.bounds_min", y); schedMin = zcoord(vx, y); y += 20;
+            addLabel("gui.bounds_max", y); schedMax = zcoord(vx, y);
+        }
+        y += 8;
+        sections.add(new SectionPos("  Schedule  ", top, y - top));
+
         // === Other ===
         top = y - 4;
         zbtn(lx, y, vw + 40, "+ " + LocalizationManager.translate("gui.trigger_settings"),
@@ -169,6 +191,18 @@ public class AreaEditPanel extends Screen {
             if (rectangleMode) { json.addProperty("minX", v(bx1)); json.addProperty("minZ", v(bz1)); json.addProperty("maxX", v(bx2)); json.addProperty("maxZ", v(bz2)); }
             else { json.addProperty("centerX", v(bx1)); json.addProperty("centerZ", v(bz1)); json.addProperty("radius", v(bx2)); }
         } catch (Exception ignored) {}
+        // Schedule
+        if (schedEnabled) {
+            var schedObj = new com.google.gson.JsonObject();
+            schedObj.addProperty("enabled", true);
+            try { if (schedMin != null && !schedMin.getValue().isEmpty()) schedObj.addProperty("timeMin", Integer.parseInt(schedMin.getValue())); } catch (Exception ignored) {}
+            try { if (schedMax != null && !schedMax.getValue().isEmpty()) schedObj.addProperty("timeMax", Integer.parseInt(schedMax.getValue())); } catch (Exception ignored) {}
+            json.add("schedule", schedObj);
+        } else {
+            var schedObj = new com.google.gson.JsonObject();
+            schedObj.addProperty("enabled", false);
+            json.add("schedule", schedObj);
+        }
         ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.UPDATE, entry.name(), json.toString()));
         onClose();
     }

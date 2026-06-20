@@ -27,6 +27,7 @@ public class AreaMonitor {
     private static final Map<UUID, PlayerState> playerStates = new ConcurrentHashMap<>();
     private static volatile MinecraftServer minecraftServer;
     private static final AtomicInteger tickCounter = new AtomicInteger(0);
+    private static final AtomicInteger scheduleTickCounter = new AtomicInteger(0);
     private static final long PENDING_ACTION_TIMEOUT_MS = 10000L;  // 10 seconds timeout for pending actions
 
     private static class PlayerState {
@@ -86,6 +87,12 @@ public class AreaMonitor {
         PerformanceMonitor.onServerTick(minecraftServer);
 
         AreaVisualizer.updatePersistentVisualizations();
+
+        // Process area schedules (every ~1 second)
+        if (scheduleTickCounter.incrementAndGet() >= 20) {
+            scheduleTickCounter.set(0);
+            processSchedules();
+        }
 
         int currentTick = tickCounter.incrementAndGet();
         if (currentTick < PerformanceMonitor.getCurrentCheckInterval()) return;
@@ -199,6 +206,32 @@ public class AreaMonitor {
             // Clean up visualization data
             AreaVisualizer.stopPersistentVisualization(player);
             SelectionTool.cleanupPlayerData(playerId);
+        }
+    }
+
+    /**
+     * Process area time-based schedules: auto-enable/disable areas based on game time.
+     */
+    private static void processSchedules() {
+        if (minecraftServer == null) return;
+        long gameTime = minecraftServer.overworld().getDayTime();
+        AreaManager am = AreaManager.getInstance();
+        for (MonitorArea area : am.getAllAreas()) {
+            if (!area.isScheduleEnabled()) continue;
+            boolean shouldEnable = area.evaluateSchedule(gameTime);
+            if (shouldEnable && !area.isEnabled()) {
+                // Schedule says enable, but area is disabled — and wasn't disabled by schedule
+                if (!area.isScheduleWasDisabledBySchedule()) {
+                    area.setEnabled(true);
+                    AreaMonitorMod.LOGGER.debug("Schedule: enabled area '{}'", area.getName());
+                }
+                area.setScheduleWasDisabledBySchedule(false);
+            } else if (!shouldEnable && area.isEnabled()) {
+                // Schedule says disable, but area is enabled
+                area.setEnabled(false);
+                area.setScheduleWasDisabledBySchedule(true);
+                AreaMonitorMod.LOGGER.debug("Schedule: disabled area '{}'", area.getName());
+            }
         }
     }
 }
