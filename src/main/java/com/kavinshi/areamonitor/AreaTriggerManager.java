@@ -262,7 +262,7 @@ public class AreaTriggerManager {
         long time = player.level().getDayTime() % 24000;
         if (c.timeMin != null && c.timeMax != null) {
             if (c.timeMin <= c.timeMax && (time < c.timeMin || time > c.timeMax)) return false;
-            if (c.timeMin > c.timeMax && (time < c.timeMin && time > c.timeMax)) return false;
+            if (c.timeMin > c.timeMax && !(time >= c.timeMin || time <= c.timeMax)) return false;
         } else {
             if (c.timeMin != null && time < c.timeMin) return false;
             if (c.timeMax != null && time > c.timeMax) return false;
