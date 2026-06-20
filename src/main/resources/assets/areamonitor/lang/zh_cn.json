@@ -334,5 +334,20 @@
   "gui.restriction_items": "物品黑名单",
   "gui.restriction_commands": "命令限制",
   "command.add": "添加",
-  "command.commands": "命令"
+  "command.commands": "命令",
+  "protection.containerInteract": "容器交互保护",
+  "protection.fluidPlace": "流体放置保护",
+  "protection.itemDrop": "物品丢弃/捡起保护",
+  "protection.container_interact_denied": "§c此区域禁止打开容器",
+  "protection.fluid_place_denied": "§c此区域禁止放置流体",
+  "protection.item_drop_denied": "§c此区域禁止丢弃/捡起物品",
+  "gui.prot_container": "容器",
+  "gui.prot_fluid_place": "流体",
+  "gui.prot_item_drop": "物品丢弃",
+  "trigger.actionbar_set": "§a已设置触发器ActionBar消息",
+  "trigger.actionbar_cleared": "§a触发器ActionBar消息已清除",
+  "trigger.potion_set": "§a已设置触发药水效果: %s",
+  "trigger.potion_cleared": "§a触发药水效果已清除",
+  "trigger.cooldown_set": "§a触发器冷却时间设置为 %d 刻",
+  "trigger.debounce_set": "§a触发器延时设置为 %d 刻"
 }

@@ -26,13 +26,14 @@ public class AreaEditPanel extends Screen {
     private EditBox bx1, bz1, bx2, bz2;
     private boolean enabled, rectangleMode = true, protectionExpanded = false;
     private boolean protBreak, protPlace, protInteract, protPvp, protExplosion, protDamage;
+    private boolean protContainer, protFluid, protItemDrop;
 
     private static final List<String> DIMENSIONS = List.of("minecraft:overworld", "minecraft:the_nether", "minecraft:the_end");
     private static final List<String> GAME_MODES = List.of("survival", "creative", "adventure", "spectator");
     private static final String[] MODE_KEYS = {"gameMode.survival", "gameMode.creative", "gameMode.adventure", "gameMode.spectator"};
     private int dimIdx, enterIdx, leaveIdx;
 
-    private int protCount() { return (protBreak?1:0)+(protPlace?1:0)+(protInteract?1:0)+(protPvp?1:0)+(protExplosion?1:0)+(protDamage?1:0); }
+    private int protCount() { return (protBreak?1:0)+(protPlace?1:0)+(protInteract?1:0)+(protPvp?1:0)+(protExplosion?1:0)+(protDamage?1:0)+(protContainer?1:0)+(protFluid?1:0)+(protItemDrop?1:0); }
 
     // Window coords
     private int wx, wy, ww, wh;
@@ -50,6 +51,8 @@ public class AreaEditPanel extends Screen {
         this.protBreak = entry.protBlockBreak(); this.protPlace = entry.protBlockPlace();
         this.protInteract = entry.protBlockInteract(); this.protPvp = entry.protPvp();
         this.protExplosion = entry.protExplosion(); this.protDamage = entry.protEntityDamage();
+        this.protContainer = entry.protContainerInteract(); this.protFluid = entry.protFluidPlace();
+        this.protItemDrop = entry.protItemDrop();
         dimIdx = Math.max(0, DIMENSIONS.indexOf(entry.dimension()));
         enterIdx = Math.max(0, GAME_MODES.indexOf(entry.enterMode()));
         leaveIdx = Math.max(0, GAME_MODES.indexOf(entry.leaveMode()));
@@ -92,7 +95,7 @@ public class AreaEditPanel extends Screen {
         // === Protection (collapsible) ===
         top = y - 4;
         String fold = protectionExpanded ? "  \u25BC" : "  \u25B6";
-        zbtn(lx, y, vw + 40, LocalizationManager.translate("gui.protection") + ": " + protCount() + "/6 " + LocalizationManager.translate("gui.prot_enabled") + fold,
+        zbtn(lx, y, vw + 40, LocalizationManager.translate("gui.protection") + ": " + protCount() + "/9 " + LocalizationManager.translate("gui.prot_enabled") + fold,
             () -> { protectionExpanded = !protectionExpanded; rebuild(); }); y += 20;
         if (protectionExpanded) {
             zbtn(lx, y, 68, LocalizationManager.translate("gui.prot_enable_all"), () -> { setAllProt(true); rebuild(); });
@@ -102,7 +105,10 @@ public class AreaEditPanel extends Screen {
             zprot(lx, y, "gui.prot_block_place", protPlace, v -> protPlace = v);
             zprot(lx + 120, y, "gui.prot_explosion", protExplosion, v -> protExplosion = v); y += 17;
             zprot(lx, y, "gui.prot_block_interact", protInteract, v -> protInteract = v);
-            zprot(lx + 120, y, "gui.prot_entity_damage", protDamage, v -> protDamage = v);
+            zprot(lx + 120, y, "gui.prot_entity_damage", protDamage, v -> protDamage = v); y += 17;
+            zprot(lx, y, "gui.prot_container", protContainer, v -> protContainer = v);
+            zprot(lx + 120, y, "gui.prot_fluid_place", protFluid, v -> protFluid = v); y += 17;
+            zprot(lx, y, "gui.prot_item_drop", protItemDrop, v -> protItemDrop = v);
         }
         y += 8;
         zbtn(lx, y, vw + 40, LocalizationManager.translate(enabled ? "area.enabled" : "area.disabled"), () -> { enabled = !enabled; rebuild(); }); y += 28;
@@ -139,7 +145,7 @@ public class AreaEditPanel extends Screen {
     }
     private void addLabel(String key, int y) { labels.add(new LabelPos(lx, y, key)); }
     private List<String> toModeNames() { return java.util.Arrays.stream(MODE_KEYS).map(LocalizationManager::translate).toList(); }
-    private void setAllProt(boolean v) { protBreak = protPlace = protInteract = protPvp = protExplosion = protDamage = v; }
+    private void setAllProt(boolean v) { protBreak = protPlace = protInteract = protPvp = protExplosion = protDamage = protContainer = protFluid = protItemDrop = v; }
     private String fmtPx() { return String.valueOf((int)Math.floor(this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getX() : 0)); }
     private String fmtPz() { return String.valueOf((int)Math.floor(this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getZ() : 0)); }
     private void rebuild() { this.clearWidgets(); init(); }
@@ -154,6 +160,8 @@ public class AreaEditPanel extends Screen {
         json.addProperty("protBlockBreak", protBreak); json.addProperty("protBlockPlace", protPlace);
         json.addProperty("protBlockInteract", protInteract); json.addProperty("protPvp", protPvp);
         json.addProperty("protExplosion", protExplosion); json.addProperty("protEntityDamage", protDamage);
+        json.addProperty("protContainerInteract", protContainer); json.addProperty("protFluidPlace", protFluid);
+        json.addProperty("protItemDrop", protItemDrop);
         json.addProperty("boundsType", rectangleMode ? "RECTANGLE" : "CIRCLE");
         try {
             if (rectangleMode) { json.addProperty("minX", v(bx1)); json.addProperty("minZ", v(bz1)); json.addProperty("maxX", v(bx2)); json.addProperty("maxZ", v(bz2)); }

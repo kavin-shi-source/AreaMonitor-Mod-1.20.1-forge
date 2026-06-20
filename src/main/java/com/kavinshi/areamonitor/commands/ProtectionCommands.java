@@ -31,6 +31,9 @@ public class ProtectionCommands {
             case "pvp" -> p.setPvp(enable);
             case "explosion" -> p.setExplosion(enable);
             case "entityDamage" -> p.setEntityDamage(enable);
+            case "containerInteract" -> p.setContainerInteract(enable);
+            case "fluidPlace" -> p.setFluidPlace(enable);
+            case "itemDrop" -> p.setItemDrop(enable);
             default -> {
                 MessageUtils.sendFailure(context.getSource(), "protection.invalid_type", type);
                 return 0;
@@ -56,6 +59,9 @@ public class ProtectionCommands {
         p.setPvp(enable);
         p.setExplosion(enable);
         p.setEntityDamage(enable);
+        p.setContainerInteract(enable);
+        p.setFluidPlace(enable);
+        p.setItemDrop(enable);
         ConfigManager.saveAreasConfig();
         MessageUtils.sendSuccess(context.getSource(),
             enable ? "protection.all_enabled" : "protection.all_disabled", true, areaName);
@@ -84,6 +90,12 @@ public class ProtectionCommands {
             Component.literal(formatLine(LocalizationManager.translate("protection.explosion"), p.isExplosion())));
         context.getSource().sendSystemMessage(
             Component.literal(formatLine(LocalizationManager.translate("protection.entityDamage"), p.isEntityDamage())));
+        context.getSource().sendSystemMessage(
+            Component.literal(formatLine(LocalizationManager.translate("protection.containerInteract"), p.isContainerInteract())));
+        context.getSource().sendSystemMessage(
+            Component.literal(formatLine(LocalizationManager.translate("protection.fluidPlace"), p.isFluidPlace())));
+        context.getSource().sendSystemMessage(
+            Component.literal(formatLine(LocalizationManager.translate("protection.itemDrop"), p.isItemDrop())));
         return 1;
     }
 

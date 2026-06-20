@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * Configuration for area triggers — actions executed when a player enters or leaves an area.
- * Supports commands, sound, title, and teleport.
+ * Supports commands, sound, title, actionbar, potion, teleport, cooldown, and debounce.
  */
 public class TriggerConfig {
     private List<String> commands = new ArrayList<>();
@@ -19,6 +19,14 @@ public class TriggerConfig {
     private String titleSub = null;
     @SerializedName("teleport")
     private String teleportTarget = null;
+    private String actionBar = null;
+    private String potion = null;
+    private int potionDuration = 200;
+    private int potionAmplifier = 0;
+    @SerializedName("cooldown")
+    private int cooldownTicks = 0;
+    @SerializedName("debounce")
+    private int debounceTicks = 0;
 
     // Getters and Setters
     public List<String> getCommands() { return commands; }
@@ -42,10 +50,26 @@ public class TriggerConfig {
     public String getTeleportTarget() { return teleportTarget; }
     public void setTeleportTarget(String v) { this.teleportTarget = v; }
 
+    public String getActionBar() { return actionBar; }
+    public void setActionBar(String v) { this.actionBar = v; }
+
+    public String getPotion() { return potion; }
+    public void setPotion(String v) { this.potion = v; }
+    public int getPotionDuration() { return potionDuration; }
+    public void setPotionDuration(int v) { this.potionDuration = v; }
+    public int getPotionAmplifier() { return potionAmplifier; }
+    public void setPotionAmplifier(int v) { this.potionAmplifier = v; }
+
+    public int getCooldownTicks() { return cooldownTicks; }
+    public void setCooldownTicks(int v) { this.cooldownTicks = v; }
+    public int getDebounceTicks() { return debounceTicks; }
+    public void setDebounceTicks(int v) { this.debounceTicks = v; }
+
     /**
      * Check if this trigger has any actionable configuration.
      */
     public boolean hasAnyAction() {
-        return !commands.isEmpty() || soundEvent != null || titleMain != null || teleportTarget != null;
+        return !commands.isEmpty() || soundEvent != null || titleMain != null
+            || teleportTarget != null || actionBar != null || potion != null;
     }
 }

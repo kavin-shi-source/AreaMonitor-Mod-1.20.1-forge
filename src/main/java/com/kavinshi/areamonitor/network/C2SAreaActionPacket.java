@@ -121,6 +121,9 @@ public class C2SAreaActionPacket {
             if (obj.has("protPvp")) area.getProtection().setPvp(obj.get("protPvp").getAsBoolean());
             if (obj.has("protExplosion")) area.getProtection().setExplosion(obj.get("protExplosion").getAsBoolean());
             if (obj.has("protEntityDamage")) area.getProtection().setEntityDamage(obj.get("protEntityDamage").getAsBoolean());
+            if (obj.has("protContainerInteract")) area.getProtection().setContainerInteract(obj.get("protContainerInteract").getAsBoolean());
+            if (obj.has("protFluidPlace")) area.getProtection().setFluidPlace(obj.get("protFluidPlace").getAsBoolean());
+            if (obj.has("protItemDrop")) area.getProtection().setItemDrop(obj.get("protItemDrop").getAsBoolean());
             // Bounds update
             if (obj.has("boundsType") && !obj.get("boundsType").isJsonNull()) {
                 String type = obj.get("boundsType").getAsString();
@@ -165,6 +168,12 @@ public class C2SAreaActionPacket {
         if (obj.has("titleMain")) tc.setTitleMain(obj.get("titleMain").isJsonNull() ? null : obj.get("titleMain").getAsString());
         if (obj.has("titleSub")) tc.setTitleSub(obj.get("titleSub").isJsonNull() ? null : obj.get("titleSub").getAsString());
         if (obj.has("teleportTarget")) tc.setTeleportTarget(obj.get("teleportTarget").isJsonNull() ? null : obj.get("teleportTarget").getAsString());
+        if (obj.has("actionBar")) tc.setActionBar(obj.get("actionBar").isJsonNull() ? null : obj.get("actionBar").getAsString());
+        if (obj.has("potion")) tc.setPotion(obj.get("potion").isJsonNull() ? null : obj.get("potion").getAsString());
+        if (obj.has("potionDuration")) tc.setPotionDuration(obj.get("potionDuration").getAsInt());
+        if (obj.has("potionAmplifier")) tc.setPotionAmplifier(obj.get("potionAmplifier").getAsInt());
+        if (obj.has("cooldownTicks")) tc.setCooldownTicks(obj.get("cooldownTicks").getAsInt());
+        if (obj.has("debounceTicks")) tc.setDebounceTicks(obj.get("debounceTicks").getAsInt());
     }
 
     private static void updateRestrictions(RestrictionSettings rs, JsonObject obj) {

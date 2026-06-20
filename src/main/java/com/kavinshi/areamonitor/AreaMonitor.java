@@ -78,6 +78,9 @@ public class AreaMonitor {
         // Clear trigger locks for this tick (anti-recursion)
         AreaTriggerManager.clearTickLocks();
 
+        // Process debounced triggers
+        AreaTriggerManager.processDebouncedTriggers(minecraftServer);
+
         processPendingActions();
 
         PerformanceMonitor.onServerTick(minecraftServer);

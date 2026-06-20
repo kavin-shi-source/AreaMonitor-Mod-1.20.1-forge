@@ -41,7 +41,8 @@ import net.minecraftforge.fml.common.Mod;
 public class ExtendedCommands {
 
     private static final java.util.List<String> PROTECTION_TYPES = java.util.List.of(
-        "blockBreak", "blockPlace", "blockInteract", "pvp", "explosion", "entityDamage"
+        "blockBreak", "blockPlace", "blockInteract", "pvp", "explosion", "entityDamage",
+        "containerInteract", "fluidPlace", "itemDrop"
     );
 
     @SubscribeEvent

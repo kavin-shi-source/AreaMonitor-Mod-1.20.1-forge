@@ -72,6 +72,9 @@ public class S2CAreaListPacket {
         boolean protPvp,
         boolean protExplosion,
         boolean protEntityDamage,
+        boolean protContainerInteract,
+        boolean protFluidPlace,
+        boolean protItemDrop,
         String enterTriggerJson,
         String leaveTriggerJson,
         String whitelistJson,
@@ -93,6 +96,9 @@ public class S2CAreaListPacket {
                  area.getProtection().isPvp(),
                  area.getProtection().isExplosion(),
                  area.getProtection().isEntityDamage(),
+                 area.getProtection().isContainerInteract(),
+                 area.getProtection().isFluidPlace(),
+                 area.getProtection().isItemDrop(),
                  area.hasEnterTrigger() ? TGSON.toJson(area.getEnterTrigger()) : null,
                  area.hasLeaveTrigger() ? TGSON.toJson(area.getLeaveTrigger()) : null,
                  area.getWhitelist().isEmpty() ? null : TGSON.toJson(area.getWhitelist()),
@@ -109,7 +115,9 @@ public class S2CAreaListPacket {
             buf.writeUtf(displayName);
             int protBits = (protBlockBreak ? 1 : 0) | (protBlockPlace ? 2 : 0)
                 | (protBlockInteract ? 4 : 0) | (protPvp ? 8 : 0)
-                | (protExplosion ? 16 : 0) | (protEntityDamage ? 32 : 0);
+                | (protExplosion ? 16 : 0) | (protEntityDamage ? 32 : 0)
+                | (protContainerInteract ? 64 : 0) | (protFluidPlace ? 128 : 0)
+                | (protItemDrop ? 256 : 0);
             buf.writeByte(protBits);
             writeNullableJson(buf, enterTriggerJson);
             writeNullableJson(buf, leaveTriggerJson);
@@ -129,6 +137,7 @@ public class S2CAreaListPacket {
             return new AreaEntry(name, enabled, dim, enter, leave, bounds, disp,
                 (bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0,
                 (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0,
+                (bits & 64) != 0, (bits & 128) != 0, (bits & 256) != 0,
                 readNullableJson(buf), readNullableJson(buf),
                 readNullableJson(buf), readNullableJson(buf));
         }

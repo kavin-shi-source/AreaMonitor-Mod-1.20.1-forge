@@ -334,5 +334,20 @@
   "gui.restriction_items": "Item Blacklist",
   "gui.restriction_commands": "Cmd Restrictions",
   "command.add": "Add",
-  "command.commands": "Commands"
+  "command.commands": "Commands",
+  "protection.containerInteract": "Container Interact Protection",
+  "protection.fluidPlace": "Fluid Placement Protection",
+  "protection.itemDrop": "Item Drop/Pickup Protection",
+  "protection.container_interact_denied": "§cContainer access is protected in this area",
+  "protection.fluid_place_denied": "§cFluid placement is protected in this area",
+  "protection.item_drop_denied": "§cItem drop/pickup is protected in this area",
+  "gui.prot_container": "Container",
+  "gui.prot_fluid_place": "Fluid",
+  "gui.prot_item_drop": "Item Drop",
+  "trigger.actionbar_set": "§aTrigger actionbar message set",
+  "trigger.actionbar_cleared": "§aTrigger actionbar message cleared",
+  "trigger.potion_set": "§aTrigger potion set: %s",
+  "trigger.potion_cleared": "§aTrigger potion cleared",
+  "trigger.cooldown_set": "§aTrigger cooldown set to %d ticks",
+  "trigger.debounce_set": "§aTrigger debounce set to %d ticks"
 }
