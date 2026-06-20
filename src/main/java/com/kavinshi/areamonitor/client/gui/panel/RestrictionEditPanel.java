@@ -47,7 +47,8 @@ public class RestrictionEditPanel extends Screen {
         ww = Math.min(this.width * 78 / 100, 560); wh = Math.min(this.height * 82 / 100, 480);
         wx = (this.width - ww) / 2; wy = (this.height - wh) / 2;
         lx = wx + 8;
-        int y = wy + 36;
+        int titleBarHeight = 26, topPadding = 10;
+        int y = wy + 3 + titleBarHeight + topPadding;
 
         // Item Blacklist
         final int secW = Math.min(ww - 55, 320);
@@ -58,7 +59,7 @@ public class RestrictionEditPanel extends Screen {
             zbtn(lx, y, 74, LocalizationManager.translate(enableItemBlacklist ? "gui.disable" : "gui.enable"), () -> { enableItemBlacklist = !enableItemBlacklist; rebuild(); }); y += 20;
             if (enableItemBlacklist) {
                 addItemBox = new EditBox(this.font, lx, y, 198, 16, Component.empty()); addItemBox.setMaxLength(100); addRenderableWidget(addItemBox);
-                zbtn(lx + 203, y, 36, "+", () -> { String v = addItemBox.getValue().trim().toLowerCase(); if (!v.isEmpty() && !blockedItems.contains(v)) { blockedItems.add(v); addItemBox.setValue(""); sendUpdate(); rebuild(); } }); y += 20;
+                zbtn(lx + 203, y, 36, "+", () -> { String v = addItemBox.getValue().trim().toLowerCase(); if (!v.isEmpty() && !blockedItems.contains(v) && blockedItems.size() < 12) { blockedItems.add(v); addItemBox.setValue(""); sendUpdate(); rebuild(); } }); y += 20;
                 int max = Math.min(blockedItems.size(), 6);
                 for (int i = 0; i < max; i++) { final int idx = i; zbtn(lx + 6, y, 198, "  \u2022 " + blockedItems.get(i) + "  \u2715", () -> { blockedItems.remove(idx); sendUpdate(); rebuild(); }); y += 18; }
             }
@@ -72,7 +73,7 @@ public class RestrictionEditPanel extends Screen {
         if (cmdsExp) {
             zbtn(lx, y, 74, LocalizationManager.translate(blockTeleportCommands ? "gui.disable" : "gui.enable"), () -> { blockTeleportCommands = !blockTeleportCommands; rebuild(); }); y += 20;
             addCmdBox = new EditBox(this.font, lx, y, 198, 16, Component.empty()); addCmdBox.setMaxLength(100); addRenderableWidget(addCmdBox);
-            zbtn(lx + 203, y, 36, "+", () -> { String v = addCmdBox.getValue().trim(); if (!v.isEmpty() && !blockedCommands.contains(v)) { blockedCommands.add(v); addCmdBox.setValue(""); sendUpdate(); rebuild(); } }); y += 20;
+            zbtn(lx + 203, y, 36, "+", () -> { String v = addCmdBox.getValue().trim(); if (!v.isEmpty() && !blockedCommands.contains(v) && blockedCommands.size() < 12) { blockedCommands.add(v); addCmdBox.setValue(""); sendUpdate(); rebuild(); } }); y += 20;
             int max = Math.min(blockedCommands.size(), 5);
             for (int i = 0; i < max; i++) { final int idx = i; zbtn(lx + 6, y, 198, "  \u2022 " + blockedCommands.get(i) + "  \u2715", () -> { blockedCommands.remove(idx); sendUpdate(); rebuild(); }); y += 18; }
         }
@@ -97,6 +98,22 @@ public class RestrictionEditPanel extends Screen {
     }
 
     @Override public void onClose() { mainScreen.updateAfterEdit(); if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
+
+    @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (this.addItemBox != null && this.addItemBox.isFocused())
+            return this.addItemBox.keyPressed(keyCode, scanCode, modifiers);
+        if (this.addCmdBox != null && this.addCmdBox.isFocused())
+            return this.addCmdBox.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override public boolean mouseClicked(double mx, double my, int button) {
+        if (mx < wx || mx > wx + ww || my < wy || my > wy + wh) {
+            this.onClose();
+            return true;
+        }
+        return super.mouseClicked(mx, my, button);
+    }
 
     @Override public void render(GuiGraphics g, int mx, int my, float pt) {
         g.fill(0, 0, this.width, this.height, 0x80000000);

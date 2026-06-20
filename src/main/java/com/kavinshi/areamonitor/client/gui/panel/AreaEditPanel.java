@@ -64,7 +64,8 @@ public class AreaEditPanel extends Screen {
         lx = wx + 8;
         vx = lx + 70;
         vw = Math.min(ww - 110, 320);  // fill most of window width
-        int y = wy + 36;
+        int titleBarHeight = 26, topPadding = 10;
+        int y = wy + 3 + titleBarHeight + topPadding;
 
         // === Basic ===
         int top = y - 4;
@@ -178,15 +179,41 @@ public class AreaEditPanel extends Screen {
         g.fill(wx + 3, wy + 28, wx + ww - 3, wy + 29, BORDER_GOLD);
         g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE),
             wx + ww / 2, wy + 9, 0xFFF5DEB3);
-        // Section backgrounds
-        int secW = vx - lx + vw + 4;
+        // Section backgrounds — unified width based on panel size
+        int margin = 8;
+        int secW = ww - (margin * 2);
+        int startX = wx + margin;
         for (SectionPos s : sections) {
-            g.fill(lx - 4, s.y, lx + secW, s.y + s.h, 0x30C4A882);
-            g.fill(lx - 4, s.y, lx + secW, s.y + 1, BORDER_GOLD);
-            g.drawString(this.font, Component.literal(s.title).withStyle(ChatFormatting.DARK_GRAY), lx + 2, s.y + 2, 0xFF8B6914);
+            g.fill(startX, s.y, startX + secW, s.y + s.h, 0x30C4A882);
+            g.fill(startX, s.y, startX + secW, s.y + 1, BORDER_GOLD);
+            g.drawString(this.font, Component.literal(s.title).withStyle(ChatFormatting.DARK_GRAY), startX + 2, s.y + 2, 0xFF8B6914);
         }
         for (LabelPos l : labels) g.drawString(this.font, Component.literal(LocalizationManager.translate(l.key)).withStyle(ChatFormatting.GRAY), l.x, l.y + 1, 0xFFFFFFFF);
         super.render(g, mx, my, pt);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (this.displayNameInput != null && this.displayNameInput.isFocused())
+            return this.displayNameInput.keyPressed(keyCode, scanCode, modifiers);
+        if (this.bx1 != null && this.bx1.isFocused())
+            return this.bx1.keyPressed(keyCode, scanCode, modifiers);
+        if (this.bz1 != null && this.bz1.isFocused())
+            return this.bz1.keyPressed(keyCode, scanCode, modifiers);
+        if (this.bx2 != null && this.bx2.isFocused())
+            return this.bx2.keyPressed(keyCode, scanCode, modifiers);
+        if (this.bz2 != null && this.bz2.isFocused())
+            return this.bz2.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean mouseClicked(double mx, double my, int button) {
+        if (mx < wx || mx > wx + ww || my < wy || my > wy + wh) {
+            this.onClose();
+            return true;
+        }
+        return super.mouseClicked(mx, my, button);
     }
 
     private record SectionPos(String title, int y, int h) {}

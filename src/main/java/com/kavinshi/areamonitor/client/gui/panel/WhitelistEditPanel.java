@@ -42,13 +42,15 @@ public class WhitelistEditPanel extends Screen {
         ww = Math.min(this.width * 78 / 100, 560); wh = Math.min(this.height * 82 / 100, 480);
         wx = (this.width - ww) / 2; wy = (this.height - wh) / 2;
         lx = wx + 8;
-        int y = wy + 36;
+        int titleBarHeight = 26, topPadding = 10;
+        int y = wy + 3 + titleBarHeight + topPadding;
 
         nameInput = new EditBox(this.font, lx, y, 256, 16, Component.empty());
         nameInput.setMaxLength(16); addRenderableWidget(nameInput);
         zbtn(lx + 262, y, 40, LocalizationManager.translate("command.add"), () -> {
             String nm = nameInput.getValue().trim();
-            if (!nm.isEmpty() && !players.contains(nm.toLowerCase())) { players.add(nm.toLowerCase()); nameInput.setValue(""); sendUpdate(); rebuild(); }
+            if (!nm.isEmpty() && !players.contains(nm.toLowerCase()) && players.size() < 50) { players.add(nm.toLowerCase()); nameInput.setValue(""); sendUpdate(); rebuild(); }
+            else if (players.size() >= 50) { nameInput.setValue(""); }
         });
         y += 22;
 
@@ -77,6 +79,20 @@ public class WhitelistEditPanel extends Screen {
 
     @Override public void onClose() { mainScreen.updateAfterEdit(); if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
 
+    @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (this.nameInput != null && this.nameInput.isFocused())
+            return this.nameInput.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override public boolean mouseClicked(double mx, double my, int button) {
+        if (mx < wx || mx > wx + ww || my < wy || my > wy + wh) {
+            this.onClose();
+            return true;
+        }
+        return super.mouseClicked(mx, my, button);
+    }
+
     @Override public void render(GuiGraphics g, int mx, int my, float pt) {
         g.fill(0, 0, this.width, this.height, 0x80000000);
         g.fill(wx, wy, wx + ww, wy + wh, PARCH_PANEL);
@@ -87,10 +103,10 @@ public class WhitelistEditPanel extends Screen {
         g.fill(wx + 3, wy + 28, wx + ww - 3, wy + 29, BORDER_GOLD);
         g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), wx + ww / 2, wy + 9, 0xFFF5DEB3);
 
-        int panelX = lx - 4, panelY = wy + 32, panelW = ww - 12, panelH = wy + wh - 76 - panelY;
+        int panelX = lx - 4, panelY = wy + 3 + 26 + 8, panelW = ww - 12, panelH = wy + wh - 76 - panelY;
         g.fill(panelX, panelY, panelX + panelW, panelY + panelH, 0x30C4A882);
         g.fill(panelX, panelY, panelX + panelW, panelY + 1, BORDER_GOLD);
-        g.drawString(this.font, Component.literal("  Players").withStyle(ChatFormatting.DARK_GRAY), lx + 2, wy + 34, 0xFF8B6914);
+        g.drawString(this.font, Component.literal("  Players").withStyle(ChatFormatting.DARK_GRAY), lx + 2, panelY + 2, 0xFF8B6914);
         super.render(g, mx, my, pt);
     }
 }
