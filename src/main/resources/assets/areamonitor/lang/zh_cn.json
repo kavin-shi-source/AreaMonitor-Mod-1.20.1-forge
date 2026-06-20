@@ -330,5 +330,9 @@
   "gui.protection": "保护",
   "gui.status_monitoring": "监控",
   "gui.status_areas": "区域数",
-  "gui.toast_save_done": "已保存"
+  "gui.toast_save_done": "已保存",
+  "gui.restriction_items": "物品黑名单",
+  "gui.restriction_commands": "命令限制",
+  "command.add": "添加",
+  "command.commands": "命令"
 }

@@ -153,8 +153,12 @@ public class AreaEditPanel extends Screen {
         addQuickR(lx, y, "gui.trigger_settings", () -> {
             if (this.minecraft != null) this.minecraft.setScreen(new TriggerEditPanel(parentScreen, entry));
         }); y += 22;
-        addQuickC(lx, y, "gui.whitelist_settings", "areamonitor whitelist list"); y += 22;
-        addQuickC(lx, y, "gui.restriction_settings", "areamonitor blacklist area " + entry.name() + " list");
+        addQuickR(lx, y, "gui.whitelist_settings", () -> {
+            if (this.minecraft != null) this.minecraft.setScreen(new WhitelistEditPanel(parentScreen, entry));
+        }); y += 22;
+        addQuickR(lx, y, "gui.restriction_settings", () -> {
+            if (this.minecraft != null) this.minecraft.setScreen(new RestrictionEditPanel(parentScreen, entry));
+        });
         y += 34;
 
         // Save / Cancel

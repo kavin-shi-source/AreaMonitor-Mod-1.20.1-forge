@@ -4,6 +4,7 @@ import com.kavinshi.areamonitor.AreaManager;
 import com.kavinshi.areamonitor.ConfigManager;
 import com.kavinshi.areamonitor.MonitorArea;
 import com.kavinshi.areamonitor.TriggerConfig;
+import com.kavinshi.areamonitor.model.RestrictionSettings;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import net.minecraft.network.FriendlyByteBuf;
@@ -138,6 +139,14 @@ public class C2SAreaActionPacket {
             // Trigger update
             if (obj.has("enterTrigger")) updateTrigger(area.getEnterTrigger(), obj.getAsJsonObject("enterTrigger"));
             if (obj.has("leaveTrigger")) updateTrigger(area.getLeaveTrigger(), obj.getAsJsonObject("leaveTrigger"));
+            // Whitelist update
+            if (obj.has("whitelist") && obj.get("whitelist").isJsonArray()) {
+                area.getWhitelist().clear();
+                for (var e : obj.getAsJsonArray("whitelist"))
+                    area.getWhitelist().add(e.getAsString().toLowerCase());
+            }
+            // Restrictions update
+            if (obj.has("restrictions")) updateRestrictions(area.getRestrictions(), obj.getAsJsonObject("restrictions"));
         } catch (Exception e) {
             com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.error("Failed to apply area update", e);
         }
@@ -156,5 +165,21 @@ public class C2SAreaActionPacket {
         if (obj.has("titleMain")) tc.setTitleMain(obj.get("titleMain").isJsonNull() ? null : obj.get("titleMain").getAsString());
         if (obj.has("titleSub")) tc.setTitleSub(obj.get("titleSub").isJsonNull() ? null : obj.get("titleSub").getAsString());
         if (obj.has("teleportTarget")) tc.setTeleportTarget(obj.get("teleportTarget").isJsonNull() ? null : obj.get("teleportTarget").getAsString());
+    }
+
+    private static void updateRestrictions(RestrictionSettings rs, JsonObject obj) {
+        if (rs == null || obj == null) return;
+        if (obj.has("enableItemBlacklist")) rs.setEnableItemBlacklist(obj.get("enableItemBlacklist").getAsBoolean());
+        if (obj.has("blockTeleportCommands")) rs.setBlockTeleportCommands(obj.get("blockTeleportCommands").getAsBoolean());
+        if (obj.has("blockedItems") && obj.get("blockedItems").isJsonArray()) {
+            rs.getBlockedItems().clear();
+            for (var e : obj.getAsJsonArray("blockedItems"))
+                rs.getBlockedItems().add(e.getAsString());
+        }
+        if (obj.has("blockedCommands") && obj.get("blockedCommands").isJsonArray()) {
+            rs.getBlockedCommands().clear();
+            for (var e : obj.getAsJsonArray("blockedCommands"))
+                rs.getBlockedCommands().add(e.getAsString());
+        }
     }
 }

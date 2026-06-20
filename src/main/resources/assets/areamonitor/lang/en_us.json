@@ -330,5 +330,9 @@
   "gui.protection": "Protection",
   "gui.status_monitoring": "Monitoring",
   "gui.status_areas": "Areas",
-  "gui.toast_save_done": "Saved"
+  "gui.toast_save_done": "Saved",
+  "gui.restriction_items": "Item Blacklist",
+  "gui.restriction_commands": "Cmd Restrictions",
+  "command.add": "Add",
+  "command.commands": "Commands"
 }
