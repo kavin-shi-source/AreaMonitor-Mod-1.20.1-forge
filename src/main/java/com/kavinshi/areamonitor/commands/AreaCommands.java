@@ -35,6 +35,8 @@ import java.util.concurrent.CompletableFuture;
 public class AreaCommands {
     public static final List<String> GAME_MODES = List.of("survival", "creative", "adventure", "spectator");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm:ss");
+    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HHmmss");
 
     private AreaCommands() {}
 
@@ -403,7 +405,7 @@ public class AreaCommands {
             Component.literal("§6=== Area Stats ==="));
         for (MonitorArea a : areas) {
             String lastTime = a.getLastVisitTime() > 0
-                ? new SimpleDateFormat("HH:mm:ss").format(new Date(a.getLastVisitTime()))
+                ? TIME_FORMAT.format(new Date(a.getLastVisitTime()))
                 : "-";
             context.getSource().sendSystemMessage(
                 Component.literal(String.format("  §e%s §7| entries: §f%d §7| last: §f%s @ %s",
@@ -419,7 +421,7 @@ public class AreaCommands {
     public static int backupConfigs(CommandContext<CommandSourceStack> context) {
         try {
             Path configDir = FMLPaths.CONFIGDIR.get().resolve("areamonitor");
-            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            String timestamp = DATE_FORMAT.format(new Date());
             Path backupDir = configDir.resolve("backups").resolve("backup_" + timestamp);
             Files.createDirectories(backupDir);
 
