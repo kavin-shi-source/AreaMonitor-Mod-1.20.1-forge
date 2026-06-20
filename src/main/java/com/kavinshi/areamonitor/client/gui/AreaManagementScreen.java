@@ -22,21 +22,17 @@ import java.util.List;
  */
 public class AreaManagementScreen extends Screen {
 
-    // === Enhanced Glass Morphism palette ===
-    private static final int GLASS_DARK   = 0xC0000000; // title bar (deeper)
-    private static final int GLASS_PANEL  = 0x70000000; // section bg (richer)
-    private static final int GLASS_SUBTLE = 0x30000000; // sub-bg
-    private static final int GLASS_LIGHT  = 0x18000000; // light overlay
-    private static final int BORDER_FAINT = 0x20FFFFFF; // subtle border
-    private static final int BORDER_SOFT  = 0x50FFFFFF; // visible border
-    private static final int BORDER_BRIGHT = 0x80FFFFFF; // accent border
-    private static final int TEXT_DIM     = 0xB0B0B0B0; // secondary text
-    private static final int ROW_EVEN     = 0x00000000; // even row (transparent)
-    private static final int ROW_ODD      = 0x10FFFFFF; // alternating row
-    private static final int ROW_HOVER    = 0x20FFFFFF; // hover highlight (unused in MC but reserved)
-    private static final int ACCENT_GREEN  = 0x8000AA00; // green accent bg
-    private static final int ACCENT_RED    = 0x80AA0000; // red accent bg
-    private static final int ACCENT_BLUE   = 0x800000AA; // blue accent bg
+    // === Warm Parchment palette ===
+    private static final int PARCH_DARK   = 0xD03A2A1A; // title bar (deep brown)
+    private static final int PARCH_PANEL  = 0xC0C4A882; // panel bg (cream parchment)
+    private static final int PARCH_LIGHT  = 0xA0D4B896; // light parchment overlay
+    private static final int BORDER_GOLD  = 0x808B6914; // gold-brown accent
+    private static final int BORDER_SHADOW = 0x405C4033; // subtle brown shadow
+    private static final int TEXT_PRIMARY = 0xFF2A1A0A; // deep brown
+    private static final int TEXT_DIM     = 0xFF6B5B4F; // medium brown
+    private static final int ROW_ALT      = 0x18E8D5B7; // warm tint stripe
+    private static final int ACCENT_GREEN  = 0x604B8C3E; // muted green
+    private static final int ACCENT_RED    = 0x608C3E3E; // muted red
 
     private List<S2CAreaListPacket.AreaEntry> areas = new ArrayList<>();
     private int scrollOffset = 0;
@@ -172,63 +168,59 @@ public class AreaManagementScreen extends Screen {
         this.renderBackground(g);
         int cx = this.width / 2;
 
-        // === Title bar (double-line glass) ===
-        g.fill(0, 0, this.width, 28, GLASS_DARK);
-        g.fill(0, 27, this.width, 28, BORDER_BRIGHT);
-        g.fill(0, 0, this.width, 1, BORDER_SOFT);
+        // === Title bar ===
+        g.fill(0, 0, this.width, 28, PARCH_DARK);
+        g.fill(0, 27, this.width, 28, BORDER_GOLD);
+        g.fill(0, 0, this.width, 1, BORDER_GOLD);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFFFFF);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFF5DEB3);
 
-        // === Column header (panel with double border) ===
+        // === Column header ===
         int hdrW = listWidth + 115;
         int hdrY = listTop - 16;
-        g.fill(listLeft - 6, hdrY, listLeft + hdrW, hdrY + 15, GLASS_PANEL);
-        g.fill(listLeft - 6, hdrY, listLeft + hdrW, hdrY + 1, BORDER_BRIGHT);
-        g.fill(listLeft - 6, hdrY + 14, listLeft + hdrW, hdrY + 15, BORDER_FAINT);
+        g.fill(listLeft - 6, hdrY, listLeft + hdrW, hdrY + 15, PARCH_PANEL);
+        g.fill(listLeft - 6, hdrY, listLeft + hdrW, hdrY + 1, BORDER_GOLD);
+        g.fill(listLeft - 6, hdrY + 14, listLeft + hdrW, hdrY + 15, BORDER_SHADOW);
         g.drawString(this.font, LocalizationManager.translate("gui.header_info"),
-            listLeft, listTop - 13, 0xCCCCCC);
+            listLeft, listTop - 13, TEXT_DIM);
         g.drawString(this.font, LocalizationManager.translate("gui.header_action"),
-            listLeft + listWidth - 60, listTop - 13, 0xCCCCCC);
+            listLeft + listWidth - 60, listTop - 13, TEXT_DIM);
 
-        // Scroll info on right side
         if (!areas.isEmpty()) {
             String info = (scrollOffset + 1) + "-" +
                 Math.min(scrollOffset + itemsPerPage, areas.size()) + "  /  " + areas.size();
             g.drawString(this.font, info, listLeft + listWidth + 20, listTop - 13, TEXT_DIM);
         }
 
-        // === Area rows with enhanced styling ===
+        // === Area rows ===
         int visible = Math.min(Math.max(0, areas.size() - scrollOffset), itemsPerPage);
         for (int i = 0; i < visible; i++) {
             int idx = scrollOffset + i;
             S2CAreaListPacket.AreaEntry entry = areas.get(idx);
             int rowY = listTop + i * itemHeight;
 
-            // Row background - alternating with accent left edge
-            int rowBg = (i % 2 == 0) ? ROW_EVEN : ROW_ODD;
+            int rowBg = (i % 2 == 0) ? 0 : ROW_ALT;
             g.fill(listLeft - 2, rowY, listLeft + listWidth + 112, rowY + itemHeight - 1, rowBg);
-            // Left accent bar on row (green=enabled, red=disabled)
             g.fill(listLeft - 2, rowY + 2, listLeft - 1, rowY + itemHeight - 3,
                 entry.enabled() ? ACCENT_GREEN : ACCENT_RED);
 
-            // Protection indicator (small shield icon if any protection is on)
             boolean hasProt = entry.protBlockBreak() || entry.protBlockPlace() || entry.protBlockInteract()
                 || entry.protPvp() || entry.protExplosion() || entry.protEntityDamage();
             if (hasProt) {
-                g.fill(listLeft - 2, rowY, listLeft - 2 + 8, rowY + 7, entry.enabled() ? ACCENT_GREEN : 0x60AAAAAA);
-                g.drawString(this.font, "\u26E8", listLeft - 1, rowY, entry.enabled() ? 0x00CC00 : 0x888888);
+                g.fill(listLeft - 2, rowY, listLeft - 2 + 8, rowY + 7, entry.enabled() ? ACCENT_GREEN : 0x60808080);
+                g.drawString(this.font, "\u26E8", listLeft - 1, rowY, entry.enabled() ? 0x3A6B3A : TEXT_DIM);
             }
         }
 
-        // === List panel border (vertical lines framing the area list) ===
+        // === List frame ===
         int listBottom = listTop + itemsPerPage * itemHeight;
-        g.fill(listLeft - 6, listTop - 2, listLeft - 5, listBottom, BORDER_FAINT);
-        g.fill(listLeft + listWidth + 110, listTop - 2, listLeft + listWidth + 111, listBottom, BORDER_FAINT);
+        g.fill(listLeft - 6, listTop - 2, listLeft - 5, listBottom, BORDER_SHADOW);
+        g.fill(listLeft + listWidth + 110, listTop - 2, listLeft + listWidth + 111, listBottom, BORDER_SHADOW);
 
-        // === Status bar (glass dark + bright top edge) ===
+        // === Status bar ===
         int statusY = this.height - 72;
-        g.fill(0, statusY, this.width, statusY + 18, GLASS_DARK);
-        g.fill(0, statusY, this.width, statusY + 1, BORDER_BRIGHT);
+        g.fill(0, statusY, this.width, statusY + 18, PARCH_DARK);
+        g.fill(0, statusY, this.width, statusY + 1, BORDER_GOLD);
         String status = "\u25C6 " + LocalizationManager.translate("gui.status_monitoring") + ": " +
             areas.size() + " " + LocalizationManager.translate("gui.status_areas");
         g.drawCenteredString(this.font,
@@ -263,9 +255,9 @@ public class AreaManagementScreen extends Screen {
             return;
         }
         long remaining = toastEndMs - System.currentTimeMillis();
-        int alpha = remaining > 500 ? 0xA0 : (int)(0xA0 * remaining / 500);
-        int bg = (alpha << 24) | 0x000000;
-        int brd = ((Math.min(alpha + 0x20, 0xFF)) << 24) | 0xFFFFFF;
+        int alpha = remaining > 500 ? 0xD0 : (int)(0xD0 * remaining / 500);
+        int bg = (alpha << 24) | 0x3A2A1A;
+        int brd = ((Math.min(alpha + 0x10, 0xFF)) << 24) | 0x8B6914;
 
         int tw = this.font.width(toastMessage) + 24;
         int tx = cx - tw / 2;
@@ -274,8 +266,8 @@ public class AreaManagementScreen extends Screen {
         g.fill(tx, ty, tx + tw, ty + 20, bg);
         g.fill(tx, ty, tx + tw, ty + 1, brd);
         g.fill(tx, ty + 19, tx + tw, ty + 20, brd);
-        g.drawCenteredString(this.font, Component.literal(toastMessage).withStyle(ChatFormatting.WHITE),
-            cx, ty + 5, 0xFFFFFF);
+        g.drawCenteredString(this.font, Component.literal(toastMessage),
+            cx, ty + 5, 0xFFF5DEB3);
     }
 
     // ===== Static inner widget classes (glass-styled) =====
@@ -289,7 +281,7 @@ public class AreaManagementScreen extends Screen {
         }
         @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
             g.drawString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
-                getX() + 2, getY() + (height - 8) / 2, 0xCCCCCC);
+                getX() + 2, getY() + (height - 8) / 2, 0xFF2A1A0A);
         }
     }
 
@@ -300,28 +292,27 @@ public class AreaManagementScreen extends Screen {
                 b -> parent.onEdit(entry), DEFAULT_NARRATION);
         }
         @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
-            g.fill(getX(), getY(), getX() + width, getY() + height, isHoveredOrFocused() ? 0x60000000 : 0x30000000);
-            g.fill(getX(), getY(), getX() + width, getY() + 1, 0x30FFFFFF);
+            int bg = isHoveredOrFocused() ? 0x80B89B6A : 0x50C4A882;
+            g.fill(getX(), getY(), getX() + width, getY() + height, bg);
+            g.fill(getX(), getY(), getX() + width, getY() + 1, 0x608B6914);
             g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
-                getX() + width / 2, getY() + (height - 8) / 2, isHoveredOrFocused() ? 0xFFFFFF : 0x888888);
+                getX() + width / 2, getY() + (height - 8) / 2, isHoveredOrFocused() ? 0xFF2A1A0A : 0xFF6B5B4F);
         }
     }
 
     static class AreaToggleButton extends Button {
         AreaToggleButton(int x, int y, int w, int h, String name, boolean enabled, AreaManagementScreen parent) {
             super(x, y, w, h,
-                Component.literal(enabled
-                    ? LocalizationManager.translate("gui.disable")
-                    : LocalizationManager.translate("gui.enable")),
+                Component.literal(enabled ? LocalizationManager.translate("gui.disable") : LocalizationManager.translate("gui.enable")),
                 b -> parent.onToggle(name), DEFAULT_NARRATION);
         }
         @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
-            int c = getMessage().getString().equals(LocalizationManager.translate("gui.enable"))
-                ? 0x4000AA00 : 0x40AA0000;
-            g.fill(getX(), getY(), getX() + width, getY() + height, isHoveredOrFocused() ? c | 0x20000000 : c);
-            g.fill(getX(), getY(), getX() + width, getY() + 1, 0x40FFFFFF);
+            int c = getMessage().getString().equals(LocalizationManager.translate("gui.enable")) ? 0x504B8C3E : 0x508C3E3E;
+            int bg = isHoveredOrFocused() ? c | 0x20000000 : c;
+            g.fill(getX(), getY(), getX() + width, getY() + height, bg);
+            g.fill(getX(), getY(), getX() + width, getY() + 1, 0x608B6914);
             g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
-                getX() + width / 2, getY() + (height - 8) / 2, 0xCCCCCC);
+                getX() + width / 2, getY() + (height - 8) / 2, 0xFF2A1A0A);
         }
     }
 
@@ -336,19 +327,15 @@ public class AreaManagementScreen extends Screen {
             this.areaName = areaName; this.parent = parent;
         }
         @Override public void onPress() {
-            if (!confirming) {
-                confirming = true;
-                setMessage(Component.literal("\u2715?").withStyle(ChatFormatting.RED));
-            } else {
-                parent.onDelete(areaName);
-            }
+            if (!confirming) { confirming = true; setMessage(Component.literal("\u2715?").withStyle(ChatFormatting.RED)); }
+            else { parent.onDelete(areaName); }
         }
         @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
-            int bg = confirming ? 0x60AA0000 : isHoveredOrFocused() ? 0x60000000 : 0x30000000;
+            int bg = confirming ? 0x808C3E3E : isHoveredOrFocused() ? 0x80B89B6A : 0x50C4A882;
             g.fill(getX(), getY(), getX() + width, getY() + height, bg);
-            g.fill(getX(), getY(), getX() + width, getY() + 1, 0x30FFFFFF);
+            g.fill(getX(), getY(), getX() + width, getY() + 1, 0x608B6914);
             g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
-                getX() + width / 2, getY() + (height - 8) / 2, confirming ? 0xFF4444 : 0x888888);
+                getX() + width / 2, getY() + (height - 8) / 2, confirming ? 0xFFC0392B : 0xFF6B5B4F);
         }
     }
 }

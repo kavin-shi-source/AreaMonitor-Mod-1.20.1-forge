@@ -21,10 +21,10 @@ import java.util.*;
  */
 public class TriggerEditPanel extends Screen {
 
-    private static final int GLASS_DARK    = 0xC0000000;
-    private static final int GLASS_PANEL   = 0x70000000;
-    private static final int BORDER_BRIGHT = 0x80FFFFFF;
-    private static final int BORDER_FAINT  = 0x20FFFFFF;
+    private static final int PARCH_DARK   = 0xD03A2A1A;
+    private static final int PARCH_PANEL  = 0xC0C4A882;
+    private static final int BORDER_GOLD  = 0x808B6914;
+    private static final int BORDER_SHADOW = 0x405C4033;
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final Screen returnScreen;
@@ -219,23 +219,23 @@ public class TriggerEditPanel extends Screen {
     public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g);
         int cx = this.width / 2;
-        g.fill(0, 0, this.width, 28, GLASS_DARK);
-        g.fill(0, 27, this.width, 28, BORDER_BRIGHT);
+        g.fill(0, 0, this.width, 28, PARCH_DARK);
+        g.fill(0, 27, this.width, 28, BORDER_GOLD);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFFFFF);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFF5DEB3);
 
         for (Section s : sections) {
-            g.fill(lx - 6, s.y, lx + panelW + 10, s.y + s.h, GLASS_PANEL);
-            g.fill(lx - 6, s.y, lx + panelW + 10, s.y + 1, BORDER_BRIGHT);
-            g.fill(lx - 6, s.y + s.h - 1, lx + panelW + 10, s.y + s.h, BORDER_FAINT);
+            g.fill(lx - 6, s.y, lx + panelW + 10, s.y + s.h, PARCH_PANEL);
+            g.fill(lx - 6, s.y, lx + panelW + 10, s.y + 1, BORDER_GOLD);
+            g.fill(lx - 6, s.y + s.h - 1, lx + panelW + 10, s.y + s.h, BORDER_SHADOW);
             g.drawString(this.font, Component.literal(s.title).withStyle(ChatFormatting.DARK_GRAY),
-                lx + 2, s.y + 2, 0x999999);
+                lx + 2, s.y + 2, 0xFF8B6914);
         }
 
         // Render labels as plain text (no widgets)
         for (LabelPos l : labels) {
             g.drawString(this.font, Component.literal(l.text).withStyle(ChatFormatting.GRAY),
-                l.x, l.y + 2, 0xAAAAAA);
+                l.x, l.y + 2, 0xFF6B5B4F);
         }
 
         super.render(g, mx, my, pt);
