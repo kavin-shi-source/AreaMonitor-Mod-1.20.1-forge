@@ -28,8 +28,8 @@ public class AreaManagementScreen extends Screen {
     private static final int PARCH_LIGHT  = 0xA0D4B896; // light parchment overlay
     private static final int BORDER_GOLD  = 0x808B6914; // gold-brown accent
     private static final int BORDER_SHADOW = 0x405C4033; // subtle brown shadow
-    private static final int TEXT_PRIMARY = 0xFF2A1A0A; // deep brown
-    private static final int TEXT_DIM     = 0xFF6B5B4F; // medium brown
+    private static final int TEXT_PRIMARY = 0xFFEFEDEB; // light cream
+    private static final int TEXT_DIM     = 0xFFFFFFFF; // white
     private static final int ROW_ALT      = 0x18E8D5B7; // warm tint stripe
     private static final int ACCENT_GREEN  = 0x604B8C3E; // muted green
     private static final int ACCENT_RED    = 0x608C3E3E; // muted red
@@ -44,7 +44,7 @@ public class AreaManagementScreen extends Screen {
     private long toastEndMs = 0;
 
     // Dynamic layout (recalculated in init)
-    private int itemHeight = 24;
+    private int itemHeight = 27;
     private int itemsPerPage = 8;
     private int listLeft, listTop, listWidth;
     private int btnY;
@@ -62,8 +62,8 @@ public class AreaManagementScreen extends Screen {
     }
 
     private void calculateLayout() {
-        listLeft   = this.width / 8;
-        listWidth  = Math.min(this.width - listLeft * 2 - 130, 420);
+        listLeft   = this.width / 14;
+        listWidth  = Math.min(this.width - listLeft * 2 - 130, 413);
         listTop    = 46;
         itemsPerPage = Math.max(3, (this.height - 162) / itemHeight);
         btnY = this.height - 35;
@@ -169,11 +169,11 @@ public class AreaManagementScreen extends Screen {
         int cx = this.width / 2;
 
         // === Title bar ===
-        g.fill(0, 0, this.width, 28, PARCH_DARK);
-        g.fill(0, 27, this.width, 28, BORDER_GOLD);
+        g.fill(0, 0, this.width, 31, PARCH_DARK);
+        g.fill(0, 30, this.width, 31, BORDER_GOLD);
         g.fill(0, 0, this.width, 1, BORDER_GOLD);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFF5DEB3);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 10, 0xFFF5DEB3);
 
         // === Column header ===
         int hdrW = listWidth + 115;
@@ -281,7 +281,7 @@ public class AreaManagementScreen extends Screen {
         }
         @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
             g.drawString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
-                getX() + 2, getY() + (height - 8) / 2, 0xFF2A1A0A);
+                getX() + 2, getY() + (height - 8) / 2, 0xFFEFEDEB);
         }
     }
 
@@ -296,7 +296,7 @@ public class AreaManagementScreen extends Screen {
             g.fill(getX(), getY(), getX() + width, getY() + height, bg);
             g.fill(getX(), getY(), getX() + width, getY() + 1, 0x608B6914);
             g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
-                getX() + width / 2, getY() + (height - 8) / 2, isHoveredOrFocused() ? 0xFF2A1A0A : 0xFF6B5B4F);
+                getX() + width / 2, getY() + (height - 8) / 2, isHoveredOrFocused() ? 0xFFEFEDEB : 0xFFFFFFFF);
         }
     }
 
@@ -312,7 +312,7 @@ public class AreaManagementScreen extends Screen {
             g.fill(getX(), getY(), getX() + width, getY() + height, bg);
             g.fill(getX(), getY(), getX() + width, getY() + 1, 0x608B6914);
             g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
-                getX() + width / 2, getY() + (height - 8) / 2, 0xFF2A1A0A);
+                getX() + width / 2, getY() + (height - 8) / 2, 0xFFEFEDEB);
         }
     }
 
@@ -335,7 +335,7 @@ public class AreaManagementScreen extends Screen {
             g.fill(getX(), getY(), getX() + width, getY() + height, bg);
             g.fill(getX(), getY(), getX() + width, getY() + 1, 0x608B6914);
             g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
-                getX() + width / 2, getY() + (height - 8) / 2, confirming ? 0xFFC0392B : 0xFF6B5B4F);
+                getX() + width / 2, getY() + (height - 8) / 2, confirming ? 0xFFC0392B : 0xFFFFFFFF);
         }
     }
 }

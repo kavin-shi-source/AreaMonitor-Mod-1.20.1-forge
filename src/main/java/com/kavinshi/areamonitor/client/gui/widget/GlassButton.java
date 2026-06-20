@@ -32,7 +32,7 @@ public class GlassButton extends Button {
         g.fill(getX(), getY(), getX() + width, getY() + 1, BORDER_TOP);
         g.fill(getX(), getY() + height - 1, getX() + width, getY() + height, BORDER_BOT);
 
-        int textColor = isHoveredOrFocused() ? 0xFF2A1A0A : 0xFF5C4033;
+        int textColor = isHoveredOrFocused() ? 0xFFEFEDEB : 0xFFFFFFFF;
         g.drawCenteredString(Minecraft.getInstance().font, getMessage(),
             getX() + width / 2, getY() + (height - 8) / 2, textColor);
     }

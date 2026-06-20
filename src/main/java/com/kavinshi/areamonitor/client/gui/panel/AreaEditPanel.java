@@ -174,9 +174,9 @@ public class AreaEditPanel extends Screen {
     @Override public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g);
         int cx = this.width / 2;
-        g.fill(0, 0, this.width, 28, PARCH_DARK);
-        g.fill(0, 27, this.width, 28, BORDER_GOLD);
-        g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFF5DEB3);
+        g.fill(0, 0, this.width, 31, PARCH_DARK);
+        g.fill(0, 30, this.width, 31, BORDER_GOLD);
+        g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 10, 0xFFF5DEB3);
 
         for (SectionPos s : sections) {
             g.fill(lx - 6, s.y, lx + vw + 46, s.y + s.h, PARCH_PANEL);
@@ -184,7 +184,7 @@ public class AreaEditPanel extends Screen {
             g.fill(lx - 6, s.y + s.h - 1, lx + vw + 46, s.y + s.h, BORDER_SHADOW);
             g.drawString(this.font, Component.literal(s.title).withStyle(ChatFormatting.DARK_GRAY), lx + 2, s.y + 2, 0xFF8B6914);
         }
-        for (LabelPos l : labels) g.drawString(this.font, Component.literal(LocalizationManager.translate(l.key)).withStyle(ChatFormatting.GRAY), l.x, l.y + 2, 0xFF6B5B4F);
+        for (LabelPos l : labels) g.drawString(this.font, Component.literal(LocalizationManager.translate(l.key)).withStyle(ChatFormatting.GRAY), l.x, l.y + 2, 0xFFFFFFFF);
         super.render(g, mx, my, pt);
     }
 

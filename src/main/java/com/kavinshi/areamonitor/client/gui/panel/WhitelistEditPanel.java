@@ -127,10 +127,10 @@ public class WhitelistEditPanel extends Screen {
     public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g);
         int cx = this.width / 2;
-        g.fill(0, 0, this.width, 28, PARCH_DARK);
-        g.fill(0, 27, this.width, 28, BORDER_GOLD);
+        g.fill(0, 0, this.width, 31, PARCH_DARK);
+        g.fill(0, 30, this.width, 31, BORDER_GOLD);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFF5DEB3);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 10, 0xFFF5DEB3);
 
         int lx = Math.max(10, cx - this.width / 4);
         g.fill(lx - 6, 56, lx + 232, this.height - 70, PARCH_PANEL);

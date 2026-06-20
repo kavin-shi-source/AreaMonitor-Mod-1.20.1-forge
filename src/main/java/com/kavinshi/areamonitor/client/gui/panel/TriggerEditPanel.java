@@ -219,10 +219,10 @@ public class TriggerEditPanel extends Screen {
     public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g);
         int cx = this.width / 2;
-        g.fill(0, 0, this.width, 28, PARCH_DARK);
-        g.fill(0, 27, this.width, 28, BORDER_GOLD);
+        g.fill(0, 0, this.width, 31, PARCH_DARK);
+        g.fill(0, 30, this.width, 31, BORDER_GOLD);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFF5DEB3);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 10, 0xFFF5DEB3);
 
         for (Section s : sections) {
             g.fill(lx - 6, s.y, lx + panelW + 10, s.y + s.h, PARCH_PANEL);
@@ -235,7 +235,7 @@ public class TriggerEditPanel extends Screen {
         // Render labels as plain text (no widgets)
         for (LabelPos l : labels) {
             g.drawString(this.font, Component.literal(l.text).withStyle(ChatFormatting.GRAY),
-                l.x, l.y + 2, 0xFF6B5B4F);
+                l.x, l.y + 2, 0xFFFFFFFF);
         }
 
         super.render(g, mx, my, pt);
