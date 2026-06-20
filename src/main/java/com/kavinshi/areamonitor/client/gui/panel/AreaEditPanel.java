@@ -68,7 +68,7 @@ public class AreaEditPanel extends Screen {
         addLabel("gui.dimension", y); addCycle(vx, vw, y, dimIdx, DIMENSIONS, v -> { dimIdx = v; rebuild(); }); y += 24;
         addLabel("gui.enter_mode", y); addCycle(vx, vw, y, enterIdx, toModeNames(), v -> { enterIdx = v; rebuild(); }); y += 24;
         addLabel("gui.leave_mode", y); addCycle(vx, vw, y, leaveIdx, toModeNames(), v -> { leaveIdx = v; rebuild(); }); y += 28;
-        sections.add(new SectionPos("  Basic  ", top, y - top - 6));
+        sections.add(new SectionPos("  Basic  ", top, y - top + 2));
 
         // === Bounds ===
         top = y - 6;
@@ -82,7 +82,7 @@ public class AreaEditPanel extends Screen {
             addLabel("gui.bounds_radius", y); bx2 = addCoord(vx, y, "R"); addRenderableWidget(bx2);
         }
         y += 30;
-        sections.add(new SectionPos("  Bounds  ", top, y - top - 6));
+        sections.add(new SectionPos("  Bounds  ", top, y - top + 2));
 
         // === Protection (collapsible) ===
         top = y - 6;
@@ -101,7 +101,7 @@ public class AreaEditPanel extends Screen {
         }
         y += 6;
         addBtn(LocalizationManager.translate(enabled ? "area.enabled" : "area.disabled"), lx, y, vw + 40, () -> { enabled = !enabled; rebuild(); }); y += 32;
-        sections.add(new SectionPos("  Protection  ", top, y - top - 6));
+        sections.add(new SectionPos("  Protection  ", top, y - top + 2));
 
         // === Other ===
         top = y - 6;
@@ -109,7 +109,7 @@ public class AreaEditPanel extends Screen {
         addQuickR(lx, y, "gui.whitelist_settings", () -> { if (this.minecraft != null) this.minecraft.setScreen(new WhitelistEditPanel(AreaEditPanel.this, parentScreen, entry)); }); y += 22;
         addQuickR(lx, y, "gui.restriction_settings", () -> { if (this.minecraft != null) this.minecraft.setScreen(new RestrictionEditPanel(AreaEditPanel.this, parentScreen, entry)); });
         y += 34;
-        sections.add(new SectionPos("  Other  ", top, y - top - 6));
+        sections.add(new SectionPos("  Other  ", top, y - top + 2));
 
         // Save / Cancel
         int btnY = Math.max(y + 4, this.height - 40);
@@ -127,9 +127,9 @@ public class AreaEditPanel extends Screen {
     private void addBtn(String text, int x, int y, int w, Runnable action) { addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> action.run())); }
 
     private void addCycle(int vx, int vw, int y, int idx, List<String> options, java.util.function.IntConsumer onChange) {
-        addRenderableWidget(GlassButton.create(vx, y, 20, 20, "\u25C0", b -> onChange.accept((idx - 1 + options.size()) % options.size())));
-        addRenderableWidget(GlassButton.create(vx + 22, y, vw - 44, 20, options.get(idx), b -> {}));
-        addRenderableWidget(GlassButton.create(vx + vw - 22, y, 20, 20, "\u25B6", b -> onChange.accept((idx + 1) % options.size())));
+        addRenderableWidget(GlassButton.create(vx, y, 20, 18, "\u25C0", b -> onChange.accept((idx - 1 + options.size()) % options.size())));
+        addRenderableWidget(GlassButton.create(vx + 22, y, vw - 44, 18, options.get(idx), b -> {}));
+        addRenderableWidget(GlassButton.create(vx + vw - 22, y, 20, 18, "\u25B6", b -> onChange.accept((idx + 1) % options.size())));
     }
 
     private void addProtToggle(int x, int y, String key, boolean val, java.util.function.Consumer<Boolean> setter) {

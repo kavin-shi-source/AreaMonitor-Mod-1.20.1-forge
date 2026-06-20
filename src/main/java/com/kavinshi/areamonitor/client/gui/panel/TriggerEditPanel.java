@@ -75,7 +75,7 @@ public class TriggerEditPanel extends Screen {
             e -> enterSound = e, e -> enterSoundVol = e, e -> enterSoundPitch = e,
             e -> enterTitleM = e, e -> enterTitleS = e,
             e -> enterTpDim = e, e -> enterTpX = e, e -> enterTpY = e, e -> enterTpZ = e);
-        sections.add(new Section("  Enter Trigger  ", top, y - top - 4));
+        sections.add(new Section("  Enter Trigger  ", top, y - top + 2));
 
         // === Leave ===
         top = y - 8;
@@ -83,7 +83,7 @@ public class TriggerEditPanel extends Screen {
             e -> leaveSound = e, e -> leaveSoundVol = e, e -> leaveSoundPitch = e,
             e -> leaveTitleM = e, e -> leaveTitleS = e,
             e -> leaveTpDim = e, e -> leaveTpX = e, e -> leaveTpY = e, e -> leaveTpZ = e);
-        sections.add(new Section("  Leave Trigger  ", top, y - top - 4));
+        sections.add(new Section("  Leave Trigger  ", top, y - top + 2));
 
         int btnY = Math.max(y + 4, this.height - 40);
         addBtn(lx, btnY, 70, LocalizationManager.translate("gui.save"), () -> { sendUpdate(); onClose(); });

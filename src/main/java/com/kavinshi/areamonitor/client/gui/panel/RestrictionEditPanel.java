@@ -22,11 +22,10 @@ import java.util.*;
  */
 public class RestrictionEditPanel extends Screen {
 
-    private static final int GLASS_DARK    = 0xC0000000;
-    private static final int GLASS_PANEL   = 0x70000000;
-    private static final int BORDER_SOFT   = 0x50FFFFFF;
-    private static final int BORDER_BRIGHT = 0x80FFFFFF;
-    private static final int BORDER_FAINT  = 0x20FFFFFF;
+    private static final int PARCH_DARK   = 0xD03A2A1A;
+    private static final int PARCH_PANEL  = 0xC0C4A882;
+    private static final int BORDER_GOLD  = 0x808B6914;
+    private static final int BORDER_SHADOW = 0x405C4033;
     private static final Gson GSON = new Gson();
 
     private final Screen returnScreen;
@@ -140,11 +139,11 @@ public class RestrictionEditPanel extends Screen {
     }
 
     private void addGlassBtn(int x, int y, int w, String text, Runnable action) {
-        addRenderableWidget(GlassButton.create(x, y, w, 20, text, b -> action.run()));
+        addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> action.run()));
     }
 
     private void addBtn(int x, int y, int w, String text, Runnable action) {
-        addRenderableWidget(GlassButton.create(x, y, w, 20, text, b -> action.run()));
+        addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> action.run()));
     }
 
     private void addRemovable(int x, int y, String text, Runnable remove) {
@@ -189,10 +188,10 @@ public class RestrictionEditPanel extends Screen {
     public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g);
         int cx = this.width / 2;
-        g.fill(0, 0, this.width, 24, GLASS_DARK);
-        g.fill(0, 23, this.width, 24, BORDER_SOFT);
+        g.fill(0, 0, this.width, 31, PARCH_DARK);
+        g.fill(0, 30, this.width, 31, BORDER_GOLD);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 6, 0xFFFFFF);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 10, 0xFFF5DEB3);
 
         int lx = Math.max(10, cx - this.width / 4);
         super.render(g, mx, my, pt);

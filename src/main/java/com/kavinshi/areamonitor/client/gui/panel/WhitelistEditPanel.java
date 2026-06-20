@@ -81,19 +81,17 @@ public class WhitelistEditPanel extends Screen {
         for (int i = 0; i < shown; i++) {
             final int idx = i;
             String p = players.get(i);
-            addRenderableWidget(Button.builder(
-                Component.literal("  \u2022 " + p + "  \u2715"), b -> {
+            addRenderableWidget(GlassButton.create(lx, y, 160, 18, "  \u2022 " + p + "  \u2715", b -> {
                     players.remove(idx);
                     sendUpdate();
                     rebuild();
-                }).pos(lx, y).size(160, 20).build());
+                }));
             y += 22;
         }
 
         if (players.size() > scrollable) {
-            addRenderableWidget(Button.builder(
-                Component.literal("... " + (players.size() - scrollable) + " more"), b -> {})
-                .pos(lx, y).size(160, 20).build());
+            addRenderableWidget(GlassButton.create(lx, y, 160, 18,
+                "... " + (players.size() - scrollable) + " more", b -> {}));
         }
         y = listY_start + listHeight + 8;
 
@@ -103,7 +101,7 @@ public class WhitelistEditPanel extends Screen {
     }
 
     private void addButton(int x, int y, int w, String text, Runnable action) {
-        addRenderableWidget(GlassButton.create(x, y, w, 20, text, b -> action.run()));
+        addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> action.run()));
     }
 
     private void rebuild() { this.clearWidgets(); init(); }
@@ -133,8 +131,8 @@ public class WhitelistEditPanel extends Screen {
             Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 10, 0xFFF5DEB3);
 
         int lx = Math.max(10, cx - this.width / 4);
-        g.fill(lx - 6, 56, lx + 232, this.height - 70, PARCH_PANEL);
-        g.fill(lx - 6, 56, lx + 232, 57, BORDER_GOLD);
+        g.fill(lx - 6, 36, lx + 232, this.height - 70, PARCH_PANEL);
+        g.fill(lx - 6, 36, lx + 232, 37, BORDER_GOLD);
         g.fill(lx - 6, this.height - 71, lx + 232, this.height - 70, BORDER_SHADOW);
         g.drawString(this.font, Component.literal("  Players").withStyle(ChatFormatting.DARK_GRAY),
             lx + 2, 58, 0xFF8B6914);
