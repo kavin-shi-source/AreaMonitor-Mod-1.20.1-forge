@@ -105,9 +105,9 @@ public class AreaEditPanel extends Screen {
 
         // === Other ===
         top = y - 6;
-        addQuickR(lx, y, "gui.trigger_settings", () -> { if (this.minecraft != null) this.minecraft.setScreen(new TriggerEditPanel(AreaEditPanel.this, entry)); }); y += 22;
-        addQuickR(lx, y, "gui.whitelist_settings", () -> { if (this.minecraft != null) this.minecraft.setScreen(new WhitelistEditPanel(AreaEditPanel.this, entry)); }); y += 22;
-        addQuickR(lx, y, "gui.restriction_settings", () -> { if (this.minecraft != null) this.minecraft.setScreen(new RestrictionEditPanel(AreaEditPanel.this, entry)); });
+        addQuickR(lx, y, "gui.trigger_settings", () -> { if (this.minecraft != null) this.minecraft.setScreen(new TriggerEditPanel(AreaEditPanel.this, parentScreen, entry)); }); y += 22;
+        addQuickR(lx, y, "gui.whitelist_settings", () -> { if (this.minecraft != null) this.minecraft.setScreen(new WhitelistEditPanel(AreaEditPanel.this, parentScreen, entry)); }); y += 22;
+        addQuickR(lx, y, "gui.restriction_settings", () -> { if (this.minecraft != null) this.minecraft.setScreen(new RestrictionEditPanel(AreaEditPanel.this, parentScreen, entry)); });
         y += 34;
         sections.add(new SectionPos("  Other  ", top, y - top - 6));
 

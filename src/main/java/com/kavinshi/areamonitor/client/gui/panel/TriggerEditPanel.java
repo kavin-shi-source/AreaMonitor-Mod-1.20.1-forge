@@ -1,6 +1,7 @@
 package com.kavinshi.areamonitor.client.gui.panel;
 
 import com.kavinshi.areamonitor.LocalizationManager;
+import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.network.ModNetwork;
@@ -27,6 +28,7 @@ public class TriggerEditPanel extends Screen {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private final Screen returnScreen;
+    private final AreaManagementScreen mainScreen;
     private final S2CAreaListPacket.AreaEntry entry;
 
     private List<EditBox> enterCmds = new ArrayList<>();
@@ -44,9 +46,10 @@ public class TriggerEditPanel extends Screen {
     private final List<Section> sections = new ArrayList<>();
     private final List<LabelPos> labels = new ArrayList<>();
 
-    public TriggerEditPanel(Screen returnScreen, S2CAreaListPacket.AreaEntry entry) {
+    public TriggerEditPanel(Screen returnScreen, AreaManagementScreen mainScreen, S2CAreaListPacket.AreaEntry entry) {
         super(Component.literal(LocalizationManager.translate("gui.trigger_settings") + ": " + entry.name()));
         this.returnScreen = returnScreen;
+        this.mainScreen = mainScreen;
         this.entry = entry;
     }
 
@@ -208,6 +211,7 @@ public class TriggerEditPanel extends Screen {
 
     @Override
     public void onClose() {
+        mainScreen.updateAfterEdit();
         if (this.minecraft != null) this.minecraft.setScreen(returnScreen);
     }
 
