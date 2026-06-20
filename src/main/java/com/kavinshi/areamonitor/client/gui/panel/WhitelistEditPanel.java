@@ -21,9 +21,11 @@ import java.util.*;
  */
 public class WhitelistEditPanel extends Screen {
 
-    private static final int GLASS_DARK  = 0xA0000000;
-    private static final int GLASS_PANEL = 0x60000000;
-    private static final int BORDER_SOFT = 0x40FFFFFF;
+    private static final int GLASS_DARK    = 0xC0000000;
+    private static final int GLASS_PANEL   = 0x70000000;
+    private static final int BORDER_SOFT   = 0x50FFFFFF;
+    private static final int BORDER_BRIGHT = 0x80FFFFFF;
+    private static final int BORDER_FAINT  = 0x20FFFFFF;
     private static final Gson GSON = new Gson();
 
     private final AreaManagementScreen parentScreen;
@@ -126,17 +128,19 @@ public class WhitelistEditPanel extends Screen {
     public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g);
         int cx = this.width / 2;
-        g.fill(0, 0, this.width, 24, GLASS_DARK);
-        g.fill(0, 23, this.width, 24, BORDER_SOFT);
+        g.fill(0, 0, this.width, 28, GLASS_DARK);
+        g.fill(0, 27, this.width, 28, BORDER_BRIGHT);
+        g.fill(0, 0, this.width, 1, BORDER_SOFT);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 6, 0xFFFFFF);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFFFFF);
 
         int lx = Math.max(10, cx - this.width / 4);
         // Glass panel around list area
-        g.fill(lx - 4, 56, lx + 230, this.height - 70, GLASS_PANEL);
-        g.fill(lx - 4, 56, lx + 230, 57, BORDER_SOFT);
+        g.fill(lx - 6, 56, lx + 232, this.height - 70, GLASS_PANEL);
+        g.fill(lx - 6, 56, lx + 232, 57, BORDER_BRIGHT);
+        g.fill(lx - 6, this.height - 71, lx + 232, this.height - 70, BORDER_FAINT);
         g.drawString(this.font, Component.literal("  Players").withStyle(ChatFormatting.DARK_GRAY),
-            lx, 57, 0x888888);
+            lx + 2, 58, 0x999999);
 
         super.render(g, mx, my, pt);
     }

@@ -20,12 +20,12 @@ import java.util.List;
  */
 public class AreaEditPanel extends Screen {
 
-    // Glass Morphism palette
-    private static final int GLASS_DARK   = 0xA0000000;
-    private static final int GLASS_PANEL  = 0x60000000;
-    private static final int GLASS_SUBTLE = 0x30000000;
-    private static final int BORDER_SOFT  = 0x40FFFFFF;
-    private static final int BORDER_FAINT = 0x20FFFFFF;
+    // Enhanced Glass Morphism palette
+    private static final int GLASS_DARK    = 0xC0000000;
+    private static final int GLASS_PANEL   = 0x70000000;
+    private static final int BORDER_SOFT   = 0x50FFFFFF;
+    private static final int BORDER_BRIGHT = 0x80FFFFFF;
+    private static final int BORDER_FAINT  = 0x20FFFFFF;
 
     private final AreaManagementScreen parentScreen;
     private final S2CAreaListPacket.AreaEntry entry;
@@ -298,19 +298,23 @@ public class AreaEditPanel extends Screen {
         this.renderBackground(g);
         int cx = this.width / 2;
 
-        // Title bar
-        g.fill(0, 0, this.width, 24, GLASS_DARK);
-        g.fill(0, 23, this.width, 24, BORDER_SOFT);
+        // Title bar (double-line)
+        g.fill(0, 0, this.width, 28, GLASS_DARK);
+        g.fill(0, 27, this.width, 28, BORDER_BRIGHT);
+        g.fill(0, 0, this.width, 1, BORDER_SOFT);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 6, 0xFFFFFF);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFFFFF);
 
-        // Section backgrounds
+        // Section backgrounds with bottom shadow edge
         for (SectionPos s : sections) {
-            g.fill(lx - 4, s.y, lx + vw + 44, s.y + s.h, GLASS_PANEL);
-            g.fill(lx - 4, s.y, lx + vw + 44, s.y + 1, BORDER_SOFT);
+            g.fill(lx - 6, s.y, lx + vw + 46, s.y + s.h, GLASS_PANEL);
+            // Bright top accent
+            g.fill(lx - 6, s.y, lx + vw + 46, s.y + 1, BORDER_BRIGHT);
+            // Faint bottom shadow
+            g.fill(lx - 6, s.y + s.h - 1, lx + vw + 46, s.y + s.h, BORDER_FAINT);
             g.drawString(this.font,
                 Component.literal(s.title).withStyle(ChatFormatting.DARK_GRAY),
-                lx, s.y + 1, 0x888888);
+                lx + 2, s.y + 2, 0x999999);
         }
 
         super.render(g, mx, my, pt);

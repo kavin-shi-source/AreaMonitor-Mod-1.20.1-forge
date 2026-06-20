@@ -21,14 +21,21 @@ import java.util.List;
  */
 public class AreaManagementScreen extends Screen {
 
-    // === Glass Morphism palette ===
-    private static final int GLASS_DARK   = 0xA0000000; // title bar
-    private static final int GLASS_PANEL  = 0x60000000; // section bg
+    // === Enhanced Glass Morphism palette ===
+    private static final int GLASS_DARK   = 0xC0000000; // title bar (deeper)
+    private static final int GLASS_PANEL  = 0x70000000; // section bg (richer)
     private static final int GLASS_SUBTLE = 0x30000000; // sub-bg
+    private static final int GLASS_LIGHT  = 0x18000000; // light overlay
     private static final int BORDER_FAINT = 0x20FFFFFF; // subtle border
-    private static final int BORDER_SOFT  = 0x40FFFFFF; // visible border
+    private static final int BORDER_SOFT  = 0x50FFFFFF; // visible border
+    private static final int BORDER_BRIGHT = 0x80FFFFFF; // accent border
     private static final int TEXT_DIM     = 0xB0B0B0B0; // secondary text
-    private static final int ROW_ODD      = 0x0CFFFFFF; // alternating row
+    private static final int ROW_EVEN     = 0x00000000; // even row (transparent)
+    private static final int ROW_ODD      = 0x10FFFFFF; // alternating row
+    private static final int ROW_HOVER    = 0x20FFFFFF; // hover highlight (unused in MC but reserved)
+    private static final int ACCENT_GREEN  = 0x8000AA00; // green accent bg
+    private static final int ACCENT_RED    = 0x80AA0000; // red accent bg
+    private static final int ACCENT_BLUE   = 0x800000AA; // blue accent bg
 
     private List<S2CAreaListPacket.AreaEntry> areas = new ArrayList<>();
     private int scrollOffset = 0;
@@ -59,9 +66,9 @@ public class AreaManagementScreen extends Screen {
 
     private void calculateLayout() {
         listLeft   = this.width / 8;
-        listWidth  = Math.min(this.width - listLeft * 2 - 120, 420);
-        listTop    = 42;
-        itemsPerPage = Math.max(3, (this.height - 158) / itemHeight);
+        listWidth  = Math.min(this.width - listLeft * 2 - 130, 420);
+        listTop    = 46;
+        itemsPerPage = Math.max(3, (this.height - 162) / itemHeight);
         btnY = this.height - 35;
     }
 
@@ -165,45 +172,67 @@ public class AreaManagementScreen extends Screen {
         this.renderBackground(g);
         int cx = this.width / 2;
 
-        // === Title bar (glass dark) ===
-        g.fill(0, 0, this.width, 24, GLASS_DARK);
-        g.fill(0, 23, this.width, 24, BORDER_SOFT);
+        // === Title bar (double-line glass) ===
+        g.fill(0, 0, this.width, 28, GLASS_DARK);
+        g.fill(0, 27, this.width, 28, BORDER_BRIGHT);
+        g.fill(0, 0, this.width, 1, BORDER_SOFT);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 6, 0xFFFFFF);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 8, 0xFFFFFF);
 
-        // === Column header (glass panel) ===
-        int hdrW = listWidth + 110;
-        int hdrY = listTop - 14;
-        g.fill(listLeft - 4, hdrY, listLeft + hdrW, hdrY + 13, GLASS_PANEL);
-        g.fill(listLeft - 4, hdrY + 12, listLeft + hdrW, hdrY + 13, BORDER_FAINT);
+        // === Column header (panel with double border) ===
+        int hdrW = listWidth + 115;
+        int hdrY = listTop - 16;
+        g.fill(listLeft - 6, hdrY, listLeft + hdrW, hdrY + 15, GLASS_PANEL);
+        g.fill(listLeft - 6, hdrY, listLeft + hdrW, hdrY + 1, BORDER_BRIGHT);
+        g.fill(listLeft - 6, hdrY + 14, listLeft + hdrW, hdrY + 15, BORDER_FAINT);
         g.drawString(this.font, LocalizationManager.translate("gui.header_info"),
-            listLeft, listTop - 12, TEXT_DIM);
+            listLeft, listTop - 13, 0xCCCCCC);
         g.drawString(this.font, LocalizationManager.translate("gui.header_action"),
-            listLeft + listWidth - 65, listTop - 12, TEXT_DIM);
+            listLeft + listWidth - 60, listTop - 13, 0xCCCCCC);
 
+        // Scroll info on right side
         if (!areas.isEmpty()) {
             String info = (scrollOffset + 1) + "-" +
-                Math.min(scrollOffset + itemsPerPage, areas.size()) + " / " + areas.size();
-            g.drawString(this.font, info, listLeft + listWidth - 50, listTop - 12, TEXT_DIM);
+                Math.min(scrollOffset + itemsPerPage, areas.size()) + "  /  " + areas.size();
+            g.drawString(this.font, info, listLeft + listWidth + 20, listTop - 13, TEXT_DIM);
         }
 
-        // === Alternating row backgrounds (glass subtle) ===
+        // === Area rows with enhanced styling ===
         int visible = Math.min(Math.max(0, areas.size() - scrollOffset), itemsPerPage);
         for (int i = 0; i < visible; i++) {
-            if (i % 2 == 1) {
-                g.fill(listLeft, listTop + i * itemHeight,
-                    listLeft + listWidth + 105, listTop + (i + 1) * itemHeight - 1, ROW_ODD);
+            int idx = scrollOffset + i;
+            S2CAreaListPacket.AreaEntry entry = areas.get(idx);
+            int rowY = listTop + i * itemHeight;
+
+            // Row background - alternating with accent left edge
+            int rowBg = (i % 2 == 0) ? ROW_EVEN : ROW_ODD;
+            g.fill(listLeft - 2, rowY, listLeft + listWidth + 112, rowY + itemHeight - 1, rowBg);
+            // Left accent bar on row (green=enabled, red=disabled)
+            g.fill(listLeft - 2, rowY + 2, listLeft - 1, rowY + itemHeight - 3,
+                entry.enabled() ? ACCENT_GREEN : ACCENT_RED);
+
+            // Protection indicator (small shield icon if any protection is on)
+            boolean hasProt = entry.protBlockBreak() || entry.protBlockPlace() || entry.protBlockInteract()
+                || entry.protPvp() || entry.protExplosion() || entry.protEntityDamage();
+            if (hasProt) {
+                g.fill(listLeft - 2, rowY, listLeft - 2 + 8, rowY + 7, entry.enabled() ? ACCENT_GREEN : 0x60AAAAAA);
+                g.drawString(this.font, "\u26E8", listLeft - 1, rowY, entry.enabled() ? 0x00CC00 : 0x888888);
             }
         }
 
-        // === Status bar (glass dark + border) ===
+        // === List panel border (vertical lines framing the area list) ===
+        int listBottom = listTop + itemsPerPage * itemHeight;
+        g.fill(listLeft - 6, listTop - 2, listLeft - 5, listBottom, BORDER_FAINT);
+        g.fill(listLeft + listWidth + 110, listTop - 2, listLeft + listWidth + 111, listBottom, BORDER_FAINT);
+
+        // === Status bar (glass dark + bright top edge) ===
         int statusY = this.height - 72;
-        g.fill(0, statusY, this.width, statusY + 16, GLASS_DARK);
-        g.fill(0, statusY, this.width, statusY + 1, BORDER_SOFT);
-        String status = LocalizationManager.translate("gui.status_monitoring") + ": " +
+        g.fill(0, statusY, this.width, statusY + 18, GLASS_DARK);
+        g.fill(0, statusY, this.width, statusY + 1, BORDER_BRIGHT);
+        String status = "\u25C6 " + LocalizationManager.translate("gui.status_monitoring") + ": " +
             areas.size() + " " + LocalizationManager.translate("gui.status_areas");
         g.drawCenteredString(this.font,
-            Component.literal(status).withStyle(ChatFormatting.GRAY), cx, statusY + 4, TEXT_DIM);
+            Component.literal(status).withStyle(ChatFormatting.GRAY), cx, statusY + 5, TEXT_DIM);
 
         // === Toast ===
         renderToast(g, cx);

@@ -21,9 +21,11 @@ import java.util.*;
  */
 public class RestrictionEditPanel extends Screen {
 
-    private static final int GLASS_DARK  = 0xA0000000;
-    private static final int GLASS_PANEL = 0x60000000;
-    private static final int BORDER_SOFT = 0x40FFFFFF;
+    private static final int GLASS_DARK    = 0xC0000000;
+    private static final int GLASS_PANEL   = 0x70000000;
+    private static final int BORDER_SOFT   = 0x50FFFFFF;
+    private static final int BORDER_BRIGHT = 0x80FFFFFF;
+    private static final int BORDER_FAINT  = 0x20FFFFFF;
     private static final Gson GSON = new Gson();
 
     private final AreaManagementScreen parentScreen;
