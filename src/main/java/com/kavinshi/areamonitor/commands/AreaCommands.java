@@ -330,13 +330,12 @@ public class AreaCommands {
         j.add("whitelist", GSON.toJsonTree(area.getWhitelist()));
         j.add("restrictions", GSON.toJsonTree(area.getRestrictions()));
         j.add("protectionWhitelist", GSON.toJsonTree(area.getProtectionWhitelist()));
-        if (area.isScheduleEnabled()) {
-            var sched = new JsonObject();
-            sched.addProperty("enabled", true);
-            if (area.getScheduleTimeMin() != null) sched.addProperty("timeMin", area.getScheduleTimeMin());
-            if (area.getScheduleTimeMax() != null) sched.addProperty("timeMax", area.getScheduleTimeMax());
-            j.add("schedule", sched);
-        }
+        // Always serialize schedule to preserve timeMin/timeMax even when disabled
+        var sched = new JsonObject();
+        sched.addProperty("enabled", area.isScheduleEnabled());
+        if (area.getScheduleTimeMin() != null) sched.addProperty("timeMin", area.getScheduleTimeMin());
+        if (area.getScheduleTimeMax() != null) sched.addProperty("timeMax", area.getScheduleTimeMax());
+        j.add("schedule", sched);
         return j;
     }
 
