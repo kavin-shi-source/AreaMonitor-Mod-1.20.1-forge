@@ -2,6 +2,31 @@
 
 [![English Version](https://img.shields.io/badge/English-Version-blue.svg)](CHANGELOG_EN.md)
 
+## [2.0.4] - 2025-06-20
+
+### 新增
+- **GUI 管理界面**: 全新的浮动窗口式区域管理界面（Glass Morphism 主题），替代原有全屏 GUI，支持暗色世界遮罩 (v2.1.0-dev)
+- **4 个子面板重写**: `AreaEditPanel`（区域编辑，含边界类型切换/保护开关/快速链接）、`WhitelistEditPanel`（白名单编辑，含新增/删除）、`RestrictionEditPanel`（限制编辑，含物品黑名单/命令限制）、`TriggerEditPanel`（触发器编辑，含命令/音效/Title/传送配置）
+- **GlassButton 玻璃态按钮**: 统一风格按钮组件，全屏面使用
+- **多边形选区**: 支持 3-32 个顶点的多边形区域选择，采用射线法碰撞检测（`PolygonBounds`）
+- **区域保护系统**: 6 种保护类型——方块破坏/放置/交互保护、PVP 保护、爆炸保护、实体伤害保护（`ProtectionSettings` + `AreaProtectionManager`）
+- **触发器系统**: 进场/离场独立触发器配置，支持执行命令、播放音效、显示 Title、跨维度传送（`TriggerConfig` + `AreaTriggerManager`）
+- **模板系统**: 内置 3 个模板预设（PVP 竞技场 / 创造区 / 冒险区），支持从模板一键创建区域（`TemplateManager`）
+- **Toast 反馈**: GUI 操作后显示保存/删除/创建成功提示
+
+### 修复
+- 快速链接命令多余前导斜杠修复（`sendCommand` 自动添加 `/`）
+- `WhitelistEditPanel` lx 局部变量改为类字段（去重）
+- Players 文字 y 坐标偏移修正
+- 子面板 `onClose` 正确调用 `mainScreen.updateAfterEdit()` 刷新列表
+- 面板关闭时点击外部区域关闭、列表溢出限制、按键冲突修复
+
+### 优化
+- 响应式布局：子面板控件和分区背景填满窗口宽度
+- 统一分区标题栏样式、标题间距、标签渲染对齐
+- Warm Parchment 暖色调主题编辑器配置
+- 中文本地化 GUI 翻译全覆盖
+
 ## [2.0.3-3] - 2025-06-19
 
 ### 重构

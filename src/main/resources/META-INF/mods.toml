@@ -4,7 +4,7 @@ license="GPL-3.0"
 
 [[mods]]
 modId="areamonitor"
-version="2.0.3"
+version="2.0.4"
 displayName="Area Monitor"
 authors="Kavinshi"
 displayURL="https://github.com/kavin-shi-source/AreaMonitor-Mod-1.20.1-forge"
