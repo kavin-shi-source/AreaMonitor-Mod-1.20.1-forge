@@ -33,6 +33,7 @@ public class WhitelistEditPanel extends Screen {
     private final S2CAreaListPacket.AreaEntry entry;
     private final List<String> players = new ArrayList<>();
     private EditBox nameInput;
+    private int winX, winY, winW, winH;
 
     public WhitelistEditPanel(Screen returnScreen, AreaManagementScreen mainScreen, S2CAreaListPacket.AreaEntry entry) {
         super(Component.literal(LocalizationManager.translate("gui.whitelist_settings") + ": " + entry.name()));
@@ -51,10 +52,12 @@ public class WhitelistEditPanel extends Screen {
     @Override
     protected void init() {
         super.init();
-        int cx = this.width / 2;
-        int lx = Math.max(10, cx - this.width / 4);
-        int vx = lx + 10;
-        int y = 30;
+        winW = Math.min(this.width * 78 / 100, 560);
+        winH = Math.min(this.height * 82 / 100, 480);
+        winX = (this.width - winW) / 2;
+        winY = (this.height - winH) / 2;
+        int lx = winX + 12;
+        int y = winY + 38;
 
         // Add input field
         nameInput = new EditBox(this.font, lx, y, 180, 18, Component.literal("Player name"));
@@ -73,9 +76,9 @@ public class WhitelistEditPanel extends Screen {
         y += 24;
 
         // Player list
-        int listHeight = Math.min(players.size() * 22, this.height - 140);
+        int listHeight = Math.min(players.size() * 22, winH - 140);
         int listY_start = y;
-        int scrollable = Math.max(0, (this.height - 140) / 22);
+        int scrollable = Math.max(0, (winH - 140) / 22);
         int shown = Math.min(players.size(), scrollable);
 
         for (int i = 0; i < shown; i++) {
@@ -123,20 +126,22 @@ public class WhitelistEditPanel extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
-        this.renderBackground(g);
-        int cx = this.width / 2;
-        g.fill(0, 0, this.width, 31, PARCH_DARK);
-        g.fill(0, 30, this.width, 31, BORDER_GOLD);
+        g.fill(0, 0, this.width, this.height, 0x80000000);
+        g.fill(winX, winY, winX + winW, winY + winH, PARCH_PANEL);
+        g.fill(winX + 1, winY + 1, winX + winW - 1, winY + winH - 1, 0xE02A1F14);
+        g.fill(winX, winY, winX + winW, winY + 2, BORDER_GOLD);
+        g.fill(winX, winY, winX + 2, winY + winH, BORDER_GOLD);
+        g.fill(winX + winW - 2, winY, winX + winW, winY + winH, BORDER_GOLD);
+        g.fill(winX, winY + winH - 2, winX + winW, winY + winH, BORDER_GOLD);
+        g.fill(winX + 3, winY + 3, winX + winW - 3, winY + 31, PARCH_DARK);
+        g.fill(winX + 3, winY + 30, winX + winW - 3, winY + 31, BORDER_GOLD);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 10, 0xFFF5DEB3);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), winX + winW / 2, winY + 10, 0xFFF5DEB3);
 
-        int lx = Math.max(10, cx - this.width / 4);
-        g.fill(lx - 6, 36, lx + 232, this.height - 70, PARCH_PANEL);
-        g.fill(lx - 6, 36, lx + 232, 37, BORDER_GOLD);
-        g.fill(lx - 6, this.height - 71, lx + 232, this.height - 70, BORDER_SHADOW);
-        g.drawString(this.font, Component.literal("  Players").withStyle(ChatFormatting.DARK_GRAY),
-            lx + 2, 38, 0xFF8B6914);
-
+        int lx = winX + 12;
+        g.fill(lx - 6, winY + 36, lx + 232, winY + winH - 40, 0x30C4A882);
+        g.fill(lx - 6, winY + 36, lx + 232, winY + 37, BORDER_GOLD);
+        g.drawString(this.font, Component.literal("  Players").withStyle(ChatFormatting.DARK_GRAY), lx + 2, winY + 38, 0xFF8B6914);
         super.render(g, mx, my, pt);
     }
 }

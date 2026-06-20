@@ -38,6 +38,7 @@ public class AreaEditPanel extends Screen {
     private int protCount() { return (protBreak?1:0)+(protPlace?1:0)+(protInteract?1:0)+(protPvp?1:0)+(protExplosion?1:0)+(protDamage?1:0); }
 
     private int lx, vx, vw;
+    private int winX, winY, winW, winH;
     private final List<SectionPos> sections = new ArrayList<>();
     private final List<LabelPos> labels = new ArrayList<>();
 
@@ -57,10 +58,13 @@ public class AreaEditPanel extends Screen {
 
     @Override protected void init() {
         super.init(); sections.clear(); labels.clear();
-        int cx = this.width / 2;
-        lx = clamp(cx - this.width / 4, 10, cx - 40);
-        vx = lx + 75; vw = Math.min(200, this.width - lx * 2 - 40);
-        int y = 30;
+        winW = Math.min(this.width * 78 / 100, 560);
+        winH = Math.min(this.height * 82 / 100, 480);
+        winX = (this.width - winW) / 2;
+        winY = (this.height - winH) / 2;
+        lx = winX + 12;
+        vx = lx + 75; vw = Math.min(200, winW - 40);
+        int y = winY + 38;
 
         // === Basic ===
         int top = y - 6;
@@ -112,7 +116,7 @@ public class AreaEditPanel extends Screen {
         sections.add(new SectionPos("  Other  ", top, y - top + 2));
 
         // Save / Cancel
-        int btnY = Math.max(y + 4, this.height - 40);
+        int btnY = Math.max(y + 4, winY + winH - 40);
         addBtn("[" + LocalizationManager.translate("gui.save") + "]", lx, btnY, 70, this::onSaveAction);
         addBtn("[" + LocalizationManager.translate("gui.cancel") + "]", lx + 80, btnY, 70, this::onClose);
     }
@@ -172,16 +176,22 @@ public class AreaEditPanel extends Screen {
     @Override public void onClose() { if (this.minecraft != null) { this.minecraft.setScreen(parentScreen); parentScreen.updateAfterEdit(); } }
 
     @Override public void render(GuiGraphics g, int mx, int my, float pt) {
-        this.renderBackground(g);
-        int cx = this.width / 2;
-        g.fill(0, 0, this.width, 31, PARCH_DARK);
-        g.fill(0, 30, this.width, 31, BORDER_GOLD);
-        g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 10, 0xFFF5DEB3);
+        g.fill(0, 0, this.width, this.height, 0x80000000);
+        g.fill(winX, winY, winX + winW, winY + winH, PARCH_PANEL);
+        g.fill(winX + 1, winY + 1, winX + winW - 1, winY + winH - 1, 0xE02A1F14);
+        g.fill(winX, winY, winX + winW, winY + 2, BORDER_GOLD);
+        g.fill(winX, winY, winX + 2, winY + winH, BORDER_GOLD);
+        g.fill(winX + winW - 2, winY, winX + winW, winY + winH, BORDER_GOLD);
+        g.fill(winX, winY + winH - 2, winX + winW, winY + winH, BORDER_GOLD);
+
+        g.fill(winX + 3, winY + 3, winX + winW - 3, winY + 31, PARCH_DARK);
+        g.fill(winX + 3, winY + 30, winX + winW - 3, winY + 31, BORDER_GOLD);
+        g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE),
+            winX + winW / 2, winY + 10, 0xFFF5DEB3);
 
         for (SectionPos s : sections) {
-            g.fill(lx - 6, s.y, lx + vw + 46, s.y + s.h, PARCH_PANEL);
+            g.fill(lx - 6, s.y, lx + vw + 46, s.y + s.h, 0x30C4A882);
             g.fill(lx - 6, s.y, lx + vw + 46, s.y + 1, BORDER_GOLD);
-            g.fill(lx - 6, s.y + s.h - 1, lx + vw + 46, s.y + s.h, BORDER_SHADOW);
             g.drawString(this.font, Component.literal(s.title).withStyle(ChatFormatting.DARK_GRAY), lx + 2, s.y + 2, 0xFF8B6914);
         }
         for (LabelPos l : labels) g.drawString(this.font, Component.literal(LocalizationManager.translate(l.key)).withStyle(ChatFormatting.GRAY), l.x, l.y + 2, 0xFFFFFFFF);

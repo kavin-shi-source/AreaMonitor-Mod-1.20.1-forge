@@ -48,6 +48,7 @@ public class AreaManagementScreen extends Screen {
     private int itemsPerPage = 8;
     private int listLeft, listTop, listWidth;
     private int btnY;
+    private int winX, winY, winW, winH;
 
     public AreaManagementScreen() {
         super(Component.literal(LocalizationManager.translate("gui.title")));
@@ -62,11 +63,15 @@ public class AreaManagementScreen extends Screen {
     }
 
     private void calculateLayout() {
-        listLeft   = this.width / 14;
-        listWidth  = Math.min(this.width - listLeft * 2 - 130, 413);
-        listTop    = 46;
-        itemsPerPage = Math.max(3, (this.height - 162) / itemHeight);
-        btnY = this.height - 35;
+        winW = Math.min(this.width * 78 / 100, 560);
+        winH = Math.min(this.height * 82 / 100, 480);
+        winX = (this.width - winW) / 2;
+        winY = (this.height - winH) / 2;
+        listLeft   = winX + 12;
+        listWidth  = Math.min(winW - 24 - 100, 380);
+        listTop    = winY + 44;
+        itemsPerPage = Math.max(3, (winH - 120) / itemHeight);
+        btnY = winY + winH - 40;
     }
 
     public void updateAreaList(List<S2CAreaListPacket.AreaEntry> newAreas) {
@@ -77,20 +82,17 @@ public class AreaManagementScreen extends Screen {
 
     private void rebuildRows() {
         this.clearWidgets();
-        int cx = this.width / 2;
+        int cx = winX + winW / 2;
 
         if (creating) {
             nameInput = new EditBox(this.font, cx - 110, btnY - 23, 220, 18,
                 Component.literal(LocalizationManager.translate("gui.area_name_hint")));
             nameInput.setMaxLength(48);
             addRenderableWidget(nameInput);
-
             glassBtn(LocalizationManager.translate("gui.create"), cx - 110, btnY, 70, this::onCreateConfirm);
-            glassBtn(LocalizationManager.translate("gui.cancel"), cx - 30, btnY, 70, () -> {
-                creating = false; rebuildRows(); });
+            glassBtn(LocalizationManager.translate("gui.cancel"), cx - 30, btnY, 70, () -> { creating = false; rebuildRows(); });
         } else {
-            glassBtn(LocalizationManager.translate("gui.create_new_area"), cx - 110, btnY, 70, () -> {
-                creating = true; rebuildRows(); });
+            glassBtn(LocalizationManager.translate("gui.create_new_area"), cx - 110, btnY, 70, () -> { creating = true; rebuildRows(); });
             glassBtn(LocalizationManager.translate("gui.refresh"), cx - 30, btnY, 70, this::onRefresh);
         }
         glassBtn(LocalizationManager.translate("gui.close"), cx + 50, btnY, 70, this::onClose);
@@ -101,24 +103,19 @@ public class AreaManagementScreen extends Screen {
             int idx = scrollOffset + i;
             S2CAreaListPacket.AreaEntry entry = areas.get(idx);
             int y = listTop + 2 + i * itemHeight;
+            int infoW = listWidth - 70;
 
             Component label = entry.enabled()
                 ? Component.literal("\u2714 ").withStyle(ChatFormatting.GREEN)
                     .append(Component.literal(entry.name() + " ").withStyle(ChatFormatting.WHITE))
-                    .append(Component.literal("[" + entry.dimension() + "] " + entry.boundsType())
-                        .withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal("[" + entry.dimension() + "] " + entry.boundsType()).withStyle(ChatFormatting.GRAY))
                 : Component.literal("\u2718 ").withStyle(ChatFormatting.RED)
                     .append(Component.literal(entry.name() + " ").withStyle(ChatFormatting.WHITE))
-                    .append(Component.literal("[" + entry.dimension() + "] " + entry.boundsType())
-                        .withStyle(ChatFormatting.GRAY));
-
-            int infoW = listWidth - 75;
+                    .append(Component.literal("[" + entry.dimension() + "] " + entry.boundsType()).withStyle(ChatFormatting.GRAY));
             addRenderableWidget(new AreaRowButton(listLeft, y, infoW, itemHeight - 2, label, entry.name(), this));
-            addRenderableWidget(new AreaEditButton(listLeft + infoW + 5, y, 20, itemHeight - 2, entry, this));
-            addRenderableWidget(new AreaToggleButton(listLeft + infoW + 30, y, 50, itemHeight - 2,
-                entry.name(), entry.enabled(), this));
-            addRenderableWidget(new AreaDeleteButton(listLeft + infoW + 85, y, 20, itemHeight - 2,
-                entry.name(), this));
+            addRenderableWidget(new AreaEditButton(listLeft + infoW + 3, y, 20, itemHeight - 2, entry, this));
+            addRenderableWidget(new AreaToggleButton(listLeft + infoW + 26, y, 44, itemHeight - 2, entry.name(), entry.enabled(), this));
+            addRenderableWidget(new AreaDeleteButton(listLeft + infoW + 73, y, 20, itemHeight - 2, entry.name(), this));
         }
     }
 
@@ -165,31 +162,35 @@ public class AreaManagementScreen extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
-        this.renderBackground(g);
-        int cx = this.width / 2;
+        // Dimmed overlay — game world visible through dark tint
+        g.fill(0, 0, this.width, this.height, 0x80000000);
+
+        // === Window background ===
+        g.fill(winX, winY, winX + winW, winY + winH, PARCH_PANEL);
+        g.fill(winX + 1, winY + 1, winX + winW - 1, winY + winH - 1, 0xE02A1F14);
+        // Window border
+        g.fill(winX, winY, winX + winW, winY + 2, BORDER_GOLD);
+        g.fill(winX, winY, winX + 2, winY + winH, BORDER_GOLD);
+        g.fill(winX + winW - 2, winY, winX + winW, winY + winH, BORDER_GOLD);
+        g.fill(winX, winY + winH - 2, winX + winW, winY + winH, BORDER_GOLD);
+
+        int cx = winX + winW / 2;
 
         // === Title bar ===
-        g.fill(0, 0, this.width, 31, PARCH_DARK);
-        g.fill(0, 30, this.width, 31, BORDER_GOLD);
-        g.fill(0, 0, this.width, 1, BORDER_GOLD);
+        g.fill(winX + 3, winY + 3, winX + winW - 3, winY + 31, PARCH_DARK);
+        g.fill(winX + 3, winY + 30, winX + winW - 3, winY + 31, BORDER_GOLD);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 10, 0xFFF5DEB3);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, winY + 10, 0xFFF5DEB3);
 
         // === Column header ===
-        int hdrW = listWidth + 115;
-        int hdrY = listTop - 16;
-        g.fill(listLeft - 6, hdrY, listLeft + hdrW, hdrY + 15, PARCH_PANEL);
-        g.fill(listLeft - 6, hdrY, listLeft + hdrW, hdrY + 1, BORDER_GOLD);
-        g.fill(listLeft - 6, hdrY + 14, listLeft + hdrW, hdrY + 15, BORDER_SHADOW);
-        g.drawString(this.font, LocalizationManager.translate("gui.header_info"),
-            listLeft, listTop - 13, TEXT_DIM);
-        g.drawString(this.font, LocalizationManager.translate("gui.header_action"),
-            listLeft + listWidth - 60, listTop - 13, TEXT_DIM);
-
+        int hdrW = listWidth + 100;
+        g.fill(listLeft - 4, listTop - 16, listLeft + hdrW, listTop - 1, 0x30C4A882);
+        g.fill(listLeft - 4, listTop - 1, listLeft + hdrW, listTop, BORDER_GOLD);
+        g.drawString(this.font, LocalizationManager.translate("gui.header_info"), listLeft, listTop - 13, TEXT_DIM);
+        g.drawString(this.font, LocalizationManager.translate("gui.header_action"), listLeft + listWidth - 50, listTop - 13, TEXT_DIM);
         if (!areas.isEmpty()) {
-            String info = (scrollOffset + 1) + "-" +
-                Math.min(scrollOffset + itemsPerPage, areas.size()) + "  /  " + areas.size();
-            g.drawString(this.font, info, listLeft + listWidth + 20, listTop - 13, TEXT_DIM);
+            String info = (scrollOffset + 1) + "-" + Math.min(scrollOffset + itemsPerPage, areas.size()) + " / " + areas.size();
+            g.drawString(this.font, info, listLeft + listWidth + 10, listTop - 13, TEXT_DIM);
         }
 
         // === Area rows ===
@@ -198,33 +199,24 @@ public class AreaManagementScreen extends Screen {
             int idx = scrollOffset + i;
             S2CAreaListPacket.AreaEntry entry = areas.get(idx);
             int rowY = listTop + i * itemHeight;
-
             int rowBg = (i % 2 == 0) ? 0 : ROW_ALT;
-            g.fill(listLeft - 2, rowY, listLeft + listWidth + 112, rowY + itemHeight - 1, rowBg);
-            g.fill(listLeft - 2, rowY + 2, listLeft - 1, rowY + itemHeight - 3,
-                entry.enabled() ? ACCENT_GREEN : ACCENT_RED);
-
+            g.fill(listLeft - 2, rowY, listLeft + listWidth + 85, rowY + itemHeight - 1, rowBg);
+            g.fill(listLeft - 2, rowY + 2, listLeft - 1, rowY + itemHeight - 3, entry.enabled() ? ACCENT_GREEN : ACCENT_RED);
             boolean hasProt = entry.protBlockBreak() || entry.protBlockPlace() || entry.protBlockInteract()
                 || entry.protPvp() || entry.protExplosion() || entry.protEntityDamage();
             if (hasProt) {
-                g.fill(listLeft - 2, rowY, listLeft - 2 + 8, rowY + 7, entry.enabled() ? ACCENT_GREEN : 0x60808080);
-                g.drawString(this.font, "\u26E8", listLeft - 1, rowY, entry.enabled() ? 0x3A6B3A : TEXT_DIM);
+                g.fill(listLeft - 2, rowY, listLeft + 6, rowY + 8, entry.enabled() ? ACCENT_GREEN : 0x60808080);
+                g.drawString(this.font, "\u26E8", listLeft, rowY, entry.enabled() ? 0x3A6B3A : TEXT_DIM);
             }
         }
 
-        // === List frame ===
-        int listBottom = listTop + itemsPerPage * itemHeight;
-        g.fill(listLeft - 6, listTop - 2, listLeft - 5, listBottom, BORDER_SHADOW);
-        g.fill(listLeft + listWidth + 110, listTop - 2, listLeft + listWidth + 111, listBottom, BORDER_SHADOW);
-
         // === Status bar ===
-        int statusY = this.height - 72;
-        g.fill(0, statusY, this.width, statusY + 18, PARCH_DARK);
-        g.fill(0, statusY, this.width, statusY + 1, BORDER_GOLD);
-        String status = "\u25C6 " + LocalizationManager.translate("gui.status_monitoring") + ": " +
-            areas.size() + " " + LocalizationManager.translate("gui.status_areas");
+        int statusY = btnY - 30;
+        g.fill(winX + 3, statusY - 4, winX + winW - 3, statusY + 16, 0x303A2A1A);
+        g.fill(winX + 3, statusY - 4, winX + winW - 3, statusY - 3, BORDER_GOLD);
         g.drawCenteredString(this.font,
-            Component.literal(status).withStyle(ChatFormatting.GRAY), cx, statusY + 5, TEXT_DIM);
+            Component.literal("\u25C6 " + LocalizationManager.translate("gui.status_monitoring") + ": " + areas.size() + " " + LocalizationManager.translate("gui.status_areas")).withStyle(ChatFormatting.GRAY),
+            cx, statusY, TEXT_DIM);
 
         // === Toast ===
         renderToast(g, cx);
@@ -261,7 +253,7 @@ public class AreaManagementScreen extends Screen {
 
         int tw = this.font.width(toastMessage) + 24;
         int tx = cx - tw / 2;
-        int ty = this.height / 2 - 10;
+        int ty = winY + winH / 2 - 10;
 
         g.fill(tx, ty, tx + tw, ty + 20, bg);
         g.fill(tx, ty, tx + tw, ty + 1, brd);

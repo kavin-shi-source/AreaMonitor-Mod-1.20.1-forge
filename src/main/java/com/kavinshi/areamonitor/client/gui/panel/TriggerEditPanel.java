@@ -43,6 +43,7 @@ public class TriggerEditPanel extends Screen {
 
     // Layout state
     private int lx, vx, panelW;
+    private int winX, winY, winW, winH;
     private final List<Section> sections = new ArrayList<>();
     private final List<LabelPos> labels = new ArrayList<>();
 
@@ -55,16 +56,15 @@ public class TriggerEditPanel extends Screen {
 
     @Override
     protected void init() {
-        super.init();
-        sections.clear();
-        labels.clear();
-        enterCmds.clear(); leaveCmds.clear();
-
-        int cx = this.width / 2;
-        lx = clamp(cx - this.width / 4, 10, cx - 40);
+        super.init(); sections.clear(); labels.clear(); enterCmds.clear(); leaveCmds.clear();
+        winW = Math.min(this.width * 78 / 100, 560);
+        winH = Math.min(this.height * 82 / 100, 480);
+        winX = (this.width - winW) / 2;
+        winY = (this.height - winH) / 2;
+        lx = winX + 12;
         vx = lx + 90;
-        panelW = Math.min(290, this.width - lx * 2);
-        int y = 30;
+        panelW = Math.min(290, winW - 30);
+        int y = winY + 38;
 
         JsonObject enterJ = safeParse(entry.enterTriggerJson());
         JsonObject leaveJ = safeParse(entry.leaveTriggerJson());
@@ -85,7 +85,7 @@ public class TriggerEditPanel extends Screen {
             e -> leaveTpDim = e, e -> leaveTpX = e, e -> leaveTpY = e, e -> leaveTpZ = e);
         sections.add(new Section("  Leave Trigger  ", top, y - top + 2));
 
-        int btnY = Math.max(y + 4, this.height - 40);
+        int btnY = Math.max(y + 4, winY + winH - 40);
         addBtn(lx, btnY, 70, LocalizationManager.translate("gui.save"), () -> { sendUpdate(); onClose(); });
         addBtn(lx + 80, btnY, 70, LocalizationManager.translate("gui.cancel"), this::onClose);
     }
@@ -217,27 +217,24 @@ public class TriggerEditPanel extends Screen {
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
-        this.renderBackground(g);
-        int cx = this.width / 2;
-        g.fill(0, 0, this.width, 31, PARCH_DARK);
-        g.fill(0, 30, this.width, 31, BORDER_GOLD);
+        g.fill(0, 0, this.width, this.height, 0x80000000);
+        g.fill(winX, winY, winX + winW, winY + winH, PARCH_PANEL);
+        g.fill(winX + 1, winY + 1, winX + winW - 1, winY + winH - 1, 0xE02A1F14);
+        g.fill(winX, winY, winX + winW, winY + 2, BORDER_GOLD);
+        g.fill(winX, winY, winX + 2, winY + winH, BORDER_GOLD);
+        g.fill(winX + winW - 2, winY, winX + winW, winY + winH, BORDER_GOLD);
+        g.fill(winX, winY + winH - 2, winX + winW, winY + winH, BORDER_GOLD);
+        g.fill(winX + 3, winY + 3, winX + winW - 3, winY + 31, PARCH_DARK);
+        g.fill(winX + 3, winY + 30, winX + winW - 3, winY + 31, BORDER_GOLD);
         g.drawCenteredString(this.font,
-            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), cx, 10, 0xFFF5DEB3);
+            Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), winX + winW / 2, winY + 10, 0xFFF5DEB3);
 
         for (Section s : sections) {
-            g.fill(lx - 6, s.y, lx + panelW + 10, s.y + s.h, PARCH_PANEL);
+            g.fill(lx - 6, s.y, lx + panelW + 10, s.y + s.h, 0x30C4A882);
             g.fill(lx - 6, s.y, lx + panelW + 10, s.y + 1, BORDER_GOLD);
-            g.fill(lx - 6, s.y + s.h - 1, lx + panelW + 10, s.y + s.h, BORDER_SHADOW);
-            g.drawString(this.font, Component.literal(s.title).withStyle(ChatFormatting.DARK_GRAY),
-                lx + 2, s.y + 2, 0xFF8B6914);
+            g.drawString(this.font, Component.literal(s.title).withStyle(ChatFormatting.DARK_GRAY), lx + 2, s.y + 2, 0xFF8B6914);
         }
-
-        // Render labels as plain text (no widgets)
-        for (LabelPos l : labels) {
-            g.drawString(this.font, Component.literal(l.text).withStyle(ChatFormatting.GRAY),
-                l.x, l.y + 2, 0xFFFFFFFF);
-        }
-
+        for (LabelPos l : labels) g.drawString(this.font, Component.literal(l.text).withStyle(ChatFormatting.GRAY), l.x, l.y + 2, 0xFFFFFFFF);
         super.render(g, mx, my, pt);
     }
 
