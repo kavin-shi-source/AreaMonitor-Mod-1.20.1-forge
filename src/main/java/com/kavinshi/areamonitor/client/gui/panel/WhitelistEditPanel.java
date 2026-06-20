@@ -34,6 +34,7 @@ public class WhitelistEditPanel extends Screen {
     private final List<String> players = new ArrayList<>();
     private EditBox nameInput;
     private int winX, winY, winW, winH;
+    private int lx;
 
     public WhitelistEditPanel(Screen returnScreen, AreaManagementScreen mainScreen, S2CAreaListPacket.AreaEntry entry) {
         super(Component.literal(LocalizationManager.translate("gui.whitelist_settings") + ": " + entry.name()));
@@ -56,7 +57,7 @@ public class WhitelistEditPanel extends Screen {
         winH = Math.min(this.height * 82 / 100, 480);
         winX = (this.width - winW) / 2;
         winY = (this.height - winH) / 2;
-        int lx = winX + 12;
+        lx = winX + 12;
         int y = winY + 38;
 
         // Add input field
@@ -138,7 +139,6 @@ public class WhitelistEditPanel extends Screen {
         g.drawCenteredString(this.font,
             Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), winX + winW / 2, winY + 10, 0xFFF5DEB3);
 
-        int lx = winX + 12;
         g.fill(lx - 6, winY + 36, lx + 232, winY + winH - 40, 0x30C4A882);
         g.fill(lx - 6, winY + 36, lx + 232, winY + 37, BORDER_GOLD);
         g.drawString(this.font, Component.literal("  Players").withStyle(ChatFormatting.DARK_GRAY), lx + 2, winY + 38, 0xFF8B6914);
