@@ -296,6 +296,10 @@ public class AreaCommands {
         clone.setEnterTrigger(copyTrigger(src.getEnterTrigger()));
         clone.setLeaveTrigger(copyTrigger(src.getLeaveTrigger()));
         clone.setRestrictions(copyRestrictions(src.getRestrictions()));
+        clone.setScheduleEnabled(src.isScheduleEnabled());
+        clone.setScheduleTimeMin(src.getScheduleTimeMin());
+        clone.setScheduleTimeMax(src.getScheduleTimeMax());
+        clone.setScheduleWasDisabledBySchedule(src.isScheduleWasDisabledBySchedule());
         AreaManager.getInstance().addArea(clone);
         ConfigManager.saveAreasConfig();
         context.getSource().sendSystemMessage(
@@ -359,6 +363,12 @@ public class AreaCommands {
         if (obj.has("restrictions")) area.setRestrictions(GSON.fromJson(obj.get("restrictions"), RestrictionSettings.class));
         if (obj.has("protectionWhitelist") && obj.get("protectionWhitelist").isJsonArray()) {
             for (var e : obj.getAsJsonArray("protectionWhitelist")) area.getProtectionWhitelist().add(e.getAsString().toLowerCase());
+        }
+        if (obj.has("schedule")) {
+            JsonObject schedObj = obj.getAsJsonObject("schedule");
+            area.setScheduleEnabled(schedObj.has("enabled") && schedObj.get("enabled").getAsBoolean());
+            if (schedObj.has("timeMin")) area.setScheduleTimeMin(schedObj.get("timeMin").getAsInt());
+            if (schedObj.has("timeMax")) area.setScheduleTimeMax(schedObj.get("timeMax").getAsInt());
         }
     }
 
