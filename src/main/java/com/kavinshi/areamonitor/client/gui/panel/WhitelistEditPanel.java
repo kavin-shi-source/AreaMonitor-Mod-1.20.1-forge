@@ -135,7 +135,7 @@ public class WhitelistEditPanel extends Screen {
         g.fill(lx - 6, 36, lx + 232, 37, BORDER_GOLD);
         g.fill(lx - 6, this.height - 71, lx + 232, this.height - 70, BORDER_SHADOW);
         g.drawString(this.font, Component.literal("  Players").withStyle(ChatFormatting.DARK_GRAY),
-            lx + 2, 58, 0xFF8B6914);
+            lx + 2, 38, 0xFF8B6914);
 
         super.render(g, mx, my, pt);
     }
