@@ -27,10 +27,7 @@ public class AreaProtectionManager {
 
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onItemToss(net.minecraftforge.event.entity.item.ItemTossEvent event) {
-        // Parchment mappings remap getEntity() to return ItemEntity at compile-time,
-        // but at runtime it still returns the Player. Use Object bypass + cast.
-        Object rawEntity = event.getEntity();
-        if (!(rawEntity instanceof ServerPlayer sp)) return;
+        if (!(event.getPlayer() instanceof ServerPlayer sp)) return;
         if (!isProtected(sp, "itemDrop")) return;
         event.setCanceled(true);
         sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.item_drop_denied"), true);
