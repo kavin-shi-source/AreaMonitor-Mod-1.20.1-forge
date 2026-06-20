@@ -118,7 +118,7 @@ public class S2CAreaListPacket {
                 | (protExplosion ? 16 : 0) | (protEntityDamage ? 32 : 0)
                 | (protContainerInteract ? 64 : 0) | (protFluidPlace ? 128 : 0)
                 | (protItemDrop ? 256 : 0);
-            buf.writeByte(protBits);
+            buf.writeShort(protBits);
             writeNullableJson(buf, enterTriggerJson);
             writeNullableJson(buf, leaveTriggerJson);
             writeNullableJson(buf, whitelistJson);
@@ -133,7 +133,7 @@ public class S2CAreaListPacket {
             String leave = buf.readUtf();
             String bounds = buf.readUtf();
             String disp = buf.readUtf();
-            int bits = buf.readByte();
+            int bits = buf.readShort();
             return new AreaEntry(name, enabled, dim, enter, leave, bounds, disp,
                 (bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0,
                 (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0,
