@@ -37,7 +37,7 @@ public class AreaCommands {
     public static final List<String> GAME_MODES = List.of("survival", "creative", "adventure", "spectator");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
-    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("uuuuMMdd_HHmmss");
 
     private AreaCommands() {}
 
