@@ -23,8 +23,9 @@ import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.*;
 import java.nio.file.*;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -35,8 +36,8 @@ import java.util.concurrent.CompletableFuture;
 public class AreaCommands {
     public static final List<String> GAME_MODES = List.of("survival", "creative", "adventure", "spectator");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final SimpleDateFormat TIME_FORMAT = new SimpleDateFormat("HH:mm:ss");
-    private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyyMMdd_HHmmss");
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
 
     private AreaCommands() {}
 
@@ -405,7 +406,7 @@ public class AreaCommands {
             Component.literal("§6=== Area Stats ==="));
         for (MonitorArea a : areas) {
             String lastTime = a.getLastVisitTime() > 0
-                ? TIME_FORMAT.format(new Date(a.getLastVisitTime()))
+                ? Instant.ofEpochMilli(a.getLastVisitTime()).atZone(ZoneId.systemDefault()).toLocalTime().format(TIME_FORMAT)
                 : "-";
             context.getSource().sendSystemMessage(
                 Component.literal(String.format("  §e%s §7| entries: §f%d §7| last: §f%s @ %s",
@@ -421,7 +422,7 @@ public class AreaCommands {
     public static int backupConfigs(CommandContext<CommandSourceStack> context) {
         try {
             Path configDir = FMLPaths.CONFIGDIR.get().resolve("areamonitor");
-            String timestamp = DATE_FORMAT.format(new Date());
+            String timestamp = Instant.now().atZone(ZoneId.systemDefault()).toLocalDateTime().format(DATE_FORMAT);
             Path backupDir = configDir.resolve("backups").resolve("backup_" + timestamp);
             Files.createDirectories(backupDir);
 
