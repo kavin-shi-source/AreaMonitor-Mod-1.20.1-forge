@@ -308,6 +308,11 @@ public class AreaCommands {
         clone.setScheduleTimeMin(src.getScheduleTimeMin());
         clone.setScheduleTimeMax(src.getScheduleTimeMax());
         clone.setScheduleWasDisabledBySchedule(src.isScheduleWasDisabledBySchedule());
+        clone.setConditionEnabled(src.isConditionEnabled());
+        clone.setConditionMinPlayers(src.getConditionMinPlayers());
+        clone.setConditionRequirePlayer(src.getConditionRequirePlayer());
+        clone.setChainNext(src.getChainNext());
+        clone.setChainDelayTicks(src.getChainDelayTicks());
         AreaManager.getInstance().addArea(clone);
         ConfigManager.saveAreasConfig();
         context.getSource().sendSystemMessage(
@@ -344,6 +349,17 @@ public class AreaCommands {
         if (area.getScheduleTimeMin() != null) sched.addProperty("timeMin", area.getScheduleTimeMin());
         if (area.getScheduleTimeMax() != null) sched.addProperty("timeMax", area.getScheduleTimeMax());
         j.add("schedule", sched);
+        // Always serialize condition to preserve minPlayers/requirePlayer even when disabled
+        var cond = new JsonObject();
+        cond.addProperty("enabled", area.isConditionEnabled());
+        if (area.getConditionMinPlayers() != null) cond.addProperty("minPlayers", area.getConditionMinPlayers());
+        if (area.getConditionRequirePlayer() != null) cond.addProperty("requirePlayer", area.getConditionRequirePlayer());
+        j.add("condition", cond);
+        // Chain
+        if (area.getChainNext() != null) {
+            j.addProperty("chainNext", area.getChainNext());
+            j.addProperty("chainDelayTicks", area.getChainDelayTicks());
+        }
         return j;
     }
 
@@ -376,6 +392,16 @@ public class AreaCommands {
             area.setScheduleEnabled(schedObj.has("enabled") && schedObj.get("enabled").getAsBoolean());
             if (schedObj.has("timeMin")) area.setScheduleTimeMin(schedObj.get("timeMin").getAsInt());
             if (schedObj.has("timeMax")) area.setScheduleTimeMax(schedObj.get("timeMax").getAsInt());
+        }
+        if (obj.has("condition")) {
+            JsonObject condObj = obj.getAsJsonObject("condition");
+            area.setConditionEnabled(condObj.has("enabled") && condObj.get("enabled").getAsBoolean());
+            if (condObj.has("minPlayers")) area.setConditionMinPlayers(condObj.get("minPlayers").getAsInt());
+            if (condObj.has("requirePlayer")) area.setConditionRequirePlayer(condObj.get("requirePlayer").getAsString().toLowerCase());
+        }
+        if (obj.has("chainNext")) {
+            area.setChainNext(obj.get("chainNext").isJsonNull() ? null : obj.get("chainNext").getAsString());
+            area.setChainDelayTicks(obj.has("chainDelayTicks") ? obj.get("chainDelayTicks").getAsInt() : 0);
         }
     }
 

@@ -29,6 +29,13 @@ public class MonitorArea {
     private boolean scheduleWasDisabledBySchedule = false; // transient runtime state
     private Integer scheduleTimeMin = null; // 0-24000 game ticks
     private Integer scheduleTimeMax = null; // 0-24000 game ticks
+    // Condition-based activation (works alongside schedule)
+    private boolean conditionEnabled = false;
+    private Integer conditionMinPlayers = null;
+    private String conditionRequirePlayer = null;
+    // Area chaining: auto-teleport to next area
+    private String chainNext = null;
+    private int chainDelayTicks = 0;
     // Stats (runtime only, not persisted)
     private final AtomicInteger entryCount = new AtomicInteger(0);
     private String lastVisitor = "-";
@@ -110,6 +117,46 @@ public class MonitorArea {
     public Integer getScheduleTimeMax() { return scheduleTimeMax; }
     public void setScheduleTimeMax(Integer v) { this.scheduleTimeMax = v; }
 
+    // === Condition ===
+    public boolean isConditionEnabled() { return conditionEnabled; }
+    public void setConditionEnabled(boolean v) { this.conditionEnabled = v; }
+    public Integer getConditionMinPlayers() { return conditionMinPlayers; }
+    public void setConditionMinPlayers(Integer v) { this.conditionMinPlayers = v; }
+    public String getConditionRequirePlayer() { return conditionRequirePlayer; }
+    public void setConditionRequirePlayer(String v) { this.conditionRequirePlayer = v; }
+
+    // === Area chain ===
+    public String getChainNext() { return chainNext; }
+    public void setChainNext(String v) { this.chainNext = v; }
+    public int getChainDelayTicks() { return chainDelayTicks; }
+    public void setChainDelayTicks(int v) { this.chainDelayTicks = v; }
+    public boolean hasChainTarget() { return chainNext != null && !chainNext.isEmpty(); }
+
+    /**
+     * Evaluate activation conditions. Returns true if area should be active
+     * based on current server state (player count, specific player presence).
+     */
+    public boolean evaluateCondition(net.minecraft.server.MinecraftServer server) {
+        if (!conditionEnabled) return true; // conditions disabled = always pass
+        if (server == null) return true;
+        // Min player count
+        if (conditionMinPlayers != null && conditionMinPlayers > 0) {
+            if (server.getPlayerCount() < conditionMinPlayers) return false;
+        }
+        // Specific player must be online
+        if (conditionRequirePlayer != null && !conditionRequirePlayer.isEmpty()) {
+            boolean found = false;
+            for (var sp : server.getPlayerList().getPlayers()) {
+                if (sp.getGameProfile().getName().equalsIgnoreCase(conditionRequirePlayer)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return false;
+        }
+        return true;
+    }
+
     // === Stats ===
     public int getEntryCount() { return entryCount.get(); }
     public String getLastVisitor() { return lastVisitor; }
@@ -150,6 +197,8 @@ public class MonitorArea {
         boolean contains(double x, double z);
         AABB getBoundingBox();
         BoundsType getType();
+        /** Returns [centerX, centerZ] for chain teleport target. */
+        double[] getCenter();
     }
 
     public static class RectangleBounds implements AreaBounds {
@@ -176,6 +225,8 @@ public class MonitorArea {
         public BoundsType getType() {
             return BoundsType.RECTANGLE;
         }
+
+        @Override public double[] getCenter() { return new double[]{(minX + maxX) / 2.0, (minZ + maxZ) / 2.0}; }
 
         public int getMinX() { return minX; }
         public int getMinZ() { return minZ; }
@@ -209,6 +260,8 @@ public class MonitorArea {
         public BoundsType getType() {
             return BoundsType.CIRCLE;
         }
+
+        @Override public double[] getCenter() { return new double[]{centerX, centerZ}; }
 
         public int getCenterX() { return centerX; }
         public int getCenterZ() { return centerZ; }
@@ -270,6 +323,12 @@ public class MonitorArea {
         @Override
         public BoundsType getType() {
             return BoundsType.POLYGON;
+        }
+
+        @Override public double[] getCenter() {
+            double cx = 0, cz = 0;
+            for (var v : vertices) { cx += v.x(); cz += v.z(); }
+            return new double[]{cx / vertices.size(), cz / vertices.size()};
         }
 
         public List<Vec2i> getVertices() {

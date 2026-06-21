@@ -218,7 +218,7 @@ public class AreaMonitor {
         AreaManager am = AreaManager.getInstance();
         for (MonitorArea area : am.getAllAreas()) {
             if (!area.isScheduleEnabled()) continue;
-            boolean shouldEnable = area.evaluateSchedule(gameTime);
+            boolean shouldEnable = area.evaluateSchedule(gameTime) && area.evaluateCondition(minecraftServer);
             if (shouldEnable && !area.isEnabled()) {
                 // Schedule says enable, but area is disabled — and wasn't disabled by schedule
                 if (!area.isScheduleWasDisabledBySchedule()) {

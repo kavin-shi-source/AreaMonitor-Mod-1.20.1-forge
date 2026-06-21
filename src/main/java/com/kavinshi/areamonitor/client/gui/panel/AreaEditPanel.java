@@ -29,6 +29,12 @@ public class AreaEditPanel extends Screen {
     private boolean protContainer, protFluid, protItemDrop;
     private boolean schedEnabled;
     private EditBox schedMin, schedMax;
+    // Condition activation
+    private boolean condEnabled, condExpanded = false;
+    private EditBox condMinPlayers, condRequirePlayer;
+    // Chain
+    private boolean chainExpanded = false;
+    private EditBox chainNextInput;
 
     private static final List<String> DIMENSIONS = List.of("minecraft:overworld", "minecraft:the_nether", "minecraft:the_end");
     private static final List<String> GAME_MODES = List.of("survival", "creative", "adventure", "spectator");
@@ -61,6 +67,11 @@ public class AreaEditPanel extends Screen {
             var sched = new com.google.gson.Gson().fromJson(entry.scheduleJson(), com.google.gson.JsonObject.class);
             schedEnabled = sched.has("enabled") && sched.get("enabled").getAsBoolean();
         } catch (Exception ignored) { schedEnabled = false; }
+        // condition
+        if (entry.conditionJson() != null) try {
+            var cond = new com.google.gson.Gson().fromJson(entry.conditionJson(), com.google.gson.JsonObject.class);
+            condEnabled = cond.has("enabled") && cond.get("enabled").getAsBoolean();
+        } catch (Exception ignored) { condEnabled = false; }
         dimIdx = Math.max(0, DIMENSIONS.indexOf(entry.dimension()));
         enterIdx = Math.max(0, GAME_MODES.indexOf(entry.enterMode()));
         leaveIdx = Math.max(0, GAME_MODES.indexOf(entry.leaveMode()));
@@ -139,6 +150,38 @@ public class AreaEditPanel extends Screen {
         y += 8;
         sections.add(new SectionPos("  Schedule  ", top, y - top));
 
+        // === Condition (collapsible) ===
+        top = y - 4;
+        String condFold = condExpanded ? "  \u25BC" : "  \u25B6";
+        String condLabel = "  Condition" + (condEnabled ? " \u2714" : " \u2718");
+        zbtn(lx, y, vw + 40, condLabel + condFold,
+            () -> { condExpanded = !condExpanded; rebuild(); });
+        tooltips.add(new TooltipZone(lx, y, vw + 40, 18, "gui.tooltip_condition"));
+        y += 20;
+        if (condExpanded) {
+            zbtn(lx, y, vw + 40, LocalizationManager.translate(condEnabled ? "area.enabled" : "area.disabled"),
+                () -> { condEnabled = !condEnabled; rebuild(); }); y += 20;
+            addLabel("gui.cond_min_players", y); condMinPlayers = zcoord(vx, y); y += 20;
+            addLabel("gui.cond_require_player", y);
+            condRequirePlayer = zbox(vx, y, 120, ""); // player name input
+        }
+        y += 8;
+        sections.add(new SectionPos("  Condition  ", top, y - top));
+
+        // === Chain (collapsible) ===
+        top = y - 4;
+        String chainFold = chainExpanded ? "  \u25BC" : "  \u25B6";
+        zbtn(lx, y, vw + 40, "  Chain" + chainFold,
+            () -> { chainExpanded = !chainExpanded; rebuild(); });
+        tooltips.add(new TooltipZone(lx, y, vw + 40, 18, "gui.tooltip_chain"));
+        y += 20;
+        if (chainExpanded) {
+            addLabel("gui.chain_next", y);
+            chainNextInput = zbox(vx, y, 160, "");
+        }
+        y += 8;
+        sections.add(new SectionPos("  Chain  ", top, y - top));
+
         // === Other ===
         top = y - 4;
         zbtn(lx, y, vw + 40, "+ " + LocalizationManager.translate("gui.trigger_settings"),
@@ -207,6 +250,18 @@ public class AreaEditPanel extends Screen {
             var schedObj = new com.google.gson.JsonObject();
             schedObj.addProperty("enabled", false);
             json.add("schedule", schedObj);
+        }
+        // Condition
+        var condObj = new com.google.gson.JsonObject();
+        condObj.addProperty("enabled", condEnabled);
+        try { if (condMinPlayers != null && !condMinPlayers.getValue().isEmpty()) condObj.addProperty("minPlayers", Integer.parseInt(condMinPlayers.getValue())); } catch (Exception ignored) {}
+        if (condRequirePlayer != null && !condRequirePlayer.getValue().trim().isEmpty()) condObj.addProperty("requirePlayer", condRequirePlayer.getValue().trim().toLowerCase());
+        json.add("condition", condObj);
+        // Chain
+        if (chainNextInput != null && !chainNextInput.getValue().trim().isEmpty()) {
+            var chainObj = new com.google.gson.JsonObject();
+            chainObj.addProperty("chainNext", chainNextInput.getValue().trim());
+            json.add("chain", chainObj);
         }
         ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.UPDATE, entry.name(), json.toString()));
         onClose();

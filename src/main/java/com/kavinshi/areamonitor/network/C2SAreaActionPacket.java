@@ -156,6 +156,10 @@ public class C2SAreaActionPacket {
             }
             // Schedule update
             if (obj.has("schedule")) applySchedule(area, obj.getAsJsonObject("schedule"));
+            // Condition update
+            if (obj.has("condition")) applyCondition(area, obj.getAsJsonObject("condition"));
+            // Chain update
+            if (obj.has("chain")) applyChain(area, obj.getAsJsonObject("chain"));
             // Restrictions update
             if (obj.has("restrictions")) updateRestrictions(area.getRestrictions(), obj.getAsJsonObject("restrictions"));
         } catch (Exception e) {
@@ -217,5 +221,37 @@ public class C2SAreaActionPacket {
         if (obj.has("timeMax") && !obj.get("timeMax").isJsonNull())
             area.setScheduleTimeMax(obj.get("timeMax").getAsInt());
         else area.setScheduleTimeMax(null);
+    }
+
+    private static void applyCondition(MonitorArea area, JsonObject obj) {
+        if (obj == null || obj.isJsonNull()) {
+            area.setConditionEnabled(false);
+            area.setConditionMinPlayers(null);
+            area.setConditionRequirePlayer(null);
+            return;
+        }
+        area.setConditionEnabled(obj.has("enabled") && obj.get("enabled").getAsBoolean());
+        if (obj.has("minPlayers") && !obj.get("minPlayers").isJsonNull())
+            area.setConditionMinPlayers(obj.get("minPlayers").getAsInt());
+        else area.setConditionMinPlayers(null);
+        if (obj.has("requirePlayer") && !obj.get("requirePlayer").isJsonNull())
+            area.setConditionRequirePlayer(obj.get("requirePlayer").getAsString().toLowerCase());
+        else area.setConditionRequirePlayer(null);
+    }
+
+    private static void applyChain(MonitorArea area, JsonObject obj) {
+        if (obj == null || obj.isJsonNull() || !obj.has("chainNext")) {
+            area.setChainNext(null);
+            area.setChainDelayTicks(0);
+            return;
+        }
+        if (obj.get("chainNext").isJsonNull()) {
+            area.setChainNext(null);
+        } else {
+            area.setChainNext(obj.get("chainNext").getAsString());
+        }
+        if (obj.has("chainDelayTicks") && !obj.get("chainDelayTicks").isJsonNull())
+            area.setChainDelayTicks(obj.get("chainDelayTicks").getAsInt());
+        else area.setChainDelayTicks(0);
     }
 }

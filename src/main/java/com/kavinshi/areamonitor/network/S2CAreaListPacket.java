@@ -80,7 +80,9 @@ public class S2CAreaListPacket {
         String whitelistJson,
         String restrictionsJson,
         String protWhitelistJson,
-        String scheduleJson
+        String scheduleJson,
+        String conditionJson,
+        String chainJson
     ) {
         private static final Gson TGSON = new Gson();
 
@@ -106,7 +108,9 @@ public class S2CAreaListPacket {
                  area.getWhitelist().isEmpty() ? null : TGSON.toJson(area.getWhitelist()),
                  TGSON.toJson(area.getRestrictions()),
                  area.getProtectionWhitelist().isEmpty() ? null : TGSON.toJson(area.getProtectionWhitelist()),
-                 scheduleToJson(area));
+                 scheduleToJson(area),
+                 conditionToJson(area),
+                 chainToJson(area));
         }
 
         public void encode(FriendlyByteBuf buf) {
@@ -129,6 +133,8 @@ public class S2CAreaListPacket {
             writeNullableJson(buf, restrictionsJson);
             writeNullableJson(buf, protWhitelistJson);
             writeNullableJson(buf, scheduleJson);
+            writeNullableJson(buf, conditionJson);
+            writeNullableJson(buf, chainJson);
         }
 
         public static AreaEntry decode(FriendlyByteBuf buf) {
@@ -145,7 +151,8 @@ public class S2CAreaListPacket {
                 (bits & 8) != 0, (bits & 16) != 0, (bits & 32) != 0,
                 (bits & 64) != 0, (bits & 128) != 0, (bits & 256) != 0,
                 readNullableJson(buf), readNullableJson(buf), readNullableJson(buf),
-                readNullableJson(buf), readNullableJson(buf), readNullableJson(buf));
+                readNullableJson(buf), readNullableJson(buf), readNullableJson(buf),
+                readNullableJson(buf), readNullableJson(buf));
         }
 
         private static void writeNullableJson(FriendlyByteBuf buf, String json) {
@@ -164,6 +171,23 @@ public class S2CAreaListPacket {
             obj.addProperty("enabled", true);
             if (area.getScheduleTimeMin() != null) obj.addProperty("timeMin", area.getScheduleTimeMin());
             if (area.getScheduleTimeMax() != null) obj.addProperty("timeMax", area.getScheduleTimeMax());
+            return obj.toString();
+        }
+
+        private static String conditionToJson(MonitorArea area) {
+            if (!area.isConditionEnabled()) return null;
+            var obj = new com.google.gson.JsonObject();
+            obj.addProperty("enabled", true);
+            if (area.getConditionMinPlayers() != null) obj.addProperty("minPlayers", area.getConditionMinPlayers());
+            if (area.getConditionRequirePlayer() != null) obj.addProperty("requirePlayer", area.getConditionRequirePlayer());
+            return obj.toString();
+        }
+
+        private static String chainToJson(MonitorArea area) {
+            if (!area.hasChainTarget()) return null;
+            var obj = new com.google.gson.JsonObject();
+            obj.addProperty("chainNext", area.getChainNext());
+            obj.addProperty("chainDelayTicks", area.getChainDelayTicks());
             return obj.toString();
         }
     }

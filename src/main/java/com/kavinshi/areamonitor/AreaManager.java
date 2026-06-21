@@ -155,6 +155,51 @@ public class AreaManager {
         // Record stats
         area.recordEntry(player.getGameProfile().getName());
 
+        // Area chaining: auto-teleport to next area in chain
+        processChainTeleport(player, area);
+
+    }
+
+    private void processChainTeleport(ServerPlayer player, MonitorArea area) {
+        if (!area.hasChainTarget()) return;
+        String nextName = area.getChainNext();
+        MonitorArea next = areas.get(nextName);
+        if (next == null || !next.isEnabled()) {
+            AreaMonitorMod.LOGGER.debug("Chain target '{}' not found or disabled for area '{}'", nextName, area.getName());
+            return;
+        }
+        // Calculate teleport position: center of the next area
+        double[] center = next.getBounds().getCenter();
+        double tpX = center[0];
+        double tpZ = center[1];
+        var targetDim = next.getDimension();
+        MinecraftServer server = AreaMonitor.getServer();
+        if (server == null) return;
+        var targetLevel = server.getLevel(net.minecraft.resources.ResourceKey.create(
+            net.minecraft.core.registries.Registries.DIMENSION,
+            new net.minecraft.resources.ResourceLocation(targetDim)));
+        if (targetLevel == null) return;
+        // Find safe Y near center
+        double tpY = findSafeY(targetLevel, (int)tpX, (int)tpZ);
+        player.teleportTo(targetLevel, tpX + 0.5, tpY, tpZ + 0.5,
+            player.getYRot(), player.getXRot());
+        player.displayClientMessage(
+            Component.literal("§7→ " + LocalizationManager.translate("gui.chain_teleported").replace("%s", next.getDisplayName())), true);
+    }
+
+    private static double findSafeY(net.minecraft.world.level.Level level, int x, int z) {
+        int y = level.getMaxBuildHeight() - 1;
+        while (y > level.getMinBuildHeight()) {
+            var pos = new net.minecraft.core.BlockPos(x, y, z);
+            var belowPos = new net.minecraft.core.BlockPos(x, y - 1, z);
+            var state = level.getBlockState(pos);
+            var below = level.getBlockState(belowPos);
+            if (state.isAir() && below.canOcclude() && below.isFaceSturdy(level, belowPos, net.minecraft.core.Direction.UP)) {
+                return y;
+            }
+            y--;
+        }
+        return 64;
     }
 
     private void handleAreaLeave(ServerPlayer player, String areaName) {
