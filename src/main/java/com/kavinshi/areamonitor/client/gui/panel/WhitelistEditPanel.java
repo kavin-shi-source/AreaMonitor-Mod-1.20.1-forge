@@ -2,6 +2,7 @@ package com.kavinshi.areamonitor.client.gui.panel;
 
 import com.kavinshi.areamonitor.LocalizationManager;
 import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
+import com.kavinshi.areamonitor.client.gui.widget.ConfirmDialog;
 import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
@@ -28,6 +29,7 @@ public class WhitelistEditPanel extends Screen {
     private final List<String> players = new ArrayList<>();
     private EditBox nameInput;
     private int wx, wy, ww, wh, lx;
+    private final ConfirmDialog confirmDialog = new ConfirmDialog();
 
     public WhitelistEditPanel(Screen returnScreen, AreaManagementScreen mainScreen, S2CAreaListPacket.AreaEntry entry) {
         this(returnScreen, mainScreen, entry, false);
@@ -71,6 +73,18 @@ public class WhitelistEditPanel extends Screen {
         y += 10;
 
         int btnY = Math.max(y, wy + wh - 38);
+        // Clear all button — only show when there are players
+        if (!players.isEmpty()) {
+            zbtn(lx + 200, btnY, 70, LocalizationManager.translate("gui.clear_all"), () -> {
+                confirmDialog.show(
+                    LocalizationManager.translate("gui.confirm_clear_title"),
+                    LocalizationManager.translate("gui.confirm_clear_msg"),
+                    LocalizationManager.translate("gui.confirm"),
+                    LocalizationManager.translate("gui.cancel"),
+                    () -> { players.clear(); sendUpdate(); rebuild(); },
+                    () -> {});
+            });
+        }
         zbtn(lx, btnY, 70, LocalizationManager.translate("gui.save"), this::onClose);
         zbtn(lx + 78, btnY, 70, LocalizationManager.translate("gui.cancel"), this::onClose);
     }
@@ -93,6 +107,10 @@ public class WhitelistEditPanel extends Screen {
     }
 
     @Override public boolean mouseClicked(double mx, double my, int button) {
+        if (confirmDialog.isVisible()) {
+            confirmDialog.mouseClicked(mx, my, button);
+            return true;
+        }
         if (mx < wx || mx > wx + ww || my < wy || my > wy + wh) {
             this.onClose();
             return true;
@@ -115,5 +133,9 @@ public class WhitelistEditPanel extends Screen {
         g.fill(panelX, panelY, panelX + panelW, panelY + 1, BORDER_GOLD);
         g.drawString(this.font, Component.literal("  Players").withStyle(ChatFormatting.DARK_GRAY), lx + 2, panelY + 2, 0xFF8B6914);
         super.render(g, mx, my, pt);
+
+        if (confirmDialog.isVisible()) {
+            confirmDialog.render(g, this.width, this.height);
+        }
     }
 }

@@ -263,6 +263,36 @@ public class AreaVisualizer {
     }
 
     /**
+     * Spawn a particle visible only to a specific player (for protection violation feedback).
+     */
+    public static void spawnParticleForPlayer(ServerPlayer player, double x, double y, double z, ParticleOptions particle) {
+        if (player.level().isClientSide()) {
+            return;
+        }
+        if (player.distanceToSqr(x, y, z) <= MAX_PARTICLE_RENDER_DISTANCE_SQ) {
+            player.connection.send(new ClientboundLevelParticlesPacket(
+                particle, false, x, y, z, 0, 0, 0, 0, 1
+            ));
+        }
+    }
+
+    /**
+     * Spawn a burst of particles at a position visible only to a specific player.
+     * Used for protection violation feedback.
+     */
+    public static void spawnDeniedBurst(ServerPlayer player, double x, double y, double z) {
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                spawnParticleForPlayer(player,
+                    x + dx * 0.25 + 0.5,
+                    y + 0.5 + (dx + dz) * 0.15,
+                    z + dz * 0.25 + 0.5,
+                    ParticleTypes.ANGRY_VILLAGER);
+            }
+        }
+    }
+
+    /**
      * Draw a line of particles between two block positions for a specific player.
      */
     public static void drawLineBetween(ServerPlayer player, BlockPos pos1, BlockPos pos2) {

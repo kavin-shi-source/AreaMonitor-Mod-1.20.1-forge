@@ -6,6 +6,7 @@ import com.kavinshi.areamonitor.network.ModNetwork;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.LocalizationManager;
 import com.kavinshi.areamonitor.client.gui.panel.AreaEditPanel;
+import com.kavinshi.areamonitor.client.gui.widget.ConfirmDialog;
 import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
@@ -46,6 +47,9 @@ public class AreaManagementScreen extends Screen {
     // Toast feedback
     private String toastMessage = "";
     private long toastEndMs = 0;
+
+    // Confirmation dialog
+    private final ConfirmDialog confirmDialog = new ConfirmDialog();
 
     // Dynamic layout (recalculated in init)
     private int itemHeight = 27;
@@ -249,6 +253,11 @@ public class AreaManagementScreen extends Screen {
         renderToast(g, cx);
 
         super.render(g, mx, my, pt);
+
+        // === Confirm dialog (on top of everything) ===
+        if (confirmDialog.isVisible()) {
+            confirmDialog.render(g, this.width, this.height);
+        }
     }
 
     @Override
@@ -259,6 +268,15 @@ public class AreaManagementScreen extends Screen {
             scrollOffset++; rebuildRows();
         }
         return true;
+    }
+
+    @Override
+    public boolean mouseClicked(double mx, double my, int button) {
+        if (confirmDialog.isVisible()) {
+            confirmDialog.mouseClicked(mx, my, button);
+            return true;
+        }
+        return super.mouseClicked(mx, my, button);
     }
 
     // ===== Toast =====
@@ -336,25 +354,30 @@ public class AreaManagementScreen extends Screen {
     }
 
     static class AreaDeleteButton extends Button {
-        private boolean confirming = false;
         private final String areaName;
+        private final ConfirmDialog confirmDialog;
         private final AreaManagementScreen parent;
         AreaDeleteButton(int x, int y, int w, int h, String areaName, AreaManagementScreen parent) {
             super(x, y, w, h,
                 Component.literal("\u2715").withStyle(ChatFormatting.GRAY),
                 b -> {}, DEFAULT_NARRATION);
-            this.areaName = areaName; this.parent = parent;
+            this.areaName = areaName; this.parent = parent; this.confirmDialog = parent.confirmDialog;
         }
         @Override public void onPress() {
-            if (!confirming) { confirming = true; setMessage(Component.literal("\u2715?").withStyle(ChatFormatting.RED)); }
-            else { parent.onDelete(areaName); }
+            confirmDialog.show(
+                LocalizationManager.translate("gui.confirm_delete_title"),
+                LocalizationManager.translate("gui.confirm_delete_msg").replace("%s", areaName),
+                LocalizationManager.translate("gui.confirm"),
+                LocalizationManager.translate("gui.cancel"),
+                () -> parent.onDelete(areaName),
+                () -> {});
         }
         @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
-            int bg = confirming ? 0x808C3E3E : isHoveredOrFocused() ? 0x80B89B6A : 0x50C4A882;
+            int bg = isHoveredOrFocused() ? 0x80B89B6A : 0x50C4A882;
             g.fill(getX(), getY(), getX() + width, getY() + height, bg);
             g.fill(getX(), getY(), getX() + width, getY() + 1, 0x608B6914);
             g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
-                getX() + width / 2, getY() + (height - 8) / 2, confirming ? 0xFFC0392B : 0xFFFFFFFF);
+                getX() + width / 2, getY() + (height - 8) / 2, 0xFFFFFFFF);
         }
     }
 }

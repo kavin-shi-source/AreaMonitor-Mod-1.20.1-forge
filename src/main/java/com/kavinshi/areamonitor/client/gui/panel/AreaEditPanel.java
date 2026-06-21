@@ -43,6 +43,7 @@ public class AreaEditPanel extends Screen {
     private int lx, vx, vw;
     private final List<SectionPos> sections = new ArrayList<>();
     private final List<LabelPos> labels = new ArrayList<>();
+    private final List<TooltipZone> tooltips = new ArrayList<>();
 
     public AreaEditPanel(AreaManagementScreen parent, S2CAreaListPacket.AreaEntry entry) {
         super(Component.literal(LocalizationManager.translate("gui.edit_area") + ": " + entry.name()));
@@ -66,7 +67,7 @@ public class AreaEditPanel extends Screen {
     }
 
     @Override protected void init() {
-        super.init(); sections.clear(); labels.clear();
+        super.init(); sections.clear(); labels.clear(); tooltips.clear();
         ww = Math.min(this.width * 78 / 100, 560);
         wh = Math.min(this.height * 82 / 100, 480);
         wx = (this.width - ww) / 2;
@@ -126,7 +127,9 @@ public class AreaEditPanel extends Screen {
         String schedFold = schedExpanded ? "  \u25BC" : "  \u25B6";
         String schedLabel = "  Schedule" + (schedEnabled ? " \u2714" : " \u2718");
         zbtn(lx, y, vw + 40, schedLabel + schedFold,
-            () -> { schedExpanded = !schedExpanded; rebuild(); }); y += 20;
+            () -> { schedExpanded = !schedExpanded; rebuild(); });
+        tooltips.add(new TooltipZone(lx, y, vw + 40, 18, "gui.tooltip_schedule"));
+        y += 20;
         if (schedExpanded) {
             zbtn(lx, y, vw + 40, LocalizationManager.translate(schedEnabled ? "area.enabled" : "area.disabled"),
                 () -> { schedEnabled = !schedEnabled; rebuild(); }); y += 20;
@@ -161,6 +164,8 @@ public class AreaEditPanel extends Screen {
     private EditBox zcoord(int x, int y) { EditBox e = new EditBox(this.font, x, y, 44, 16, Component.empty()); e.setMaxLength(9); e.setValue("0"); addRenderableWidget(e); return e; }
     private void zprot(int x, int y, String key, boolean val, java.util.function.Consumer<Boolean> s) {
         zbtn(x, y, 108, LocalizationManager.translate(key) + "  " + (val ? LocalizationManager.translate("gui.prot_enabled") : LocalizationManager.translate("gui.prot_disabled")), () -> { s.accept(!val); rebuild(); });
+        String tooltipKey = "gui.tooltip_" + key.substring(4); // gui.prot_XXX -> gui.tooltip_prot_XXX
+        tooltips.add(new TooltipZone(x, y, 108, 18, tooltipKey));
     }
     private void zcycle(int vx, int vw, int y, int idx, List<String> opts, java.util.function.IntConsumer cb) {
         zbtn(vx, y, 18, "\u25C0", () -> cb.accept((idx - 1 + opts.size()) % opts.size()));
@@ -234,6 +239,32 @@ public class AreaEditPanel extends Screen {
         }
         for (LabelPos l : labels) g.drawString(this.font, Component.literal(LocalizationManager.translate(l.key)).withStyle(ChatFormatting.GRAY), l.x, l.y + 1, 0xFFFFFFFF);
         super.render(g, mx, my, pt);
+
+        // Tooltip rendering
+        for (TooltipZone t : tooltips) {
+            if (mx >= t.x && mx <= t.x + t.w && my >= t.y && my <= t.y + t.h) {
+                String tip = LocalizationManager.translate(t.key);
+                if (tip.equals(t.key)) continue; // translation not found, skip
+                renderTooltip(g, mx, my, tip);
+                break;
+            }
+        }
+    }
+
+    private void renderTooltip(GuiGraphics g, int mx, int my, String text) {
+        int padding = 4;
+        int tw = this.font.width(text) + padding * 2;
+        int th = this.font.lineHeight + padding * 2;
+        int tx = Math.min(mx + 8, this.width - tw - 4);
+        int ty = my - th - 4;
+        if (ty < 4) ty = my + 12; // flip below if too close to top
+
+        g.fill(tx, ty, tx + tw, ty + th, 0xE03A2A1A);
+        g.fill(tx, ty, tx + tw, ty + 1, 0xC08B6914);
+        g.fill(tx, ty + th - 1, tx + tw, ty + th, 0xC08B6914);
+        g.fill(tx, ty, tx + 1, ty + th, 0xC08B6914);
+        g.fill(tx + tw - 1, ty, tx + tw, ty + th, 0xC08B6914);
+        g.drawString(this.font, text, tx + padding, ty + padding, 0xFFD4B896);
     }
 
     @Override
@@ -262,4 +293,5 @@ public class AreaEditPanel extends Screen {
 
     private record SectionPos(String title, int y, int h) {}
     private record LabelPos(int x, int y, String key) {}
+    private record TooltipZone(int x, int y, int w, int h, String key) {}
 }

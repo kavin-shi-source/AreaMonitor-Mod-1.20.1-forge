@@ -1,11 +1,13 @@
 package com.kavinshi.areamonitor;
 
 import com.kavinshi.areamonitor.util.MessageUtils;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraftforge.event.entity.item.ItemTossEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
@@ -26,11 +28,12 @@ public class AreaProtectionManager {
     private AreaProtectionManager() {}
 
     @SubscribeEvent(priority = EventPriority.HIGH)
-    public static void onItemToss(net.minecraftforge.event.entity.item.ItemTossEvent event) {
+    public static void onItemToss(ItemTossEvent event) {
         if (!(event.getPlayer() instanceof ServerPlayer sp)) return;
         if (!isProtected(sp, "itemDrop")) return;
         event.setCanceled(true);
         sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.item_drop_denied"), true);
+        AreaVisualizer.spawnDeniedBurst(sp, sp.getX(), sp.getY(), sp.getZ());
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
@@ -40,6 +43,8 @@ public class AreaProtectionManager {
         if (!isProtected(sp, "blockBreak")) return;
         event.setCanceled(true);
         sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.block_break_denied"), true);
+        BlockPos pos = event.getPos();
+        AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
@@ -49,11 +54,15 @@ public class AreaProtectionManager {
         if (isProtected(sp, "blockPlace")) {
             event.setCanceled(true);
             sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.block_place_denied"), true);
+            BlockPos pos = event.getPos();
+            AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
             return;
         }
         if (isFluidPlaceBlocked(sp, event)) {
             event.setCanceled(true);
             sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.fluid_place_denied"), true);
+            BlockPos pos = event.getPos();
+            AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
         }
     }
 
@@ -69,13 +78,15 @@ public class AreaProtectionManager {
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onBlockInteract(PlayerInteractEvent.RightClickBlock event) {
         if (!(event.getEntity() instanceof ServerPlayer sp)) return;
+        BlockPos pos = event.getPos();
         // Container interaction protection
         if (isProtected(sp, "containerInteract")) {
             var level = event.getLevel();
-            var be = level.getBlockEntity(event.getPos());
+            var be = level.getBlockEntity(pos);
             if (be instanceof BaseContainerBlockEntity) {
                 event.setCanceled(true);
                 sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.container_interact_denied"), true);
+                AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
                 return;
             }
         }
@@ -83,6 +94,7 @@ public class AreaProtectionManager {
         if (isProtected(sp, "blockInteract")) {
             event.setCanceled(true);
             sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.block_interact_denied"), true);
+            AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
         }
     }
 
@@ -94,6 +106,7 @@ public class AreaProtectionManager {
             if (isProtected(attacker, "pvp") || isProtected(victim, "pvp")) {
                 event.setCanceled(true);
                 attacker.displayClientMessage(MessageUtils.smartComponent(attacker, "protection.pvp_denied"), true);
+                AreaVisualizer.spawnDeniedBurst(attacker, victim.getX(), victim.getY(), victim.getZ());
                 return;
             }
         }
@@ -102,6 +115,7 @@ public class AreaProtectionManager {
             !(event.getSource().getEntity() instanceof Player)) {
             if (isProtected(victim, "entityDamage")) {
                 event.setCanceled(true);
+                AreaVisualizer.spawnDeniedBurst(victim, victim.getX(), victim.getY(), victim.getZ());
             }
         }
     }
