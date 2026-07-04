@@ -5,6 +5,7 @@ import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.network.ModNetwork;
+import com.kavinshi.areamonitor.client.gui.widget.ConfirmDialog;
 import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import com.google.gson.*;
 import net.minecraft.ChatFormatting;
@@ -30,13 +31,23 @@ public class TriggerEditPanel extends Screen {
     private EditBox leaveSound, leaveSoundVol, leaveSoundPitch, leaveTitleM, leaveTitleS, leaveTpDim, leaveTpX, leaveTpY, leaveTpZ;
 
     private int wx, wy, ww, wh, lx, vx, panelW;
+    // Scroll support
+    private int scrollOffset = 0;
+    private int contentHeight = 0;
+    private int contentTopY, contentBottomY;
+    // Unsaved-change tracking & confirm dialog
+    private boolean dirty = false;
+    private final ConfirmDialog confirmDialog = new ConfirmDialog();
+    private GlassButton saveBtn, cancelBtn;
+
     private final List<Section> sections = new ArrayList<>();
     private final List<LabelPos> labels = new ArrayList<>();
+    private final List<TooltipZone> tooltips = new ArrayList<>();
 
-    // ===== 核心重构：引入界面运行时状态持久化，防止 rebuild() 时数据丢失 =====
+    // ===== 状态持久化 =====
     private boolean initializedData = false;
-    private boolean enterExpanded = true;  // 默认展开 Enter 面板
-    private boolean leaveExpanded = false; // 默认收起 Leave 面板，防止纵向撑爆屏幕
+    private boolean enterExpanded = true;
+    private boolean leaveExpanded = false;
 
     private final List<String> enterCmdValues = new ArrayList<>();
     private String enterSoundVal = "", enterVolVal = "1.0", enterPitchVal = "1.0";
@@ -53,22 +64,23 @@ public class TriggerEditPanel extends Screen {
         this.returnScreen = returnScreen; this.mainScreen = mainScreen; this.entry = entry;
     }
 
-    @Override 
+    @Override
     protected void init() {
-        super.init(); 
-        sections.clear(); labels.clear(); enterCmds.clear(); leaveCmds.clear();
-        
-        ww = Math.min(this.width * 78 / 100, 560); 
+        super.init();
+        sections.clear(); labels.clear(); tooltips.clear(); enterCmds.clear(); leaveCmds.clear();
+
+        ww = Math.min(this.width * 78 / 100, 560);
         wh = Math.min(this.height * 82 / 100, 480);
-        wx = (this.width - ww) / 2; 
+        wx = (this.width - ww) / 2;
         wy = (this.height - wh) / 2;
-        lx = wx + 8; 
-        vx = lx + 85; 
+        lx = wx + 8;
+        vx = lx + 85;
         panelW = ww - 45;
         int titleBarHeight = 26, topPadding = 10;
-        int y = wy + 3 + titleBarHeight + topPadding;
+        contentTopY = wy + 3 + titleBarHeight + topPadding;
+        contentBottomY = wy + wh - 38;
+        int y = contentTopY - scrollOffset;
 
-        // 仅在初次打开 GUI 时从原始封包中解析 Json，后续的刷新使用缓存数据
         if (!initializedData) {
             JsonObject enterJ = safeParse(entry.enterTriggerJson());
             if (enterJ.has("commands") && enterJ.get("commands").isJsonArray()) {
@@ -97,96 +109,99 @@ public class TriggerEditPanel extends Screen {
             initializedData = true;
         }
 
-        // === 1. Enter Trigger 折叠栏主按钮 ===
-        String enterTitle = (enterExpanded ? "▼ " : "▶ ") + LocalizationManager.translate("command.commands") + " (Enter)";
-        zbtn(lx, y, panelW, enterTitle, () -> { enterExpanded = !enterExpanded; saveAndRebuild(); });
-        y += 20;
+        // === 1. Enter Trigger 折叠栏 ===
+        int top = y; y += 14; // 区段标题行（避免与下方按钮重叠）
+        String enterTitle = "\u00A7a" + (enterExpanded ? "\u25BC " : "\u25B6 ") + "\u00A7f" + LocalizationManager.translate("gui.trigger_enter");
+        zbtn(lx, y, panelW, enterTitle, () -> { captureCurrentState(); enterExpanded = !enterExpanded; saveAndRebuild(); }); y += 20;
         if (enterExpanded) {
-            int top = y - 2;
-            y = zsec(y, enterCmds, enterCmdValues, 
+            y = zsec(y, enterCmds, enterCmdValues,
                 e -> enterSound = e, e -> enterSoundVol = e, e -> enterSoundPitch = e,
-                e -> enterTitleM = e, e -> enterTitleS = e, 
+                e -> enterTitleM = e, e -> enterTitleS = e,
                 e -> enterTpDim = e, e -> enterTpX = e, e -> enterTpY = e, e -> enterTpZ = e,
                 enterSoundVal, enterVolVal, enterPitchVal, enterTitleMVal, enterTitleSVal, enterTpDimVal, enterTpXVal, enterTpYVal, enterTpZVal);
-            sections.add(new Section("", top, y - top));
         }
         y += 6;
+        sections.add(new Section("  " + LocalizationManager.translate("gui.trigger_enter") + "  ", top, y - top));
 
-        // === 2. Leave Trigger 折叠栏主按钮 ===
-        String leaveTitle = (leaveExpanded ? "▼ " : "▶ ") + LocalizationManager.translate("command.commands") + " (Leave)";
-        zbtn(lx, y, panelW, leaveTitle, () -> { leaveExpanded = !leaveExpanded; saveAndRebuild(); });
-        y += 20;
+        // === 2. Leave Trigger 折叠栏 ===
+        top = y; y += 14;
+        String leaveTitle = "\u00A7c" + (leaveExpanded ? "\u25BC " : "\u25B6 ") + "\u00A7f" + LocalizationManager.translate("gui.trigger_leave");
+        zbtn(lx, y, panelW, leaveTitle, () -> { captureCurrentState(); leaveExpanded = !leaveExpanded; saveAndRebuild(); }); y += 20;
         if (leaveExpanded) {
-            int top = y - 2;
-            y = zsec(y, leaveCmds, leaveCmdValues, 
+            y = zsec(y, leaveCmds, leaveCmdValues,
                 e -> leaveSound = e, e -> leaveSoundVol = e, e -> leaveSoundPitch = e,
-                e -> leaveTitleM = e, e -> leaveTitleS = e, 
+                e -> leaveTitleM = e, e -> leaveTitleS = e,
                 e -> leaveTpDim = e, e -> leaveTpX = e, e -> leaveTpY = e, e -> leaveTpZ = e,
                 leaveSoundVal, leaveVolVal, leavePitchVal, leaveTitleMVal, leaveTitleSVal, leaveTpDimVal, leaveTpXVal, leaveTpYVal, leaveTpZVal);
-            sections.add(new Section("", top, y - top));
         }
+        sections.add(new Section("  " + LocalizationManager.translate("gui.trigger_leave") + "  ", top, y - top));
 
-        // === 3. 固定底部控制按钮，绝对安全，永不被挤出屏幕外 ===
-        int btnY = wy + wh - 24;
-        zbtn(lx, btnY, 70, LocalizationManager.translate("gui.save"), () -> { captureCurrentState(); sendUpdate(); onClose(); });
-        zbtn(lx + 78, btnY, 70, LocalizationManager.translate("gui.cancel"), this::onClose);
+        // Record content height and clamp scrollOffset
+        contentHeight = (y + scrollOffset) - contentTopY;
+        int visibleH = contentBottomY - contentTopY;
+        int maxScroll = Math.max(0, contentHeight - visibleH);
+        if (scrollOffset > maxScroll) { scrollOffset = maxScroll; }
+
+        // Save / Cancel — centered at bottom (kept as fields so render() can draw them outside the scissor clip)
+        int btnY = wy + wh - 30;
+        int cx = wx + ww / 2;
+        saveBtn = GlassButton.create(cx - 78, btnY, 70, 18, "[" + LocalizationManager.translate("gui.save") + "]", b -> { captureCurrentState(); sendUpdate(); dirty = false; onClose(); });
+        cancelBtn = GlassButton.create(cx + 8, btnY, 70, 18, "[" + LocalizationManager.translate("gui.cancel") + "]", b -> onClose());
+        addRenderableWidget(saveBtn);
+        addRenderableWidget(cancelBtn);
     }
 
-    // 重构核心方法：重绘次级区域，彻底重构坐标系统并引入命令删除键
     private int zsec(int y, List<EditBox> cmds, List<String> cmdValues,
             java.util.function.Consumer<EditBox> snd, java.util.function.Consumer<EditBox> vol, java.util.function.Consumer<EditBox> pitch,
             java.util.function.Consumer<EditBox> tM, java.util.function.Consumer<EditBox> tS,
             java.util.function.Consumer<EditBox> tD, java.util.function.Consumer<EditBox> tX, java.util.function.Consumer<EditBox> tY, java.util.function.Consumer<EditBox> tZ,
             String sndV, String volV, String pitchV, String tMV, String tSV, String tDV, String tXV, String tYV, String tZV) {
-        
+
         final int cmdW = Math.min(panelW - 60, 340);
         if (cmdValues.isEmpty()) cmdValues.add("");
 
-        // 循环渲染多行指令，并添加行尾的简易删除按钮 "×"
         for (int i = 0; i < cmdValues.size(); i++) {
             EditBox box = zbox(vx, y, cmdW, cmdValues.get(i));
             cmds.add(box);
-            
+
             final int idx = i;
-            if (cmdValues.size() > 1) { // 只有大于1行时才提供删除按钮
-                zbtn(vx + cmdW + 4, y, 16, "×", () -> {
-                    captureCurrentState();
-                    cmdValues.remove(idx);
-                    saveAndRebuild();
+            if (cmdValues.size() > 1) {
+                zbtn(vx + cmdW + 4, y, 24, "[\u00D7]", () -> {
+                    captureCurrentState(); cmdValues.remove(idx); dirty = true; saveAndRebuild();
                 });
             }
             y += 18;
         }
 
-        // 贴片放置 "+ Add" 按钮
         zbtn(vx, y, 60, "+ " + LocalizationManager.translate("command.add"), () -> {
             captureCurrentState();
-            if (cmdValues.size() < 20) cmdValues.add(""); // 限制最大 20 条防止面板溢出
-            saveAndRebuild();
+            if (cmdValues.size() < 20) cmdValues.add("");
+            dirty = true; saveAndRebuild();
         });
         y += 22;
 
-        // Sound 音效行优化：大幅拉宽空间，增加小标题对齐，避免重叠
-        addLab(lx + 4, y, "Sound"); EditBox se = zbox(vx, y, 160, sndV); snd.accept(se);
-        addLab(vx + 166, y, "Vol"); EditBox sv = zbox(vx + 188, y, 30, volV); vol.accept(sv);
-        addLab(vx + 224, y, "Pt");  EditBox sp = zbox(vx + 240, y, 30, pitchV); pitch.accept(sp);
+        // Sound 行
+        addLab(lx + 4, y, "gui.trigger_sound"); EditBox se = zbox(vx, y, 160, sndV); snd.accept(se);
+        addLab(vx + 166, y, "gui.trigger_volume"); EditBox sv = zbox(vx + 188, y, 30, volV); vol.accept(sv);
+        addLab(vx + 224, y, "gui.trigger_pitch");  EditBox sp = zbox(vx + 240, y, 30, pitchV); pitch.accept(sp);
+        tooltips.add(new TooltipZone(vx, y, 160, 16, "gui.tooltip_trigger_sound"));
         y += 20;
 
-        // Title 标题行优化：提供合理的编辑长度
-        addLab(lx + 4, y, "Title"); EditBox tm = zbox(vx, y, 110, tMV); tM.accept(tm);
-        addLab(vx + 116, y, "Sub"); EditBox ts = zbox(vx + 140, y, 130, tSV); tS.accept(ts);
+        // Title 行
+        addLab(lx + 4, y, "gui.trigger_title"); EditBox tm = zbox(vx, y, 110, tMV); tM.accept(tm);
+        addLab(vx + 116, y, "gui.trigger_subtitle"); EditBox ts = zbox(vx + 140, y, 130, tSV); tS.accept(ts);
         y += 20;
 
-        // TP 传送行优化：维度与 X/Y/Z 文本彻底独立隔离，互不干扰
-        addLab(lx + 4, y, "TP Dim"); EditBox td = zbox(vx, y, 90, tDV); tD.accept(td);
-        addLab(vx + 96, y, "X");   EditBox tx = zbox(vx + 106, y, 32, tXV); tX.accept(tx);
-        addLab(vx + 142, y, "Y");  EditBox ty = zbox(vx + 152, y, 32, tYV); tY.accept(ty);
-        addLab(vx + 188, y, "Z");  EditBox tz = zbox(vx + 198, y, 32, tZV); tZ.accept(tz);
-        
+        // TP 行
+        addLab(lx + 4, y, "gui.trigger_tp_dim"); EditBox td = zbox(vx, y, 90, tDV); tD.accept(td);
+        addLab(vx + 96, y, "gui.trigger_tp_x");   EditBox tx = zbox(vx + 106, y, 32, tXV); tX.accept(tx);
+        addLab(vx + 142, y, "gui.trigger_tp_y");  EditBox ty = zbox(vx + 152, y, 32, tYV); tY.accept(ty);
+        addLab(vx + 188, y, "gui.trigger_tp_z");  EditBox tz = zbox(vx + 198, y, 32, tZV); tZ.accept(tz);
+        tooltips.add(new TooltipZone(vx, y, 90, 16, "gui.tooltip_trigger_tp"));
+
         return y + 24;
     }
 
-    // 核心工具方法：在擦除小部件重构前，捕获并实时更新内存中的文本状态值
     private void captureCurrentState() {
         if (!enterCmds.isEmpty() && enterSound != null) {
             enterCmdValues.clear();
@@ -210,21 +225,39 @@ public class TriggerEditPanel extends Screen {
     }
 
     private void zbtn(int x, int y, int w, String text, Runnable a) { addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> a.run())); }
-    private EditBox zbox(int x, int y, int w, String v) { EditBox e = new EditBox(this.font, x, y, w, 16, Component.empty()); e.setMaxLength(200); e.setValue(v); addRenderableWidget(e); return e; }
-    private void addLab(int x, int y, String t) { labels.add(new LabelPos(x, y, t)); }
-    private String getStr(JsonObject j, String k, String d) { return j != null && j.has(k) && !j.get(k).isJsonNull() ? j.get(k).getAsString() : d; }
-    
-    // 改良版的4段传送解析器：[0]->维度, [1]->X, [2]->Y, [3]->Z
-    private String[] safeTpParts(String tp) { 
-        if (tp == null || tp.isEmpty()) return new String[]{"", "", "", ""};
-        String[] p = tp.split(" "); 
-        if (p.length >= 4) return new String[]{p[0], p[1], p[2], p[3]}; 
-        if (p.length == 3) return new String[]{"", p[0], p[1], p[2]}; 
-        return new String[]{tp, "", "", ""}; 
+    private EditBox zbox(int x, int y, int w, String v) {
+        EditBox e = new EditBox(this.font, x, y, w, 16, Component.empty());
+        e.setMaxLength(200);
+        e.setValue(v);
+        e.setResponder(v2 -> dirty = true);
+        addRenderableWidget(e);
+        return e;
     }
-    
+    private void addLab(int x, int y, String key) { labels.add(new LabelPos(x, y, LocalizationManager.translate(key))); }
+    private String getStr(JsonObject j, String k, String d) { return j != null && j.has(k) && !j.get(k).isJsonNull() ? j.get(k).getAsString() : d; }
+
+    private String[] safeTpParts(String tp) {
+        if (tp == null || tp.isEmpty()) return new String[]{"", "", "", ""};
+        String[] p = tp.split(" ");
+        if (p.length >= 4) return new String[]{p[0], p[1], p[2], p[3]};
+        if (p.length == 3) return new String[]{"", p[0], p[1], p[2]};
+        return new String[]{tp, "", "", ""};
+    }
+
     private JsonObject safeParse(String j) { try { return j != null ? GSON.fromJson(j, JsonObject.class) : new JsonObject(); } catch (Exception e) { return new JsonObject(); } }
     private void rebuild() { captureCurrentState(); saveAndRebuild(); }
+
+    private java.util.List<EditBox> getAllBoxes() {
+        java.util.List<EditBox> all = new java.util.ArrayList<>();
+        if (enterCmds != null) all.addAll(enterCmds);
+        if (leaveCmds != null) all.addAll(leaveCmds);
+        java.util.stream.Stream.of(enterSound, enterSoundVol, enterSoundPitch, enterTitleM, enterTitleS,
+            enterTpDim, enterTpX, enterTpY, enterTpZ,
+            leaveSound, leaveSoundVol, leaveSoundPitch, leaveTitleM, leaveTitleS,
+            leaveTpDim, leaveTpX, leaveTpY, leaveTpZ)
+            .filter(Objects::nonNull).forEach(all::add);
+        return all;
+    }
 
     private String trigJson(List<EditBox> cmds, EditBox snd, EditBox vol, EditBox pitch, EditBox tM, EditBox tS, EditBox tD, EditBox tX, EditBox tY, EditBox tZ) {
         JsonObject j = new JsonObject(); var arr = new JsonArray();
@@ -254,23 +287,52 @@ public class TriggerEditPanel extends Screen {
     @Override public void onClose() { mainScreen.updateAfterEdit(); if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        java.util.List<EditBox> all = new java.util.ArrayList<>();
-        if (enterCmds != null) all.addAll(enterCmds);
-        if (leaveCmds != null) all.addAll(leaveCmds);
-        java.util.stream.Stream.of(enterSound, enterSoundVol, enterSoundPitch, enterTitleM, enterTitleS,
-            enterTpDim, enterTpX, enterTpY, enterTpZ,
-            leaveSound, leaveSoundVol, leaveSoundPitch, leaveTitleM, leaveTitleS,
-            leaveTpDim, leaveTpX, leaveTpY, leaveTpZ)
-            .filter(Objects::nonNull).forEach(all::add);
-        for (EditBox box : all) {
+        for (EditBox box : getAllBoxes()) {
             if (box.isFocused()) return box.keyPressed(keyCode, scanCode, modifiers);
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
+    @Override public boolean charTyped(char c, int modifiers) {
+        for (EditBox box : getAllBoxes()) {
+            if (box.isFocused()) return box.charTyped(c, modifiers);
+        }
+        return super.charTyped(c, modifiers);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mx, double my, double delta) {
+        if (delta > 0 && scrollOffset > 0) {
+            scrollOffset = Math.max(0, scrollOffset - 20);
+            rebuild();
+        } else if (delta < 0) {
+            int visibleH = contentBottomY - contentTopY;
+            int maxScroll = Math.max(0, contentHeight - visibleH);
+            if (scrollOffset < maxScroll) {
+                scrollOffset = Math.min(maxScroll, scrollOffset + 20);
+                rebuild();
+            }
+        }
+        return true;
+    }
+
     @Override public boolean mouseClicked(double mx, double my, int button) {
+        if (confirmDialog.isVisible()) {
+            confirmDialog.mouseClicked(mx, my, button);
+            return true;
+        }
         if (mx < wx || mx > wx + ww || my < wy || my > wy + wh) {
-            this.onClose();
+            if (dirty) {
+                confirmDialog.show(
+                    LocalizationManager.translate("gui.confirm_discard_title"),
+                    LocalizationManager.translate("gui.confirm_discard_msg"),
+                    LocalizationManager.translate("gui.confirm"),
+                    LocalizationManager.translate("gui.cancel"),
+                    () -> { dirty = false; onClose(); },
+                    () -> {});
+            } else {
+                onClose();
+            }
             return true;
         }
         return super.mouseClicked(mx, my, button);
@@ -286,15 +348,67 @@ public class TriggerEditPanel extends Screen {
         g.fill(wx + 3, wy + 28, wx + ww - 3, wy + 29, BORDER_GOLD);
         g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), wx + ww / 2, wy + 9, 0xFFF5DEB3);
 
-        int secW = Math.min(vx - lx + panelW + 4, ww - 16);
+        // Clip content area so scrolling doesn't bleed into title/bottom-button rows
+        g.enableScissor(wx + 2, contentTopY, wx + ww - 2, contentBottomY);
+        int margin = 8;
+        int secW = ww - (margin * 2);
+        int startX = wx + margin;
         for (Section s : sections) {
-            g.fill(lx - 4, s.y, lx + secW, s.y + s.h, 0x30C4A882);
-            g.fill(lx - 4, s.y, lx + secW, s.y + 1, BORDER_GOLD);
+            g.fill(startX, s.y, startX + secW, s.y + s.h, 0x30C4A882);
+            g.fill(startX, s.y, startX + secW, s.y + 1, BORDER_GOLD);
+            g.drawString(this.font, Component.literal(s.title).withStyle(ChatFormatting.DARK_GRAY), startX + 2, s.y + 2, 0xFF8B6914);
         }
         for (LabelPos l : labels) g.drawString(this.font, Component.literal(l.text).withStyle(ChatFormatting.GRAY), l.x, l.y + 1, 0xFFFFFFFF);
         super.render(g, mx, my, pt);
+        g.disableScissor();
+
+        // Re-draw save/cancel manually (they sit below the scissor clip)
+        if (saveBtn != null) saveBtn.render(g, mx, my, pt);
+        if (cancelBtn != null) cancelBtn.render(g, mx, my, pt);
+
+        // Scrollbar
+        int visibleH = contentBottomY - contentTopY;
+        int maxScroll = Math.max(0, contentHeight - visibleH);
+        if (maxScroll > 0) {
+            int barX = wx + ww - 6;
+            int barH = Math.max(20, visibleH * visibleH / Math.max(1, contentHeight));
+            int barY = contentTopY + (visibleH - barH) * scrollOffset / Math.max(1, maxScroll);
+            g.fill(barX, contentTopY, barX + 4, contentBottomY, 0x408B6914);
+            g.fill(barX, barY, barX + 4, barY + barH, 0xC08B6914);
+        }
+
+        // Tooltip rendering
+        for (TooltipZone t : tooltips) {
+            if (mx >= t.x && mx <= t.x + t.w && my >= t.y && my <= t.y + t.h) {
+                String tip = LocalizationManager.translate(t.key);
+                if (tip.equals(t.key)) continue;
+                renderTooltip(g, mx, my, tip);
+                break;
+            }
+        }
+
+        // Confirm dialog (on top of everything)
+        if (confirmDialog.isVisible()) {
+            confirmDialog.render(g, this.width, this.height);
+        }
+    }
+
+    private void renderTooltip(GuiGraphics g, int mx, int my, String text) {
+        int padding = 4;
+        int tw = this.font.width(text) + padding * 2;
+        int th = this.font.lineHeight + padding * 2;
+        int tx = Math.min(mx + 8, this.width - tw - 4);
+        int ty = my - th - 4;
+        if (ty < 4) ty = my + 12;
+        g.fill(tx, ty, tx + tw, ty + th, 0xE03A2A1A);
+        g.fill(tx, ty, tx + tw, ty + 1, 0xC08B6914);
+        g.fill(tx, ty + th - 1, tx + tw, ty + th, 0xC08B6914);
+        g.fill(tx, ty, tx + 1, ty + th, 0xC08B6914);
+        g.fill(tx + tw - 1, ty, tx + tw, ty + th, 0xC08B6914);
+        g.drawString(this.font, text, tx + padding, ty + padding, 0xFFD4B896);
     }
 
     private record Section(String title, int y, int h) {}
     private record LabelPos(int x, int y, String text) {}
+    private record TooltipZone(int x, int y, int w, int h, String key) {}
 }

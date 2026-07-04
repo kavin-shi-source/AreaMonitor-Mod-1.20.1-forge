@@ -30,7 +30,7 @@ import net.minecraftforge.fml.common.Mod;
  *
  * <p>Command groups:
  * <ul>
- *   <li>{@link WhitelistCommands} — toggle, whitelist, help, language</li>
+ *   <li>{@link WhitelistCommands} — toggle, whitelist, help</li>
  *   <li>{@link AreaCommands} — area create/delete/list/toggle/info/mode</li>
  *   <li>{@link BlacklistCommands} — blacklist add/remove/list/toggle/reload</li>
  *   <li>{@link VisualCommands} — visual tool/show/hide, performance</li>
@@ -82,16 +82,6 @@ public class ExtendedCommands {
 
             .then(Commands.literal("help")
                 .executes(WhitelistCommands::showHelp)
-            )
-
-            .then(Commands.literal("language")
-                .then(Commands.literal("en")
-                    .executes(WhitelistCommands::setLanguageEnglish)
-                )
-                .then(Commands.literal("zh")
-                    .executes(WhitelistCommands::setLanguageChinese)
-                )
-                .executes(WhitelistCommands::showLanguageStatus)
             )
 
             // --- Area commands ---

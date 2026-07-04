@@ -16,7 +16,9 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 
 public class ConfigManager {
@@ -53,6 +55,7 @@ public class ConfigManager {
         public final ForgeConfigSpec.LongValue optimizationCooldownMs;
         public final ForgeConfigSpec.DoubleValue particleSpacing;
         public final ForgeConfigSpec.ConfigValue<String> selectionToolItemId;
+        public final ForgeConfigSpec.ConfigValue<String> language;
 
         public Config(ForgeConfigSpec.Builder builder) {
             builder.comment("Area Monitor Settings").push("area_monitor");
@@ -85,6 +88,10 @@ public class ConfigManager {
                     .comment("Item ID used for the area selection tool (e.g., \"minecraft:wooden_axe\")")
                     .define("selectionToolItemId", "minecraft:wooden_axe");
 
+            language = builder
+                    .comment("Server-side language for clients without the mod. Clients with the mod automatically use their own language.")
+                    .define("language", "en_us");
+
             builder.pop();
 
             // Area configuration instructions
@@ -99,7 +106,10 @@ public class ConfigManager {
     }
 
     public static void init() {
-        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SPEC);
+        // Migrate legacy config file before registering the new path
+        migrateOldCommonConfig();
+
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SPEC, "areamonitor/common.toml");
 
         // Initialize config file paths
         initConfigFiles();
@@ -108,6 +118,26 @@ public class ConfigManager {
         ItemBlacklistManager.initBlacklistConfig();
 
         AreaMonitorMod.LOGGER.info("Area monitor config registered");
+    }
+
+    /**
+     * Migrate legacy config/areamonitor-common.toml to config/areamonitor/common.toml.
+     * Copies (does not delete) the old file so existing settings are preserved.
+     */
+    private static void migrateOldCommonConfig() {
+        try {
+            Path configRoot = FMLPaths.CONFIGDIR.get();
+            Path oldFile = configRoot.resolve("areamonitor-common.toml");
+            Path newFile = configRoot.resolve("areamonitor").resolve("common.toml");
+
+            if (Files.exists(oldFile) && !Files.exists(newFile)) {
+                Files.createDirectories(newFile.getParent());
+                Files.copy(oldFile, newFile, StandardCopyOption.REPLACE_EXISTING);
+                AreaMonitorMod.LOGGER.info("Migrated legacy config: {} -> {}", oldFile, newFile);
+            }
+        } catch (Exception e) {
+            AreaMonitorMod.LOGGER.warn("Failed to migrate legacy areamonitor-common.toml, Forge will create a new default config", e);
+        }
     }
 
     /**

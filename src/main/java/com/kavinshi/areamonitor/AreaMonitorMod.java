@@ -39,9 +39,11 @@ public class AreaMonitorMod {
 
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
+        LocalizationManager.applyConfigLanguage(ConfigManager.CONFIG.language.get());
+
         ConfigManager.loadAreasConfig();
         ItemBlacklistManager.loadBlacklistConfig();
-        
+
         AreaMonitorMod.LOGGER.info("Server started, area monitor ready");
         AreaMonitorMod.LOGGER.info("Loaded {} areas", AreaManager.getInstance().getAllAreas().size());
     }

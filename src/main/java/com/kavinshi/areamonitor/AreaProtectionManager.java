@@ -110,24 +110,56 @@ public class AreaProtectionManager {
                 return;
             }
         }
-        // Entity damage to player (non-player entity attacking)
+        // Entity damage to player (non-player source: mobs, fall, fire, etc.)
         if (event.getEntity() instanceof ServerPlayer victim &&
             !(event.getSource().getEntity() instanceof Player)) {
             if (isProtected(victim, "entityDamage")) {
                 event.setCanceled(true);
                 AreaVisualizer.spawnDeniedBurst(victim, victim.getX(), victim.getY(), victim.getZ());
+                return;
+            }
+        }
+        // Entity damage to non-player living entities (villagers, animals, armor stands, etc.)
+        // Protects all living entities inside entityDamage-protected areas
+        if (!(event.getEntity() instanceof Player)) {
+            net.minecraft.world.entity.LivingEntity victim = event.getEntity();
+            if (isProtectedAtLocation(victim.getX(), victim.getZ(), "entityDamage")) {
+                // Whitelisted players bypass entity damage protection
+                if (event.getSource().getEntity() instanceof ServerPlayer attacker) {
+                    if (WhitelistManager.isWhitelisted(attacker)) return;
+                    String attackerName = attacker.getGameProfile().getName().toLowerCase();
+                    AreaManager am = AreaManager.getInstance();
+                    for (MonitorArea area : am.getAllAreas()) {
+                        if (area.isEnabled() && area.getProtection().isEntityDamage() &&
+                            area.getBounds().contains(victim.getX(), victim.getZ()) &&
+                            area.getProtectionWhitelist().contains(attackerName)) {
+                            return; // attacker is in this area's protection whitelist
+                        }
+                    }
+                }
+                event.setCanceled(true);
             }
         }
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onExplosionDetonate(ExplosionEvent.Detonate event) {
-        // Remove blocks within explosion-protected areas from affected list
+        // Remove blocks and entities within explosion-protected areas from affected lists
         AreaManager am = AreaManager.getInstance();
         event.getAffectedBlocks().removeIf(pos -> {
             for (MonitorArea area : am.getAllAreas()) {
                 if (area.isEnabled() && area.getProtection().isExplosion() &&
                     area.getBounds().contains(pos.getX(), pos.getZ())) {
+                    return true;
+                }
+            }
+            return false;
+        });
+        // Also protect entities (players, mobs, villagers, etc.) from explosion damage
+        event.getAffectedEntities().removeIf(ent -> {
+            for (MonitorArea area : am.getAllAreas()) {
+                if (area.isEnabled() && area.getProtection().isExplosion() &&
+                    area.getBounds().contains(ent.getX(), ent.getZ())) {
                     return true;
                 }
             }
@@ -162,6 +194,24 @@ public class AreaProtectionManager {
                 case "containerInteract": if (p.isContainerInteract()) return true; break;
                 case "fluidPlace": if (p.isFluidPlace()) return true; break;
                 case "itemDrop": if (p.isItemDrop()) return true; break;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Location-based protection check for non-player entities (villagers, animals, etc.)
+     * that have no whitelist concept. Used by entityDamage and explosion protection.
+     */
+    private static boolean isProtectedAtLocation(double x, double z, String protectionType) {
+        AreaManager am = AreaManager.getInstance();
+        for (MonitorArea area : am.getAllAreas()) {
+            if (area == null || !area.isEnabled()) continue;
+            if (!area.getBounds().contains(x, z)) continue;
+            ProtectionSettings p = area.getProtection();
+            switch (protectionType) {
+                case "entityDamage": if (p.isEntityDamage()) return true; break;
+                case "explosion": if (p.isExplosion()) return true; break;
             }
         }
         return false;

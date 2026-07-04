@@ -5,6 +5,7 @@ import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.network.ModNetwork;
+import com.kavinshi.areamonitor.client.gui.widget.ConfirmDialog;
 import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
@@ -19,6 +20,8 @@ public class AreaEditPanel extends Screen {
     private static final int PARCH_DARK   = 0xD03A2A1A;
     private static final int PARCH_PANEL  = 0xC0C4A882;
     private static final int BORDER_GOLD  = 0x808B6914;
+    private static final int ACCENT_GREEN = 0x604B8C3E;
+    private static final int ACCENT_GRAY  = 0x60606060;
 
     private final AreaManagementScreen parentScreen;
     private final S2CAreaListPacket.AreaEntry entry;
@@ -36,6 +39,12 @@ public class AreaEditPanel extends Screen {
     private boolean chainExpanded = false;
     private EditBox chainNextInput;
 
+    // Initial values parsed from entry (for backfilling inputs on open)
+    private String initBx1 = "0", initBz1 = "0", initBx2 = "0", initBz2 = "0";
+    private String initSchedMin = "0", initSchedMax = "0";
+    private String initCondMinPlayers = "0", initCondRequirePlayer = "";
+    private String initChainNext = "";
+
     private static final List<String> DIMENSIONS = List.of("minecraft:overworld", "minecraft:the_nether", "minecraft:the_end");
     private static final List<String> GAME_MODES = List.of("survival", "creative", "adventure", "spectator");
     private static final String[] MODE_KEYS = {"gameMode.survival", "gameMode.creative", "gameMode.adventure", "gameMode.spectator"};
@@ -47,6 +56,17 @@ public class AreaEditPanel extends Screen {
     private int wx, wy, ww, wh;
     // Content area (inside window, below title)
     private int lx, vx, vw;
+    // Scroll support
+    private int scrollOffset = 0;
+    private int contentHeight = 0;
+    private int contentTopY;    // absolute y where content begins (below title bar)
+    private int contentBottomY; // absolute y where content ends (above bottom buttons)
+    // All EditBox instances for unified keyPressed handling
+    private final List<EditBox> allBoxes = new ArrayList<>();
+    // Unsaved-change tracking & confirm dialog
+    private boolean dirty = false;
+    private final ConfirmDialog confirmDialog = new ConfirmDialog();
+
     private final List<SectionPos> sections = new ArrayList<>();
     private final List<LabelPos> labels = new ArrayList<>();
     private final List<TooltipZone> tooltips = new ArrayList<>();
@@ -66,149 +86,204 @@ public class AreaEditPanel extends Screen {
         if (entry.scheduleJson() != null) try {
             var sched = new com.google.gson.Gson().fromJson(entry.scheduleJson(), com.google.gson.JsonObject.class);
             schedEnabled = sched.has("enabled") && sched.get("enabled").getAsBoolean();
+            if (sched.has("timeMin")) initSchedMin = String.valueOf(sched.get("timeMin").getAsInt());
+            if (sched.has("timeMax")) initSchedMax = String.valueOf(sched.get("timeMax").getAsInt());
         } catch (Exception ignored) { schedEnabled = false; }
         // condition
         if (entry.conditionJson() != null) try {
             var cond = new com.google.gson.Gson().fromJson(entry.conditionJson(), com.google.gson.JsonObject.class);
             condEnabled = cond.has("enabled") && cond.get("enabled").getAsBoolean();
+            if (cond.has("minPlayers")) initCondMinPlayers = String.valueOf(cond.get("minPlayers").getAsInt());
+            if (cond.has("requirePlayer")) initCondRequirePlayer = cond.get("requirePlayer").getAsString();
         } catch (Exception ignored) { condEnabled = false; }
+        // chain
+        if (entry.chainJson() != null) try {
+            var chain = new com.google.gson.Gson().fromJson(entry.chainJson(), com.google.gson.JsonObject.class);
+            if (chain.has("chainNext")) initChainNext = chain.get("chainNext").getAsString();
+        } catch (Exception ignored) {}
+        // bounds coordinates
+        if (entry.boundsCoordsJson() != null) try {
+            var bc = new com.google.gson.Gson().fromJson(entry.boundsCoordsJson(), com.google.gson.JsonObject.class);
+            if (rectangleMode) {
+                if (bc.has("minX")) initBx1 = String.valueOf(bc.get("minX").getAsInt());
+                if (bc.has("minZ")) initBz1 = String.valueOf(bc.get("minZ").getAsInt());
+                if (bc.has("maxX")) initBx2 = String.valueOf(bc.get("maxX").getAsInt());
+                if (bc.has("maxZ")) initBz2 = String.valueOf(bc.get("maxZ").getAsInt());
+            } else {
+                if (bc.has("centerX")) initBx1 = String.valueOf(bc.get("centerX").getAsInt());
+                if (bc.has("centerZ")) initBz1 = String.valueOf(bc.get("centerZ").getAsInt());
+                if (bc.has("radius")) initBx2 = String.valueOf(bc.get("radius").getAsInt());
+            }
+        } catch (Exception ignored) {}
         dimIdx = Math.max(0, DIMENSIONS.indexOf(entry.dimension()));
         enterIdx = Math.max(0, GAME_MODES.indexOf(entry.enterMode()));
         leaveIdx = Math.max(0, GAME_MODES.indexOf(entry.leaveMode()));
     }
 
     @Override protected void init() {
-        super.init(); sections.clear(); labels.clear(); tooltips.clear();
+        super.init(); sections.clear(); labels.clear(); tooltips.clear(); allBoxes.clear();
         ww = Math.min(this.width * 78 / 100, 560);
         wh = Math.min(this.height * 82 / 100, 480);
         wx = (this.width - ww) / 2;
         wy = (this.height - wh) / 2;
         lx = wx + 8;
         vx = lx + 70;
-        vw = Math.min(ww - 110, 320);  // fill most of window width
+        vw = Math.min(ww - 110, 320);
         int titleBarHeight = 26, topPadding = 10;
-        int y = wy + 3 + titleBarHeight + topPadding;
+        contentTopY = wy + 3 + titleBarHeight + topPadding;
+        contentBottomY = wy + wh - 38; // reserve bottom row for save/cancel
+        int y = contentTopY - scrollOffset;
 
         // === Basic ===
-        int top = y - 4;
+        int top = y; y += 14;
         addLabel("gui.display", y); displayNameInput = zbox(vx, y, vw, entry.displayName() != null ? entry.displayName() : entry.name()); y += 22;
-        addLabel("gui.dimension", y); zcycle(vx, vw, y, dimIdx, DIMENSIONS, v -> { dimIdx = v; rebuild(); }); y += 22;
-        addLabel("gui.enter_mode", y); zcycle(vx, vw, y, enterIdx, toModeNames(), v -> { enterIdx = v; rebuild(); }); y += 22;
-        addLabel("gui.leave_mode", y); zcycle(vx, vw, y, leaveIdx, toModeNames(), v -> { leaveIdx = v; rebuild(); }); y += 22;
-        sections.add(new SectionPos("  Basic  ", top, y - top));
+        addLabel("gui.dimension", y); zcycle(vx, vw, y, dimIdx, dimDisplayNames(), v -> { dimIdx = v; dirty = true; rebuild(); }); y += 22;
+        addLabel("gui.enter_mode", y); zcycle(vx, vw, y, enterIdx, toModeNames(), v -> { enterIdx = v; dirty = true; rebuild(); }); y += 22;
+        addLabel("gui.leave_mode", y); zcycle(vx, vw, y, leaveIdx, toModeNames(), v -> { leaveIdx = v; dirty = true; rebuild(); }); y += 22;
+        sections.add(new SectionPos("  " + LocalizationManager.translate("gui.section_basic") + "  ", top, y - top));
 
         // === Bounds ===
-        top = y - 4;
+        top = y; y += 14;
         zbtn(lx, y, vw + 40, LocalizationManager.translate("gui.bounds") + ": " + LocalizationManager.translate(rectangleMode ? "gui.bounds_rectangle" : "gui.bounds_circle"),
-            () -> { rectangleMode = !rectangleMode; rebuild(); }); y += 22;
+            () -> { rectangleMode = !rectangleMode; dirty = true; rebuild(); }); y += 22;
         if (rectangleMode) {
-            addLabel("gui.bounds_min", y); bx1 = zcoord(vx, y); bz1 = zcoord(vx + 48, y); zbtn(vx + 96, y, 44, LocalizationManager.translate("gui.bounds_use_pos"), () -> { bx1.setValue(fmtPx()); bz1.setValue(fmtPz()); }); y += 20;
-            addLabel("gui.bounds_max", y); bx2 = zcoord(vx, y); bz2 = zcoord(vx + 48, y); zbtn(vx + 96, y, 44, LocalizationManager.translate("gui.bounds_use_pos"), () -> { bx2.setValue(fmtPx()); bz2.setValue(fmtPz()); });
+            addLabel("gui.bounds_min", y); bx1 = zcoord(vx, y, initBx1); bz1 = zcoord(vx + 64, y, initBz1); zbtn(vx + 128, y, 56, LocalizationManager.translate("gui.bounds_use_pos"), () -> { bx1.setValue(fmtPx()); bz1.setValue(fmtPz()); }); y += 20;
+            addLabel("gui.bounds_max", y); bx2 = zcoord(vx, y, initBx2); bz2 = zcoord(vx + 64, y, initBz2); zbtn(vx + 128, y, 56, LocalizationManager.translate("gui.bounds_use_pos"), () -> { bx2.setValue(fmtPx()); bz2.setValue(fmtPz()); });
         } else {
-            addLabel("gui.bounds_center", y); bx1 = zcoord(vx, y); bz1 = zcoord(vx + 48, y); zbtn(vx + 96, y, 44, LocalizationManager.translate("gui.bounds_use_pos"), () -> { bx1.setValue(fmtPx()); bz1.setValue(fmtPz()); }); y += 20;
-            addLabel("gui.bounds_radius", y); bx2 = zcoord(vx, y); addRenderableWidget(bx2);
+            addLabel("gui.bounds_center", y); bx1 = zcoord(vx, y, initBx1); bz1 = zcoord(vx + 64, y, initBz1); zbtn(vx + 128, y, 56, LocalizationManager.translate("gui.bounds_use_pos"), () -> { bx1.setValue(fmtPx()); bz1.setValue(fmtPz()); }); y += 20;
+            addLabel("gui.bounds_radius", y); bx2 = zcoord(vx, y, initBx2); addRenderableWidget(bx2);
         }
         y += 26;
-        sections.add(new SectionPos("  Bounds  ", top, y - top));
+        sections.add(new SectionPos("  " + LocalizationManager.translate("gui.section_bounds") + "  ", top, y - top));
 
         // === Protection (collapsible) ===
-        top = y - 4;
+        top = y; y += 14;
         String fold = protectionExpanded ? "  \u25BC" : "  \u25B6";
         zbtn(lx, y, vw + 40, LocalizationManager.translate("gui.protection") + ": " + protCount() + "/9 " + LocalizationManager.translate("gui.prot_enabled") + fold,
             () -> { protectionExpanded = !protectionExpanded; rebuild(); }); y += 20;
         if (protectionExpanded) {
-            zbtn(lx, y, 68, LocalizationManager.translate("gui.prot_enable_all"), () -> { setAllProt(true); rebuild(); });
-            zbtn(lx + 72, y, 68, LocalizationManager.translate("gui.prot_disable_all"), () -> { setAllProt(false); rebuild(); }); y += 20;
-            zprot(lx, y, "gui.prot_block_break", protBreak, v -> protBreak = v);
-            zprot(lx + 120, y, "gui.prot_pvp", protPvp, v -> protPvp = v); y += 17;
-            zprot(lx, y, "gui.prot_block_place", protPlace, v -> protPlace = v);
-            zprot(lx + 120, y, "gui.prot_explosion", protExplosion, v -> protExplosion = v); y += 17;
-            zprot(lx, y, "gui.prot_block_interact", protInteract, v -> protInteract = v);
-            zprot(lx + 120, y, "gui.prot_entity_damage", protDamage, v -> protDamage = v); y += 17;
-            zprot(lx, y, "gui.prot_container", protContainer, v -> protContainer = v);
-            zprot(lx + 120, y, "gui.prot_fluid_place", protFluid, v -> protFluid = v); y += 17;
-            zprot(lx, y, "gui.prot_item_drop", protItemDrop, v -> protItemDrop = v);
+            zbtn(lx, y, 68, LocalizationManager.translate("gui.prot_enable_all"), () -> { setAllProt(true); dirty = true; rebuild(); });
+            zbtn(lx + 72, y, 68, LocalizationManager.translate("gui.prot_disable_all"), () -> { setAllProt(false); dirty = true; rebuild(); }); y += 20;
+            // 3-column grid for 9 protection toggles (button shows short name, color = state)
+            int colW = (vw + 40 - 8) / 3;
+            zprot(lx,             y, colW, "gui.prot_block_break",    protBreak,    v -> { protBreak = v; dirty = true; rebuild(); });
+            zprot(lx + colW + 4,  y, colW, "gui.prot_pvp",            protPvp,      v -> { protPvp = v; dirty = true; rebuild(); });
+            zprot(lx + 2*(colW+4), y, colW, "gui.prot_explosion",     protExplosion,v -> { protExplosion = v; dirty = true; rebuild(); }); y += 18;
+            zprot(lx,             y, colW, "gui.prot_block_place",    protPlace,    v -> { protPlace = v; dirty = true; rebuild(); });
+            zprot(lx + colW + 4,  y, colW, "gui.prot_entity_damage",  protDamage,   v -> { protDamage = v; dirty = true; rebuild(); });
+            zprot(lx + 2*(colW+4), y, colW, "gui.prot_container",     protContainer,v -> { protContainer = v; dirty = true; rebuild(); }); y += 18;
+            zprot(lx,             y, colW, "gui.prot_block_interact", protInteract, v -> { protInteract = v; dirty = true; rebuild(); });
+            zprot(lx + colW + 4,  y, colW, "gui.prot_fluid_place",    protFluid,    v -> { protFluid = v; dirty = true; rebuild(); });
+            zprot(lx + 2*(colW+4), y, colW, "gui.prot_item_drop",     protItemDrop, v -> { protItemDrop = v; dirty = true; rebuild(); }); y += 18;
         }
         y += 8;
-        zbtn(lx, y, vw + 40, LocalizationManager.translate(enabled ? "area.enabled" : "area.disabled"), () -> { enabled = !enabled; rebuild(); }); y += 28;
-        sections.add(new SectionPos("  Protection  ", top, y - top));
+        zbtn(lx, y, vw + 40, LocalizationManager.translate(enabled ? "area.enabled" : "area.disabled"), () -> { enabled = !enabled; dirty = true; rebuild(); }); y += 28;
+        sections.add(new SectionPos("  " + LocalizationManager.translate("gui.section_protection") + "  ", top, y - top));
 
         // === Schedule (collapsible) ===
-        top = y - 4;
+        top = y; y += 14;
         String schedFold = schedExpanded ? "  \u25BC" : "  \u25B6";
-        String schedLabel = "  Schedule" + (schedEnabled ? " \u2714" : " \u2718");
+        String schedLabel = "  " + LocalizationManager.translate("gui.section_schedule") + (schedEnabled ? " \u2714" : " \u2718");
         zbtn(lx, y, vw + 40, schedLabel + schedFold,
             () -> { schedExpanded = !schedExpanded; rebuild(); });
         tooltips.add(new TooltipZone(lx, y, vw + 40, 18, "gui.tooltip_schedule"));
         y += 20;
         if (schedExpanded) {
             zbtn(lx, y, vw + 40, LocalizationManager.translate(schedEnabled ? "area.enabled" : "area.disabled"),
-                () -> { schedEnabled = !schedEnabled; rebuild(); }); y += 20;
-            addLabel("gui.bounds_min", y); schedMin = zcoord(vx, y); y += 20;
-            addLabel("gui.bounds_max", y); schedMax = zcoord(vx, y);
+                () -> { schedEnabled = !schedEnabled; dirty = true; rebuild(); }); y += 20;
+            addLabel("gui.bounds_min", y); schedMin = ztime(vx, y, initSchedMin); y += 20;
+            addLabel("gui.bounds_max", y); schedMax = ztime(vx, y, initSchedMax);
         }
         y += 8;
-        sections.add(new SectionPos("  Schedule  ", top, y - top));
+        sections.add(new SectionPos("  " + LocalizationManager.translate("gui.section_schedule") + "  ", top, y - top));
 
         // === Condition (collapsible) ===
-        top = y - 4;
+        top = y; y += 14;
         String condFold = condExpanded ? "  \u25BC" : "  \u25B6";
-        String condLabel = "  Condition" + (condEnabled ? " \u2714" : " \u2718");
+        String condLabel = "  " + LocalizationManager.translate("gui.section_condition") + (condEnabled ? " \u2714" : " \u2718");
         zbtn(lx, y, vw + 40, condLabel + condFold,
             () -> { condExpanded = !condExpanded; rebuild(); });
         tooltips.add(new TooltipZone(lx, y, vw + 40, 18, "gui.tooltip_condition"));
         y += 20;
         if (condExpanded) {
             zbtn(lx, y, vw + 40, LocalizationManager.translate(condEnabled ? "area.enabled" : "area.disabled"),
-                () -> { condEnabled = !condEnabled; rebuild(); }); y += 20;
-            addLabel("gui.cond_min_players", y); condMinPlayers = zcoord(vx, y); y += 20;
+                () -> { condEnabled = !condEnabled; dirty = true; rebuild(); }); y += 20;
+            addLabel("gui.cond_min_players", y); condMinPlayers = zcoord(vx, y, initCondMinPlayers); y += 20;
             addLabel("gui.cond_require_player", y);
-            condRequirePlayer = zbox(vx, y, 120, ""); // player name input
+            condRequirePlayer = zbox(vx, y, 120, initCondRequirePlayer);
         }
         y += 8;
-        sections.add(new SectionPos("  Condition  ", top, y - top));
+        sections.add(new SectionPos("  " + LocalizationManager.translate("gui.section_condition") + "  ", top, y - top));
 
         // === Chain (collapsible) ===
-        top = y - 4;
+        top = y; y += 14;
         String chainFold = chainExpanded ? "  \u25BC" : "  \u25B6";
-        zbtn(lx, y, vw + 40, "  Chain" + chainFold,
+        zbtn(lx, y, vw + 40, "  " + LocalizationManager.translate("gui.section_chain") + chainFold,
             () -> { chainExpanded = !chainExpanded; rebuild(); });
         tooltips.add(new TooltipZone(lx, y, vw + 40, 18, "gui.tooltip_chain"));
         y += 20;
         if (chainExpanded) {
             addLabel("gui.chain_next", y);
-            chainNextInput = zbox(vx, y, 160, "");
+            chainNextInput = zbox(vx, y, 160, initChainNext);
         }
         y += 8;
-        sections.add(new SectionPos("  Chain  ", top, y - top));
+        sections.add(new SectionPos("  " + LocalizationManager.translate("gui.section_chain") + "  ", top, y - top));
 
         // === Other ===
-        top = y - 4;
+        top = y; y += 14;
         zbtn(lx, y, vw + 40, "+ " + LocalizationManager.translate("gui.trigger_settings"),
-            () -> { if (this.minecraft != null) this.minecraft.setScreen(new TriggerEditPanel(AreaEditPanel.this, parentScreen, entry)); }); y += 20;
+            () -> { if (this.minecraft != null) this.minecraft.setScreen(new TriggerEditPanel(AreaEditPanel.this, parentScreen, entry)); });
+        tooltips.add(new TooltipZone(lx, y, vw + 40, 18, "gui.tooltip_trigger_settings")); y += 20;
         zbtn(lx, y, vw + 40, "+ " + LocalizationManager.translate("gui.whitelist_settings"),
-            () -> { if (this.minecraft != null) this.minecraft.setScreen(new WhitelistEditPanel(AreaEditPanel.this, parentScreen, entry)); }); y += 20;
+            () -> { if (this.minecraft != null) this.minecraft.setScreen(new WhitelistEditPanel(AreaEditPanel.this, parentScreen, entry)); });
+        tooltips.add(new TooltipZone(lx, y, vw + 40, 18, "gui.tooltip_whitelist_settings")); y += 20;
         zbtn(lx, y, vw + 40, "+ " + LocalizationManager.translate("gui.prot_whitelist"),
-            () -> { if (this.minecraft != null) this.minecraft.setScreen(new WhitelistEditPanel(AreaEditPanel.this, parentScreen, entry, true)); }); y += 20;
+            () -> { if (this.minecraft != null) this.minecraft.setScreen(new WhitelistEditPanel(AreaEditPanel.this, parentScreen, entry, true)); });
+        tooltips.add(new TooltipZone(lx, y, vw + 40, 18, "gui.tooltip_prot_whitelist")); y += 20;
         zbtn(lx, y, vw + 40, "+ " + LocalizationManager.translate("gui.restriction_settings"),
             () -> { if (this.minecraft != null) this.minecraft.setScreen(new RestrictionEditPanel(AreaEditPanel.this, parentScreen, entry)); });
+        tooltips.add(new TooltipZone(lx, y, vw + 40, 18, "gui.tooltip_restriction_settings"));
         y += 28;
-        sections.add(new SectionPos("  Other  ", top, y - top));
+        sections.add(new SectionPos("  " + LocalizationManager.translate("gui.section_other") + "  ", top, y - top));
 
-        // Save / Cancel
-        int btnY = Math.max(y + 6, wy + wh - 38);
-        zbtn(lx, btnY, 70, "[" + LocalizationManager.translate("gui.save") + "]", this::onSaveAction);
-        zbtn(lx + 78, btnY, 70, "[" + LocalizationManager.translate("gui.cancel") + "]", this::onClose);
+        // Record content height and clamp scrollOffset
+        contentHeight = (y + scrollOffset) - contentTopY;
+        int visibleH = contentBottomY - contentTopY;
+        int maxScroll = Math.max(0, contentHeight - visibleH);
+        if (scrollOffset > maxScroll) { scrollOffset = maxScroll; }
+
+        // Save / Cancel — centered at bottom (kept as fields so render() can draw them outside the scissor clip)
+        int btnY = wy + wh - 30;
+        int cx = wx + ww / 2;
+        saveBtn = GlassButton.create(cx - 78, btnY, 70, 18, "[" + LocalizationManager.translate("gui.save") + "]", b -> onSaveAction());
+        cancelBtn = GlassButton.create(cx + 8, btnY, 70, 18, "[" + LocalizationManager.translate("gui.cancel") + "]", b -> onClose());
+        addRenderableWidget(saveBtn);
+        addRenderableWidget(cancelBtn);
     }
 
-    // === Widget builders (all 18px height) ===
+    private GlassButton saveBtn, cancelBtn;
+
+    // === Widget builders ===
     private void zbtn(int x, int y, int w, String text, Runnable a) { addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> a.run())); }
-    private EditBox zbox(int x, int y, int w, String v) { EditBox e = new EditBox(this.font, x, y, w, 16, Component.empty()); e.setMaxLength(48); e.setValue(v); addRenderableWidget(e); return e; }
-    private EditBox zcoord(int x, int y) { EditBox e = new EditBox(this.font, x, y, 44, 16, Component.empty()); e.setMaxLength(9); e.setValue("0"); addRenderableWidget(e); return e; }
-    private void zprot(int x, int y, String key, boolean val, java.util.function.Consumer<Boolean> s) {
-        zbtn(x, y, 108, LocalizationManager.translate(key) + "  " + (val ? LocalizationManager.translate("gui.prot_enabled") : LocalizationManager.translate("gui.prot_disabled")), () -> { s.accept(!val); rebuild(); });
-        String tooltipKey = "gui.tooltip_" + key.substring(4); // gui.prot_XXX -> gui.tooltip_prot_XXX
-        tooltips.add(new TooltipZone(x, y, 108, 18, tooltipKey));
+    private EditBox zbox(int x, int y, int w, String v) {
+        EditBox e = new EditBox(this.font, x, y, w, 16, Component.empty()); e.setMaxLength(48); e.setValue(v);
+        addRenderableWidget(e); allBoxes.add(e); return e;
+    }
+    private EditBox zcoord(int x, int y, String initial) {
+        EditBox e = new EditBox(this.font, x, y, 60, 16, Component.empty()); e.setMaxLength(9); e.setValue(initial);
+        addRenderableWidget(e); allBoxes.add(e); return e;
+    }
+    private EditBox ztime(int x, int y, String initial) {
+        EditBox e = new EditBox(this.font, x, y, 60, 16, Component.literal(LocalizationManager.translate("gui.schedule_time_hint")));
+        e.setMaxLength(9); e.setValue(initial);
+        addRenderableWidget(e); allBoxes.add(e); return e;
+    }
+    private void zprot(int x, int y, int w, String key, boolean val, java.util.function.Consumer<Boolean> s) {
+        // Short label only; color distinguishes enabled (green) vs disabled (gray)
+        String label = LocalizationManager.translate(key) + (val ? " \u2714" : " \u2718");
+        addRenderableWidget(GlassButton.create(x, y, w, 18, label, b -> s.accept(!val)));
+        String tooltipKey = "gui.tooltip_" + key.substring(4);
+        tooltips.add(new TooltipZone(x, y, w, 18, tooltipKey));
     }
     private void zcycle(int vx, int vw, int y, int idx, List<String> opts, java.util.function.IntConsumer cb) {
         zbtn(vx, y, 18, "\u25C0", () -> cb.accept((idx - 1 + opts.size()) % opts.size()));
@@ -217,10 +292,28 @@ public class AreaEditPanel extends Screen {
     }
     private void addLabel(String key, int y) { labels.add(new LabelPos(lx, y, key)); }
     private List<String> toModeNames() { return java.util.Arrays.stream(MODE_KEYS).map(LocalizationManager::translate).toList(); }
+    private List<String> dimDisplayNames() {
+        return DIMENSIONS.stream().map(AreaEditPanel::shortDim).toList();
+    }
+    private static String shortDim(String dim) {
+        return switch (dim) {
+            case "minecraft:overworld" -> "overworld";
+            case "minecraft:the_nether" -> "nether";
+            case "minecraft:the_end" -> "end";
+            default -> dim;
+        };
+    }
     private void setAllProt(boolean v) { protBreak = protPlace = protInteract = protPvp = protExplosion = protDamage = protContainer = protFluid = protItemDrop = v; }
     private String fmtPx() { return String.valueOf((int)Math.floor(this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getX() : 0)); }
     private String fmtPz() { return String.valueOf((int)Math.floor(this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getZ() : 0)); }
-    private void rebuild() { this.clearWidgets(); init(); }
+    private void rebuild() {
+        // Preserve EditBox values across rebuilds (scroll/fold toggles recreate widgets)
+        String[] saved = new String[allBoxes.size()];
+        for (int i = 0; i < allBoxes.size(); i++) saved[i] = allBoxes.get(i).getValue();
+        this.clearWidgets();
+        init();
+        for (int i = 0; i < allBoxes.size() && i < saved.length; i++) allBoxes.get(i).setValue(saved[i]);
+    }
     private static int v(EditBox b) { return Integer.parseInt(b.getValue()); }
 
     private void onSaveAction() {
@@ -264,6 +357,7 @@ public class AreaEditPanel extends Screen {
             json.add("chain", chainObj);
         }
         ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.UPDATE, entry.name(), json.toString()));
+        dirty = false;
         onClose();
     }
 
@@ -283,6 +377,9 @@ public class AreaEditPanel extends Screen {
         g.fill(wx + 3, wy + 28, wx + ww - 3, wy + 29, BORDER_GOLD);
         g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE),
             wx + ww / 2, wy + 9, 0xFFF5DEB3);
+
+        // Clip content area so scrolling doesn't bleed into title/bottom-button rows
+        g.enableScissor(wx + 2, contentTopY, wx + ww - 2, contentBottomY);
         // Section backgrounds — unified width based on panel size
         int margin = 8;
         int secW = ww - (margin * 2);
@@ -294,6 +391,22 @@ public class AreaEditPanel extends Screen {
         }
         for (LabelPos l : labels) g.drawString(this.font, Component.literal(LocalizationManager.translate(l.key)).withStyle(ChatFormatting.GRAY), l.x, l.y + 1, 0xFFFFFFFF);
         super.render(g, mx, my, pt);
+        g.disableScissor();
+
+        // Re-draw save/cancel manually (they sit below the scissor clip)
+        if (saveBtn != null) saveBtn.render(g, mx, my, pt);
+        if (cancelBtn != null) cancelBtn.render(g, mx, my, pt);
+
+        // Scrollbar
+        int visibleH = contentBottomY - contentTopY;
+        int maxScroll = Math.max(0, contentHeight - visibleH);
+        if (maxScroll > 0) {
+            int barX = wx + ww - 6;
+            int barH = Math.max(20, visibleH * visibleH / Math.max(1, contentHeight));
+            int barY = contentTopY + (visibleH - barH) * scrollOffset / Math.max(1, maxScroll);
+            g.fill(barX, contentTopY, barX + 4, contentBottomY, 0x408B6914);
+            g.fill(barX, barY, barX + 4, barY + barH, 0xC08B6914);
+        }
 
         // Tooltip rendering
         for (TooltipZone t : tooltips) {
@@ -303,6 +416,11 @@ public class AreaEditPanel extends Screen {
                 renderTooltip(g, mx, my, tip);
                 break;
             }
+        }
+
+        // Confirm dialog (on top of everything)
+        if (confirmDialog.isVisible()) {
+            confirmDialog.render(g, this.width, this.height);
         }
     }
 
@@ -323,24 +441,62 @@ public class AreaEditPanel extends Screen {
     }
 
     @Override
+    public boolean mouseScrolled(double mx, double my, double delta) {
+        if (delta > 0 && scrollOffset > 0) {
+            scrollOffset = Math.max(0, scrollOffset - 20);
+            rebuild();
+        } else if (delta < 0) {
+            int visibleH = contentBottomY - contentTopY;
+            int maxScroll = Math.max(0, contentHeight - visibleH);
+            if (scrollOffset < maxScroll) {
+                scrollOffset = Math.min(maxScroll, scrollOffset + 20);
+                rebuild();
+            }
+        }
+        return true;
+    }
+
+    @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (this.displayNameInput != null && this.displayNameInput.isFocused())
-            return this.displayNameInput.keyPressed(keyCode, scanCode, modifiers);
-        if (this.bx1 != null && this.bx1.isFocused())
-            return this.bx1.keyPressed(keyCode, scanCode, modifiers);
-        if (this.bz1 != null && this.bz1.isFocused())
-            return this.bz1.keyPressed(keyCode, scanCode, modifiers);
-        if (this.bx2 != null && this.bx2.isFocused())
-            return this.bx2.keyPressed(keyCode, scanCode, modifiers);
-        if (this.bz2 != null && this.bz2.isFocused())
-            return this.bz2.keyPressed(keyCode, scanCode, modifiers);
+        // Forward to whichever EditBox is focused (covers all input boxes uniformly)
+        for (EditBox box : allBoxes) {
+            if (box.isFocused()) {
+                return box.keyPressed(keyCode, scanCode, modifiers);
+            }
+        }
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override
+    public boolean charTyped(char c, int modifiers) {
+        for (EditBox box : allBoxes) {
+            if (box.isFocused()) {
+                return box.charTyped(c, modifiers);
+            }
+        }
+        return super.charTyped(c, modifiers);
+    }
+
+    @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        // Confirm dialog intercepts all clicks when visible
+        if (confirmDialog.isVisible()) {
+            confirmDialog.mouseClicked(mx, my, button);
+            return true;
+        }
         if (mx < wx || mx > wx + ww || my < wy || my > wy + wh) {
-            this.onClose();
+            // Clicked outside window — confirm before discarding unsaved edits
+            if (dirty) {
+                confirmDialog.show(
+                    LocalizationManager.translate("gui.confirm_discard_title"),
+                    LocalizationManager.translate("gui.confirm_discard_msg"),
+                    LocalizationManager.translate("gui.confirm"),
+                    LocalizationManager.translate("gui.cancel"),
+                    () -> { dirty = false; onClose(); },
+                    () -> {});
+            } else {
+                onClose();
+            }
             return true;
         }
         return super.mouseClicked(mx, my, button);

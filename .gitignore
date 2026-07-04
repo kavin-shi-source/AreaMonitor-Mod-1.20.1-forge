@@ -35,6 +35,7 @@ src/test/
 
 # VS Code
 .vscode
+.trae/
 
 # Compressed files
 *.gz

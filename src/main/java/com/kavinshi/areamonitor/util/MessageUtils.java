@@ -16,8 +16,8 @@ import net.minecraft.server.level.ServerPlayer;
  *   <li>Clients without the mod: Receive literal components (server-side translation)</li>
  * </ul>
  * 
- * <p>The server language is controlled by the {@code /areamonitor language en/zh} command,
- * defaulting to English.</p>
+ * <p>The server language is set in {@code config/areamonitor/common.toml} (default English).
+ * Clients with the mod automatically use their own Minecraft language setting.</p>
  * 
  * @since 2.0.3
  */

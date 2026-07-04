@@ -2,6 +2,7 @@ package com.kavinshi.areamonitor.client.gui.panel;
 
 import com.kavinshi.areamonitor.LocalizationManager;
 import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
+import com.kavinshi.areamonitor.client.gui.widget.ConfirmDialog;
 import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
@@ -31,6 +32,17 @@ public class RestrictionEditPanel extends Screen {
     private EditBox addItemBox, addCmdBox;
     private int wx, wy, ww, wh, lx;
 
+    // Scroll support
+    private int scrollOffset = 0;
+    private int contentTopY, contentBottomY;
+    // Unsaved-change tracking
+    private boolean dirty = false;
+    private final ConfirmDialog confirmDialog = new ConfirmDialog();
+    // Tooltips
+    private final List<TooltipZone> tooltips = new ArrayList<>();
+    // Bottom buttons kept as fields so render() can draw them outside the scissor clip
+    private GlassButton saveBtn, cancelBtn;
+
     public RestrictionEditPanel(Screen returnScreen, AreaManagementScreen mainScreen, S2CAreaListPacket.AreaEntry entry) {
         super(Component.literal(LocalizationManager.translate("gui.restriction_settings") + ": " + entry.name()));
         this.returnScreen = returnScreen; this.mainScreen = mainScreen; this.entry = entry;
@@ -44,50 +56,118 @@ public class RestrictionEditPanel extends Screen {
 
     @Override protected void init() {
         super.init();
+        tooltips.clear();
         ww = Math.min(this.width * 78 / 100, 560); wh = Math.min(this.height * 82 / 100, 480);
         wx = (this.width - ww) / 2; wy = (this.height - wh) / 2;
         lx = wx + 8;
         int titleBarHeight = 26, topPadding = 10;
-        int y = wy + 3 + titleBarHeight + topPadding;
+        contentTopY = wy + 3 + titleBarHeight + topPadding;
+        contentBottomY = wy + wh - 38;
+        int y = contentTopY - scrollOffset;
 
-        // Item Blacklist
-        final int secW = Math.min(ww - 55, 320);
-        zbtn(lx, y, secW, LocalizationManager.translate("gui.restriction_items") +
-            (enableItemBlacklist ? " " + LocalizationManager.translate("gui.prot_enabled") : " " + LocalizationManager.translate("gui.prot_disabled")) +
-            (itemsExp ? "  \u25BC" : "  \u25B6"), () -> { itemsExp = !itemsExp; rebuild(); }); y += 20;
+        int secW = Math.min(ww - 16, 360);
+
+        // === Section: Item Blacklist ===
+        int top = y; y += 14;
+        String itemFold = itemsExp ? "  \u25BC" : "  \u25B6";
+        String itemLabel = "  " + LocalizationManager.translate("gui.section_item_blacklist") +
+            (enableItemBlacklist ? " \u2714" : " \u2718") + itemFold;
+        zbtn(lx, y, secW, itemLabel, () -> { itemsExp = !itemsExp; rebuild(); });
+        tooltips.add(new TooltipZone(lx, y, secW, 18, "gui.tooltip_item_blacklist"));
+        y += 20;
         if (itemsExp) {
-            zbtn(lx, y, 74, LocalizationManager.translate(enableItemBlacklist ? "gui.disable" : "gui.enable"), () -> { enableItemBlacklist = !enableItemBlacklist; rebuild(); }); y += 20;
+            zbtn(lx, y, 90, "[" + LocalizationManager.translate(enableItemBlacklist ? "gui.disable" : "gui.enable") + "]",
+                () -> { enableItemBlacklist = !enableItemBlacklist; dirty = true; rebuild(); }); y += 20;
             if (enableItemBlacklist) {
-                addItemBox = new EditBox(this.font, lx, y, 198, 16, Component.empty()); addItemBox.setMaxLength(100); addRenderableWidget(addItemBox);
-                zbtn(lx + 203, y, 36, "+", () -> { String v = addItemBox.getValue().trim().toLowerCase(); if (!v.isEmpty() && !blockedItems.contains(v) && blockedItems.size() < 12) { blockedItems.add(v); addItemBox.setValue(""); sendUpdate(); rebuild(); } }); y += 20;
-                int max = Math.min(blockedItems.size(), 6);
-                for (int i = 0; i < max; i++) { final int idx = i; zbtn(lx + 6, y, 198, "  \u2022 " + blockedItems.get(i) + "  \u2715", () -> { blockedItems.remove(idx); sendUpdate(); rebuild(); }); y += 18; }
+                addItemBox = new EditBox(this.font, lx, y, 220, 16, Component.empty());
+                addItemBox.setMaxLength(100);
+                addItemBox.setResponder(s -> dirty = true);
+                addRenderableWidget(addItemBox);
+                zbtn(lx + 226, y, 60, "[" + LocalizationManager.translate("command.add") + "]", () -> {
+                    String v = addItemBox.getValue().trim().toLowerCase();
+                    if (!v.isEmpty() && !blockedItems.contains(v) && blockedItems.size() < 12) {
+                        blockedItems.add(v); addItemBox.setValue(""); dirty = true; rebuild();
+                    }
+                });
+                tooltips.add(new TooltipZone(lx, y, 220, 18, "gui.tooltip_item_input"));
+                y += 22;
+                for (int i = 0; i < blockedItems.size(); i++) {
+                    final int idx = i; String p = blockedItems.get(i);
+                    zbtn(lx + 6, y, 220, "  \u2022 " + p + "  \u2715", () -> { blockedItems.remove(idx); dirty = true; rebuild(); });
+                    tooltips.add(new TooltipZone(lx + 6, y, 220, 18, "gui.tooltip_item_row"));
+                    y += 18;
+                }
             }
         }
         y += 8;
 
-        // Cmd restrictions
-        zbtn(lx, y, secW, LocalizationManager.translate("gui.restriction_commands") +
-            (blockTeleportCommands ? " " + LocalizationManager.translate("gui.prot_enabled") : " " + LocalizationManager.translate("gui.prot_disabled")) +
-            (cmdsExp ? "  \u25BC" : "  \u25B6"), () -> { cmdsExp = !cmdsExp; rebuild(); }); y += 20;
+        // === Section: Command Restrictions ===
+        y += 14;
+        String cmdFold = cmdsExp ? "  \u25BC" : "  \u25B6";
+        String cmdLabel = "  " + LocalizationManager.translate("gui.section_cmd_restrict") +
+            (blockTeleportCommands ? " \u2714" : " \u2718") + cmdFold;
+        zbtn(lx, y, secW, cmdLabel, () -> { cmdsExp = !cmdsExp; rebuild(); });
+        tooltips.add(new TooltipZone(lx, y, secW, 18, "gui.tooltip_cmd_restrict"));
+        y += 20;
         if (cmdsExp) {
-            zbtn(lx, y, 74, LocalizationManager.translate(blockTeleportCommands ? "gui.disable" : "gui.enable"), () -> { blockTeleportCommands = !blockTeleportCommands; rebuild(); }); y += 20;
-            addCmdBox = new EditBox(this.font, lx, y, 198, 16, Component.empty()); addCmdBox.setMaxLength(100); addRenderableWidget(addCmdBox);
-            zbtn(lx + 203, y, 36, "+", () -> { String v = addCmdBox.getValue().trim(); if (!v.isEmpty() && !blockedCommands.contains(v) && blockedCommands.size() < 12) { blockedCommands.add(v); addCmdBox.setValue(""); sendUpdate(); rebuild(); } }); y += 20;
-            int max = Math.min(blockedCommands.size(), 5);
-            for (int i = 0; i < max; i++) { final int idx = i; zbtn(lx + 6, y, 198, "  \u2022 " + blockedCommands.get(i) + "  \u2715", () -> { blockedCommands.remove(idx); sendUpdate(); rebuild(); }); y += 18; }
+            zbtn(lx, y, 90, "[" + LocalizationManager.translate(blockTeleportCommands ? "gui.disable" : "gui.enable") + "]",
+                () -> { blockTeleportCommands = !blockTeleportCommands; dirty = true; rebuild(); }); y += 20;
+            addCmdBox = new EditBox(this.font, lx, y, 220, 16, Component.empty());
+            addCmdBox.setMaxLength(100);
+            addCmdBox.setResponder(s -> dirty = true);
+            addRenderableWidget(addCmdBox);
+            zbtn(lx + 226, y, 60, "[" + LocalizationManager.translate("command.add") + "]", () -> {
+                String v = addCmdBox.getValue().trim();
+                if (!v.isEmpty() && !blockedCommands.contains(v) && blockedCommands.size() < 12) {
+                    blockedCommands.add(v); addCmdBox.setValue(""); dirty = true; rebuild();
+                }
+            });
+            tooltips.add(new TooltipZone(lx, y, 220, 18, "gui.tooltip_cmd_input"));
+            y += 22;
+            for (int i = 0; i < blockedCommands.size(); i++) {
+                final int idx = i; String p = blockedCommands.get(i);
+                zbtn(lx + 6, y, 220, "  \u2022 " + p + "  \u2715", () -> { blockedCommands.remove(idx); dirty = true; rebuild(); });
+                tooltips.add(new TooltipZone(lx + 6, y, 220, 18, "gui.tooltip_cmd_row"));
+                y += 18;
+            }
         }
-        y += 10;
+        y += 8;
 
-        int btnY = Math.max(y, wy + wh - 38);
-        zbtn(lx, btnY, 70, LocalizationManager.translate("gui.save"), this::onClose);
-        zbtn(lx + 78, btnY, 70, LocalizationManager.translate("gui.cancel"), this::onClose);
+        // Record content height and clamp scrollOffset
+        int contentHeight = (y + scrollOffset) - contentTopY;
+        int visibleH = contentBottomY - contentTopY;
+        int maxScroll = Math.max(0, contentHeight - visibleH);
+        if (scrollOffset > maxScroll) scrollOffset = maxScroll;
+        if (scrollOffset < 0) scrollOffset = 0;
+
+        // Bottom buttons — centered (kept as fields; rendered outside the scissor clip in render())
+        int btnY = wy + wh - 30;
+        int cx = wx + ww / 2;
+        saveBtn = GlassButton.create(cx - 78, btnY, 70, 18, "[" + LocalizationManager.translate("gui.save") + "]", b -> {
+            if (dirty) { sendUpdate(); dirty = false; }
+            onClose();
+        });
+        cancelBtn = GlassButton.create(cx + 8, btnY, 70, 18, "[" + LocalizationManager.translate("gui.cancel") + "]", b -> {
+            dirty = false;
+            onClose();
+        });
+        addRenderableWidget(saveBtn);
+        addRenderableWidget(cancelBtn);
     }
 
     private void zbtn(int x, int y, int w, String text, Runnable a) { addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> a.run())); }
     private boolean zb(JsonObject o, String k, boolean d) { return o.has(k) ? o.get(k).getAsBoolean() : d; }
     private void zl(JsonObject o, String k, List<String> d) { if (o.has(k) && o.get(k).isJsonArray()) for (var e : o.getAsJsonArray(k)) d.add(e.getAsString()); }
-    private void rebuild() { clearWidgets(); init(); }
+
+    private void rebuild() {
+        String savedItem = addItemBox != null ? addItemBox.getValue() : "";
+        String savedCmd = addCmdBox != null ? addCmdBox.getValue() : "";
+        clearWidgets();
+        init();
+        if (addItemBox != null) addItemBox.setValue(savedItem);
+        if (addCmdBox != null) addCmdBox.setValue(savedCmd);
+    }
+
     private void sendUpdate() {
         var json = new JsonObject(); var rest = new JsonObject();
         rest.addProperty("enableItemBlacklist", enableItemBlacklist); rest.addProperty("blockTeleportCommands", blockTeleportCommands);
@@ -100,6 +180,7 @@ public class RestrictionEditPanel extends Screen {
     @Override public void onClose() { mainScreen.updateAfterEdit(); if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (confirmDialog.isVisible()) return true;
         if (this.addItemBox != null && this.addItemBox.isFocused())
             return this.addItemBox.keyPressed(keyCode, scanCode, modifiers);
         if (this.addCmdBox != null && this.addCmdBox.isFocused())
@@ -107,9 +188,47 @@ public class RestrictionEditPanel extends Screen {
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
+    @Override public boolean charTyped(char c, int modifiers) {
+        if (this.addItemBox != null && this.addItemBox.isFocused())
+            return this.addItemBox.charTyped(c, modifiers);
+        if (this.addCmdBox != null && this.addCmdBox.isFocused())
+            return this.addCmdBox.charTyped(c, modifiers);
+        return super.charTyped(c, modifiers);
+    }
+
+    @Override public boolean mouseScrolled(double mx, double my, double delta) {
+        int visibleH = contentBottomY - contentTopY;
+        int contentH = 0;
+        // Approximate content height: items section + cmd section
+        contentH += 14 + 20; // item header
+        if (itemsExp) { contentH += 20; if (enableItemBlacklist) { contentH += 22 + blockedItems.size() * 18; } }
+        contentH += 14 + 20; // cmd header
+        if (cmdsExp) { contentH += 20 + 22 + blockedCommands.size() * 18; }
+        int maxScroll = Math.max(0, contentH - visibleH);
+        if (maxScroll > 0) {
+            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) delta * 20));
+            rebuild();
+        }
+        return true;
+    }
+
     @Override public boolean mouseClicked(double mx, double my, int button) {
+        if (confirmDialog.isVisible()) {
+            confirmDialog.mouseClicked(mx, my, button);
+            return true;
+        }
         if (mx < wx || mx > wx + ww || my < wy || my > wy + wh) {
-            this.onClose();
+            if (dirty) {
+                confirmDialog.show(
+                    LocalizationManager.translate("gui.confirm_discard_title"),
+                    LocalizationManager.translate("gui.confirm_discard_msg"),
+                    LocalizationManager.translate("gui.confirm"),
+                    LocalizationManager.translate("gui.cancel"),
+                    () -> { dirty = false; onClose(); },
+                    () -> {});
+            } else {
+                onClose();
+            }
             return true;
         }
         return super.mouseClicked(mx, my, button);
@@ -124,6 +243,61 @@ public class RestrictionEditPanel extends Screen {
         g.fill(wx + 3, wy + 3, wx + ww - 3, wy + 29, PARCH_DARK);
         g.fill(wx + 3, wy + 28, wx + ww - 3, wy + 29, BORDER_GOLD);
         g.drawCenteredString(this.font, Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE), wx + ww / 2, wy + 9, 0xFFF5DEB3);
+
+        g.enableScissor(wx + 2, contentTopY, wx + ww - 2, contentBottomY);
         super.render(g, mx, my, pt);
+        g.disableScissor();
+
+        // Re-draw bottom buttons manually (they sit below the scissor clip)
+        if (saveBtn != null) saveBtn.render(g, mx, my, pt);
+        if (cancelBtn != null) cancelBtn.render(g, mx, my, pt);
+
+        // Scrollbar
+        int visibleH = contentBottomY - contentTopY;
+        int contentH = 0;
+        contentH += 14 + 20;
+        if (itemsExp) { contentH += 20; if (enableItemBlacklist) { contentH += 22 + blockedItems.size() * 18; } }
+        contentH += 14 + 20;
+        if (cmdsExp) { contentH += 20 + 22 + blockedCommands.size() * 18; }
+        if (contentH > visibleH) {
+            int barX = wx + ww - 10;
+            int thumbH = Math.max(20, visibleH * visibleH / contentH);
+            int thumbY = contentTopY + (visibleH - thumbH) * scrollOffset / Math.max(1, contentH - visibleH);
+            g.fill(barX, contentTopY, barX + 4, contentTopY + visibleH, 0x408B6914);
+            g.fill(barX, thumbY, barX + 4, thumbY + thumbH, 0xC08B6914);
+        }
+
+        // Tooltips
+        for (TooltipZone t : tooltips) {
+            if (mx >= t.x && mx <= t.x + t.w && my >= t.y && my <= t.y + t.h) {
+                String tip = LocalizationManager.translate(t.key);
+                if (!tip.equals(t.key)) {
+                    renderTooltip(g, mx, my, tip);
+                    break;
+                }
+            }
+        }
+
+        if (confirmDialog.isVisible()) {
+            confirmDialog.render(g, this.width, this.height);
+        }
     }
+
+    private void renderTooltip(GuiGraphics g, int mx, int my, String text) {
+        int padding = 4;
+        int tw = this.font.width(text) + padding * 2;
+        int th = this.font.lineHeight + padding * 2;
+        int tx = Math.min(mx + 8, this.width - tw - 4);
+        int ty = my - th - 4;
+        if (ty < 4) ty = my + 12;
+
+        g.fill(tx, ty, tx + tw, ty + th, 0xE03A2A1A);
+        g.fill(tx, ty, tx + tw, ty + 1, 0xC08B6914);
+        g.fill(tx, ty + th - 1, tx + tw, ty + th, 0xC08B6914);
+        g.fill(tx, ty, tx + 1, ty + th, 0xC08B6914);
+        g.fill(tx + tw - 1, ty, tx + tw, ty + th, 0xC08B6914);
+        g.drawString(this.font, text, tx + padding, ty + padding, 0xFFD4B896);
+    }
+
+    private record TooltipZone(int x, int y, int w, int h, String key) {}
 }

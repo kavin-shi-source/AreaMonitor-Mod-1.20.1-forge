@@ -82,7 +82,8 @@ public class S2CAreaListPacket {
         String protWhitelistJson,
         String scheduleJson,
         String conditionJson,
-        String chainJson
+        String chainJson,
+        String boundsCoordsJson
     ) {
         private static final Gson TGSON = new Gson();
 
@@ -110,7 +111,8 @@ public class S2CAreaListPacket {
                  area.getProtectionWhitelist().isEmpty() ? null : TGSON.toJson(area.getProtectionWhitelist()),
                  scheduleToJson(area),
                  conditionToJson(area),
-                 chainToJson(area));
+                 chainToJson(area),
+                 boundsCoordsToJson(area));
         }
 
         public void encode(FriendlyByteBuf buf) {
@@ -135,6 +137,7 @@ public class S2CAreaListPacket {
             writeNullableJson(buf, scheduleJson);
             writeNullableJson(buf, conditionJson);
             writeNullableJson(buf, chainJson);
+            writeNullableJson(buf, boundsCoordsJson);
         }
 
         public static AreaEntry decode(FriendlyByteBuf buf) {
@@ -152,7 +155,7 @@ public class S2CAreaListPacket {
                 (bits & 64) != 0, (bits & 128) != 0, (bits & 256) != 0,
                 readNullableJson(buf), readNullableJson(buf), readNullableJson(buf),
                 readNullableJson(buf), readNullableJson(buf), readNullableJson(buf),
-                readNullableJson(buf), readNullableJson(buf));
+                readNullableJson(buf), readNullableJson(buf), readNullableJson(buf));
         }
 
         private static void writeNullableJson(FriendlyByteBuf buf, String json) {
@@ -188,6 +191,21 @@ public class S2CAreaListPacket {
             var obj = new com.google.gson.JsonObject();
             obj.addProperty("chainNext", area.getChainNext());
             obj.addProperty("chainDelayTicks", area.getChainDelayTicks());
+            return obj.toString();
+        }
+
+        private static String boundsCoordsToJson(MonitorArea area) {
+            var obj = new com.google.gson.JsonObject();
+            if (area.getBounds() instanceof MonitorArea.RectangleBounds rect) {
+                obj.addProperty("minX", rect.getMinX());
+                obj.addProperty("minZ", rect.getMinZ());
+                obj.addProperty("maxX", rect.getMaxX());
+                obj.addProperty("maxZ", rect.getMaxZ());
+            } else if (area.getBounds() instanceof MonitorArea.CircleBounds circle) {
+                obj.addProperty("centerX", circle.getCenterX());
+                obj.addProperty("centerZ", circle.getCenterZ());
+                obj.addProperty("radius", circle.getRadius());
+            }
             return obj.toString();
         }
     }

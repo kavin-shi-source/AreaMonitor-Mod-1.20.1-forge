@@ -77,8 +77,13 @@ public class AreaManagementScreen extends Screen {
         winY = (this.height - winH) / 2;
         listLeft   = winX + 12;
         listWidth  = Math.min(winW - 24 - 100, 380);
-        listTop    = winY + 52; // extra room for search bar
-        itemsPerPage = Math.max(3, (winH - 120) / itemHeight);
+        // Layout rows (top to bottom):
+        //   title bar      winY+3  ~ winY+31
+        //   search row     winY+36 ~ winY+54 (search box 14h + sort button 20h)
+        //   column header  winY+56 ~ winY+71 (header bg + gold line)
+        //   area list      winY+72 ~ ...
+        listTop    = winY + 72;
+        itemsPerPage = Math.max(3, (winH - 140) / itemHeight);
         btnY = winY + winH - 40;
     }
 
@@ -104,29 +109,31 @@ public class AreaManagementScreen extends Screen {
         this.clearWidgets();
         int cx = winX + winW / 2;
 
-        // Search bar
-        searchInput = new EditBox(this.font, listLeft, listTop - 22, 120, 14, Component.literal(LocalizationManager.translate("gui.search")));
+        // Search bar — placed in the row between title bar (winY+3..31) and column header (winY+56..71).
+        // searchY = listTop - 36 = winY + 36; bottom = winY + 50 (clears header top winY+56 by 6px).
+        int searchY = listTop - 36;
+        searchInput = new EditBox(this.font, listLeft, searchY, 150, 14, Component.literal(LocalizationManager.translate("gui.search")));
         searchInput.setMaxLength(32);
         searchInput.setValue(searchTerm);
         searchInput.setResponder(s -> { searchTerm = s; applyFilterAndSort(); scrollOffset = 0; rebuildRows(); });
         addRenderableWidget(searchInput);
 
-        // Sort toggle
+        // Sort toggle — same row as search, aligned to search box top.
         String sortIcon = sortAsc ? "\u25B2" : "\u25BC"; // ▲ / ▼
-        glassBtn(sortIcon, listLeft + 126, listTop - 24, 22, () -> { sortAsc = !sortAsc; applyFilterAndSort(); rebuildRows(); });
+        glassBtn(sortIcon, listLeft + 156, searchY - 2, 22, () -> { sortAsc = !sortAsc; applyFilterAndSort(); rebuildRows(); });
 
         if (creating) {
             nameInput = new EditBox(this.font, cx - 110, btnY - 23, 220, 18,
                 Component.literal(LocalizationManager.translate("gui.area_name_hint")));
             nameInput.setMaxLength(48);
             addRenderableWidget(nameInput);
-            glassBtn(LocalizationManager.translate("gui.create"), cx - 110, btnY, 70, this::onCreateConfirm);
-            glassBtn(LocalizationManager.translate("gui.cancel"), cx - 30, btnY, 70, () -> { creating = false; rebuildRows(); });
+            glassBtn(LocalizationManager.translate("gui.create"), cx - 80, btnY, 70, this::onCreateConfirm);
+            glassBtn(LocalizationManager.translate("gui.cancel"), cx + 10, btnY, 70, () -> { creating = false; rebuildRows(); });
         } else {
-            glassBtn(LocalizationManager.translate("gui.create_new_area"), cx - 110, btnY, 70, () -> { creating = true; rebuildRows(); });
-            glassBtn(LocalizationManager.translate("gui.refresh"), cx - 30, btnY, 70, this::onRefresh);
+            glassBtn(LocalizationManager.translate("gui.create_new_area"), cx - 120, btnY, 80, () -> { creating = true; rebuildRows(); });
+            glassBtn(LocalizationManager.translate("gui.refresh"), cx - 30, btnY, 60, this::onRefresh);
+            glassBtn(LocalizationManager.translate("gui.close"), cx + 40, btnY, 60, this::onClose);
         }
-        glassBtn(LocalizationManager.translate("gui.close"), cx + 50, btnY, 70, this::onClose);
 
         // Area rows
         int visible = Math.min(Math.max(0, filteredAreas.size() - scrollOffset), itemsPerPage);
@@ -139,19 +146,28 @@ public class AreaManagementScreen extends Screen {
             Component label = entry.enabled()
                 ? Component.literal("\u2714 ").withStyle(ChatFormatting.GREEN)
                     .append(Component.literal(entry.name() + " ").withStyle(ChatFormatting.WHITE))
-                    .append(Component.literal("[" + entry.dimension() + "] " + entry.boundsType()).withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal("[" + shortDim(entry.dimension()) + "] " + entry.boundsType()).withStyle(ChatFormatting.GRAY))
                 : Component.literal("\u2718 ").withStyle(ChatFormatting.RED)
                     .append(Component.literal(entry.name() + " ").withStyle(ChatFormatting.WHITE))
-                    .append(Component.literal("[" + entry.dimension() + "] " + entry.boundsType()).withStyle(ChatFormatting.GRAY));
+                    .append(Component.literal("[" + shortDim(entry.dimension()) + "] " + entry.boundsType()).withStyle(ChatFormatting.GRAY));
             addRenderableWidget(new AreaRowButton(listLeft, y, infoW, itemHeight - 2, label, entry.name(), this));
-            addRenderableWidget(new AreaEditButton(listLeft + infoW + 3, y, 20, itemHeight - 2, entry, this));
+            addRenderableWidget(new AreaEditButton(listLeft + infoW + 2, y, 22, itemHeight - 2, entry, this));
             addRenderableWidget(new AreaToggleButton(listLeft + infoW + 26, y, 44, itemHeight - 2, entry.name(), entry.enabled(), this));
-            addRenderableWidget(new AreaDeleteButton(listLeft + infoW + 73, y, 20, itemHeight - 2, entry.name(), this));
+            addRenderableWidget(new AreaDeleteButton(listLeft + infoW + 72, y, 22, itemHeight - 2, entry.name(), this));
         }
     }
 
     private void glassBtn(String text, int x, int y, int w, Runnable action) {
         addRenderableWidget(GlassButton.create(x, y, w, 20, text, b -> action.run()));
+    }
+
+    private static String shortDim(String dim) {
+        return switch (dim) {
+            case "minecraft:overworld" -> "overworld";
+            case "minecraft:the_nether" -> "nether";
+            case "minecraft:the_end" -> "end";
+            default -> dim;
+        };
     }
 
     void onToggle(String name) {
@@ -373,11 +389,11 @@ public class AreaManagementScreen extends Screen {
                 () -> {});
         }
         @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
-            int bg = isHoveredOrFocused() ? 0x80B89B6A : 0x50C4A882;
+            int bg = isHoveredOrFocused() ? 0x808C3E3E : 0x40604040;
             g.fill(getX(), getY(), getX() + width, getY() + height, bg);
             g.fill(getX(), getY(), getX() + width, getY() + 1, 0x608B6914);
             g.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font, getMessage(),
-                getX() + width / 2, getY() + (height - 8) / 2, 0xFFFFFFFF);
+                getX() + width / 2, getY() + (height - 8) / 2, isHoveredOrFocused() ? 0xFFCC4444 : 0xFFAA6666);
         }
     }
 }

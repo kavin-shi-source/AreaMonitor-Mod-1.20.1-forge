@@ -16,6 +16,13 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Localization manager for handling multi-language support.
  * Thread-safe implementation using ConcurrentHashMap.
+ *
+ * <p>Language source: the active language is read from
+ * {@code config/areamonitor/common.toml} (field {@code language}) on server start
+ * and on {@code /areamonitor config reload}. When a client has the mod installed,
+ * the server sends {@link net.minecraft.network.chat.MutableComponent} via
+ * {@link Component#translatable(String, Object...)} and the client resolves the
+ * text using its own Minecraft language setting, ignoring the server-side language.</p>
  */
 public class LocalizationManager {
     private static class InstanceHolder {
@@ -201,6 +208,24 @@ public class LocalizationManager {
      */
     public static void switchLanguage(String languageCode) {
         if (Arrays.asList(SUPPORTED_LANGUAGES).contains(languageCode)) {
+            InstanceHolder.INSTANCE.currentLanguage = languageCode;
+            InstanceHolder.INSTANCE.loadLanguage();
+        }
+    }
+
+    /**
+     * Apply language from config file. Reloads translations only when the
+     * language code changes. Called on server start and on config reload.
+     */
+    public static void applyConfigLanguage(String languageCode) {
+        if (languageCode == null || !Arrays.asList(SUPPORTED_LANGUAGES).contains(languageCode)) {
+            AreaMonitorMod.LOGGER.warn("Unsupported language code from config: {}, keeping current: {}",
+                    languageCode, InstanceHolder.INSTANCE.currentLanguage);
+            return;
+        }
+        if (!languageCode.equals(InstanceHolder.INSTANCE.currentLanguage)) {
+            AreaMonitorMod.LOGGER.info("Applying language from config: {} -> {}",
+                    InstanceHolder.INSTANCE.currentLanguage, languageCode);
             InstanceHolder.INSTANCE.currentLanguage = languageCode;
             InstanceHolder.INSTANCE.loadLanguage();
         }

@@ -228,6 +228,27 @@ public class AreaTriggerManager {
     }
 
     /**
+     * Check if player has a specific item in any inventory slot.
+     * Searches main inventory, armor slots, and offhand.
+     */
+    private static boolean playerHasItem(ServerPlayer player, String itemIdStr) {
+        ResourceLocation resourceId = ResourceLocation.tryParse(itemIdStr);
+        if (resourceId == null) return false;
+        var item = BuiltInRegistries.ITEM.get(resourceId);
+        if (item == null) return false;
+        for (var stack : player.getInventory().items) {
+            if (stack.getItem() == item) return true;
+        }
+        for (var stack : player.getInventory().armor) {
+            if (stack.getItem() == item) return true;
+        }
+        for (var stack : player.getInventory().offhand) {
+            if (stack.getItem() == item) return true;
+        }
+        return false;
+    }
+
+    /**
      * Evaluate trigger conditions. Returns true if all conditions pass.
      */
     private static boolean checkConditions(ServerPlayer player, TriggerConfig.TriggerCondition c) {
@@ -235,26 +256,8 @@ public class AreaTriggerManager {
 
         // playerHasItem: check inventory
         if (c.playerHasItem != null && !c.playerHasItem.isEmpty()) {
-            ResourceLocation itemId = ResourceLocation.tryParse(c.playerHasItem);
-            if (itemId != null) {
-                var item = BuiltInRegistries.ITEM.get(itemId);
-                if (item != null) {
-                    boolean hasItem = false;
-                    for (var stack : player.getInventory().items) {
-                        if (stack.getItem() == item) { hasItem = true; break; }
-                    }
-                    if (!hasItem) {
-                        for (var stack : player.getInventory().armor) {
-                            if (stack.getItem() == item) { hasItem = true; break; }
-                        }
-                    }
-                    if (!hasItem) {
-                        for (var stack : player.getInventory().offhand) {
-                            if (stack.getItem() == item) { hasItem = true; break; }
-                        }
-                    }
-                    if (!hasItem) return false;
-                }
+            if (!playerHasItem(player, c.playerHasItem)) {
+                return false;
             }
         }
 

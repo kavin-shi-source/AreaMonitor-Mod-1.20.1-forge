@@ -119,24 +119,28 @@ public class ConfirmDialog {
     public boolean mouseClicked(double mx, double my, int button) {
         if (!visible) return false;
 
+        // Capture callbacks before hide() clears them.
+        Runnable confirmAction = onConfirm;
+        Runnable cancelAction = onCancel;
+
         // Click outside dialog = cancel
         if (mx < dialogX || mx > dialogX + dialogW || my < dialogY || my > dialogY + dialogH) {
             hide();
-            if (onCancel != null) onCancel.run();
+            if (cancelAction != null) cancelAction.run();
             return true;
         }
 
         // Confirm button
         if (mx >= confirmX && mx <= confirmX + confirmW && my >= confirmY && my <= confirmY + confirmH) {
             hide();
-            if (onConfirm != null) onConfirm.run();
+            if (confirmAction != null) confirmAction.run();
             return true;
         }
 
         // Cancel button
         if (mx >= cancelX && mx <= cancelX + cancelW && my >= cancelY && my <= cancelY + cancelH) {
             hide();
-            if (onCancel != null) onCancel.run();
+            if (cancelAction != null) cancelAction.run();
             return true;
         }
 

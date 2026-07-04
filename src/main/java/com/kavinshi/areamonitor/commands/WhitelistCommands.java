@@ -2,7 +2,6 @@ package com.kavinshi.areamonitor.commands;
 
 import com.kavinshi.areamonitor.AreaMonitorMod;
 import com.kavinshi.areamonitor.ConfigManager;
-import com.kavinshi.areamonitor.LocalizationManager;
 import com.kavinshi.areamonitor.WhitelistManager;
 import com.kavinshi.areamonitor.util.MessageUtils;
 import com.mojang.brigadier.context.CommandContext;
@@ -15,7 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Whitelist, toggle, help, and language commands.
+ * Whitelist, toggle, and help commands.
  */
 public class WhitelistCommands {
 
@@ -143,37 +142,6 @@ public class WhitelistCommands {
         MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.section.config", false);
         MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.config.reload", false);
         MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.config.generate", false);
-
-        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.section.language", false);
-        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.language.show", false);
-        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.language.english", false);
-        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.language.chinese", false);
-
-        return 1;
-    }
-
-    // ---- Language commands ----
-
-    public static int setLanguageEnglish(CommandContext<CommandSourceStack> context) {
-        LocalizationManager.switchLanguage(LocalizationManager.LANGUAGE_ENGLISH);
-        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.english.success", false);
-        return 1;
-    }
-
-    public static int setLanguageChinese(CommandContext<CommandSourceStack> context) {
-        LocalizationManager.switchLanguage(LocalizationManager.LANGUAGE_CHINESE);
-        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.chinese.success", true);
-        return 1;
-    }
-
-    public static int showLanguageStatus(CommandContext<CommandSourceStack> context) {
-        String currentLang = LocalizationManager.getCurrentLanguage();
-        String displayName = LocalizationManager.getLanguageDisplayName(currentLang);
-
-        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.current", false, displayName);
-        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.language.usage", false);
-        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.language.english", false);
-        MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.language.chinese", false);
 
         return 1;
     }

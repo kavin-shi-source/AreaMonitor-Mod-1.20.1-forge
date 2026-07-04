@@ -3,6 +3,7 @@ package com.kavinshi.areamonitor.commands;
 import com.kavinshi.areamonitor.AreaMonitorMod;
 import com.kavinshi.areamonitor.ConfigManager;
 import com.kavinshi.areamonitor.ItemBlacklistManager;
+import com.kavinshi.areamonitor.LocalizationManager;
 import com.kavinshi.areamonitor.SelectionTool;
 import com.kavinshi.areamonitor.util.MessageUtils;
 import com.mojang.brigadier.context.CommandContext;
@@ -126,6 +127,7 @@ public class SelectionCommands {
             ConfigManager.loadAreasConfig();
             ItemBlacklistManager.loadBlacklistConfig();
             ConfigManager.validateConfig();
+            LocalizationManager.applyConfigLanguage(ConfigManager.CONFIG.language.get());
 
             MessageUtils.sendSuccess(context.getSource(), "config.reloaded", true);
         } catch (Exception e) {
