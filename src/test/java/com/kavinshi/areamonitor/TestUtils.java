@@ -26,16 +26,16 @@ public class TestUtils {
      */
     public static ConfigManager.AreaConfig createTestAreaConfig(int minX, int minZ, int maxX, int maxZ) {
         ConfigManager.AreaConfig config = new ConfigManager.AreaConfig();
-        config.displayName = "Test Config";
-        config.dimension = "minecraft:overworld";
-        config.minX = minX;
-        config.minZ = minZ;
-        config.maxX = maxX;
-        config.maxZ = maxZ;
-        config.enterMode = "adventure";
-        config.leaveMode = "survival";
-        config.enabled = true;
-        config.whitelist = new java.util.ArrayList<>();
+        config.setDisplayName("Test Config");
+        config.setDimension("minecraft:overworld");
+        config.setMinX(minX);
+        config.setMinZ(minZ);
+        config.setMaxX(maxX);
+        config.setMaxZ(maxZ);
+        config.setEnterMode("adventure");
+        config.setLeaveMode("survival");
+        config.setEnabled(true);
+        config.setWhitelist(new java.util.ArrayList<>());
         return config;
     }
 

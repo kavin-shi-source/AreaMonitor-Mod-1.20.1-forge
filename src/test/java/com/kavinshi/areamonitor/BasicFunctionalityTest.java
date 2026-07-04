@@ -42,15 +42,15 @@ public class BasicFunctionalityTest {
         ConfigManager.AreaConfig config = TestUtils.createTestAreaConfig(10, 10, 50, 50);
         assertNotNull(config, "Config should be created");
 
-        assertEquals(10, config.minX, "minX should match");
-        assertEquals(10, config.minZ, "minZ should match");
-        assertEquals(50, config.maxX, "maxX should match");
-        assertEquals(50, config.maxZ, "maxZ should match");
-        assertEquals("adventure", config.enterMode, "enterMode should be adventure");
-        assertEquals("survival", config.leaveMode, "leaveMode should be survival");
+        assertEquals(10, config.getMinX(), "minX should match");
+        assertEquals(10, config.getMinZ(), "minZ should match");
+        assertEquals(50, config.getMaxX(), "maxX should match");
+        assertEquals(50, config.getMaxZ(), "maxZ should match");
+        assertEquals("adventure", config.getEnterMode(), "enterMode should be adventure");
+        assertEquals("survival", config.getLeaveMode(), "leaveMode should be survival");
 
-        assertTrue(config.minX < config.maxX, "minX should be less than maxX");
-        assertTrue(config.minZ < config.maxZ, "minZ should be less than maxZ");
+        assertTrue(config.getMinX() < config.getMaxX(), "minX should be less than maxX");
+        assertTrue(config.getMinZ() < config.getMaxZ(), "minZ should be less than maxZ");
     }
 
     @Test
