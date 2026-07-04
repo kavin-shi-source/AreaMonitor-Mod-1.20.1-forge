@@ -2,7 +2,7 @@
 
 [![English Version](https://img.shields.io/badge/English-Version-blue.svg)](CHANGELOG_EN.md)
 
-## [2.0.4] - 2025-06-20
+## [2.0.4] - 2025-07-04
 
 ### 新增
 - **GUI 管理界面**: 全新的浮动窗口式区域管理界面（Glass Morphism 主题），替代原有全屏 GUI，支持暗色世界遮罩 (v2.1.0-dev)
@@ -22,6 +22,11 @@
  - **区域导出/导入/克隆 (v2.2.0-dev)**: `/areamonitor area export/import/clone` 命令支持区域数据迁移与复制
  - **区域统计 (v2.2.0-dev)**: `/areamonitor stats` 显示每个区域的进入次数、最后访客、最后访问时间
  - **配置备份 (v2.2.0-dev)**: `/areamonitor backup` 将配置备份到 config/areamonitor/backups/ 目录
+ - **保护可视化 (v2.1.0)**: 保护违规时被拦截位置显示红色粒子簇
+ - **操作确认弹窗 (v2.1.0)**: ConfirmDialog 组件，删除区域/清空白名单确认
+ - **帮助悬浮提示 (v2.1.0)**: 保护类型/调度/条件/区域链 hover tooltip
+ - **条件激活 (v2.2.0)**: 最少在线人数 / 特定玩家存在条件激活
+ - **区域链 (v2.2.0)**: 进入区域自动传送到链中下一区域
 
 ### 修复
 - 快速链接命令多余前导斜杠修复（`sendCommand` 自动添加 `/`）
@@ -29,6 +34,10 @@
 - Players 文字 y 坐标偏移修正
 - 子面板 `onClose` 正确调用 `mainScreen.updateAfterEdit()` 刷新列表
 - 面板关闭时点击外部区域关闭、列表溢出限制、按键冲突修复
+- ConfigManager.AreaConfig 补充 schedule/condition/chain 字段，修复重启后数据丢失
+- SelectionTool.createAreaFromSelection null 检查顺序修正，消除 NPE 风险
+- C2SRequestAreaListPacket 权限拒绝时 player null 检查
+- 清除 zh_cn.json / en_us.json 中 66 个未使用的翻译键
 
 ### 优化
 - 响应式布局：子面板控件和分区背景填满窗口宽度
