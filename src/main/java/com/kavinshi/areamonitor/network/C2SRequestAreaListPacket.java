@@ -27,7 +27,7 @@ public class C2SRequestAreaListPacket {
                 S2CAreaListPacket response = S2CAreaListPacket.fromAreas(
                     AreaManager.getInstance().getAllAreas());
                 ModNetwork.sendToPlayer(response, player);
-            } else {
+            } else if (player != null) {
                 // Permission denied: send empty list so client GUI doesn't hang forever
                 ModNetwork.sendToPlayer(new S2CAreaListPacket(List.of()), player);
             }

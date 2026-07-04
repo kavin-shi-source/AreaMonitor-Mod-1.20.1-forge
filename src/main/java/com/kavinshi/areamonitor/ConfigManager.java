@@ -326,6 +326,16 @@ public class ConfigManager {
             area.setLeaveTrigger(config.getLeaveTrigger());
         }
 
+        // Load schedule / condition / chain
+        if (config.getScheduleEnabled() != null) area.setScheduleEnabled(config.getScheduleEnabled());
+        if (config.getScheduleTimeMin() != null) area.setScheduleTimeMin(config.getScheduleTimeMin());
+        if (config.getScheduleTimeMax() != null) area.setScheduleTimeMax(config.getScheduleTimeMax());
+        if (config.getConditionEnabled() != null) area.setConditionEnabled(config.getConditionEnabled());
+        if (config.getConditionMinPlayers() != null) area.setConditionMinPlayers(config.getConditionMinPlayers());
+        if (config.getConditionRequirePlayer() != null) area.setConditionRequirePlayer(config.getConditionRequirePlayer());
+        if (config.getChainNext() != null) area.setChainNext(config.getChainNext());
+        if (config.getChainDelayTicks() != null) area.setChainDelayTicks(config.getChainDelayTicks());
+
         return area;
     }
 
@@ -376,6 +386,16 @@ public class ConfigManager {
         if (area.getLeaveTrigger() != null) {
             config.setLeaveTrigger(area.getLeaveTrigger());
         }
+
+        // Save schedule / condition / chain
+        config.setScheduleEnabled(area.isScheduleEnabled());
+        config.setScheduleTimeMin(area.getScheduleTimeMin());
+        config.setScheduleTimeMax(area.getScheduleTimeMax());
+        config.setConditionEnabled(area.isConditionEnabled());
+        config.setConditionMinPlayers(area.getConditionMinPlayers());
+        config.setConditionRequirePlayer(area.getConditionRequirePlayer());
+        config.setChainNext(area.getChainNext());
+        config.setChainDelayTicks(area.getChainDelayTicks());
 
         return config;
     }
@@ -506,6 +526,14 @@ public class ConfigManager {
         private String boundsType = "RECTANGLE";
         private int[][] vertices;
         private Integer centerX, centerZ, radius;
+        // Schedule / Condition / Chain
+        private Boolean scheduleEnabled;
+        private Integer scheduleTimeMin, scheduleTimeMax;
+        private Boolean conditionEnabled;
+        private Integer conditionMinPlayers;
+        private String conditionRequirePlayer;
+        private String chainNext;
+        private Integer chainDelayTicks;
 
         public String getDisplayName() { return displayName; }
         public void setDisplayName(String v) { this.displayName = v; }
@@ -543,6 +571,23 @@ public class ConfigManager {
         public void setCenterZ(Integer v) { this.centerZ = v; }
         public Integer getRadius() { return radius; }
         public void setRadius(Integer v) { this.radius = v; }
+
+        public Boolean getScheduleEnabled() { return scheduleEnabled; }
+        public void setScheduleEnabled(Boolean v) { this.scheduleEnabled = v; }
+        public Integer getScheduleTimeMin() { return scheduleTimeMin; }
+        public void setScheduleTimeMin(Integer v) { this.scheduleTimeMin = v; }
+        public Integer getScheduleTimeMax() { return scheduleTimeMax; }
+        public void setScheduleTimeMax(Integer v) { this.scheduleTimeMax = v; }
+        public Boolean getConditionEnabled() { return conditionEnabled; }
+        public void setConditionEnabled(Boolean v) { this.conditionEnabled = v; }
+        public Integer getConditionMinPlayers() { return conditionMinPlayers; }
+        public void setConditionMinPlayers(Integer v) { this.conditionMinPlayers = v; }
+        public String getConditionRequirePlayer() { return conditionRequirePlayer; }
+        public void setConditionRequirePlayer(String v) { this.conditionRequirePlayer = v; }
+        public String getChainNext() { return chainNext; }
+        public void setChainNext(String v) { this.chainNext = v; }
+        public Integer getChainDelayTicks() { return chainDelayTicks; }
+        public void setChainDelayTicks(Integer v) { this.chainDelayTicks = v; }
     }
 
     /**

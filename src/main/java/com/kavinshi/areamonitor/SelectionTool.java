@@ -306,15 +306,15 @@ public class SelectionTool {
      */
     public static void createAreaFromSelection(ServerPlayer player, String areaName) {
         SelectionPoints selection = playerSelections.get(player.getUUID());
-        if (selection.isMultiPointMode() && selection.hasEnoughVerticesForPolygon()) {
-            createPolygonAreaFromSelection(player, areaName, selection);
-            return;
-        }
         if (selection == null || !selection.isComplete()) {
             player.displayClientMessage(
                 MessageUtils.smartComponent(player, "selection.error.no_points"),
                 true
             );
+            return;
+        }
+        if (selection.isMultiPointMode() && selection.hasEnoughVerticesForPolygon()) {
+            createPolygonAreaFromSelection(player, areaName, selection);
             return;
         }
 
