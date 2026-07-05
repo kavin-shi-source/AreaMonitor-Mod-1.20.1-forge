@@ -42,11 +42,8 @@ public class VisualCommands {
             return 0;
         }
 
-        MonitorArea area = AreaManager.getInstance().getArea(areaName);
-        if (area == null) {
-            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
-            return 0;
-        }
+        MonitorArea area = AreaCommandHelper.requireArea(context, areaName);
+        if (area == null) return 0;
 
         AreaVisualizer.startPersistentVisualization(player, area);
         MessageUtils.sendSuccess(context.getSource(), "area.start_showing_boundary", true, area.getDisplayName());
@@ -77,7 +74,7 @@ public class VisualCommands {
             String key = "performance." + entry.getKey();
             String label = LocalizationManager.translate(key);
             context.getSource().sendSuccess(
-                () -> Component.literal(label + ": §f" + entry.getValue()),
+                () -> Component.literal(label).append(": §f" + entry.getValue()),
                 false
             );
         }

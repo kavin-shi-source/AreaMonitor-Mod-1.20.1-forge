@@ -22,8 +22,10 @@ import net.minecraft.server.level.ServerPlayer;
  * @since 2.0.3
  */
 public final class MessageUtils {
-    
+
     private static final String MOD_ID = AreaMonitorMod.MOD_ID;
+    private static final io.netty.util.AttributeKey<net.minecraftforge.network.ConnectionData> FML_CONNECTION_DATA_KEY =
+        io.netty.util.AttributeKey.valueOf("fml:connectionData");
     
     private MessageUtils() {
     }
@@ -46,13 +48,12 @@ public final class MessageUtils {
             net.minecraft.network.Connection connection = player.connection.connection;
             if (connection != null && connection.channel() != null) {
                 io.netty.channel.Channel channel = connection.channel();
-                io.netty.util.AttributeKey<?> fmlConnectionDataKey = 
-                    io.netty.util.AttributeKey.valueOf("fml:connectionData");
-                
-                Object connectionData = channel.attr(fmlConnectionDataKey).get();
-                
-                if (connectionData instanceof net.minecraftforge.network.ConnectionData data) {
-                    com.google.common.collect.ImmutableList<String> modList = data.getModList();
+
+                net.minecraftforge.network.ConnectionData connectionData =
+                    channel.attr(FML_CONNECTION_DATA_KEY).get();
+
+                if (connectionData != null) {
+                    com.google.common.collect.ImmutableList<String> modList = connectionData.getModList();
                     if (modList != null) {
                         return modList.contains(MOD_ID);
                     }
@@ -101,7 +102,9 @@ public final class MessageUtils {
         ServerPlayer player = null;
         try {
             player = source.getPlayerOrException();
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            // Source is not a player (e.g., console/command block) — fall back to server-side translation
+            AreaMonitorMod.LOGGER.debug("smartComponent: source is not a player, using server-side translation");
         }
         return smartComponent(player, translationKey, args);
     }

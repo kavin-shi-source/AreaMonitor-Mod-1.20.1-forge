@@ -1,11 +1,13 @@
 package com.kavinshi.areamonitor;
 
+import com.kavinshi.areamonitor.commands.AreaBackupCommands;
 import com.kavinshi.areamonitor.commands.AreaCommands;
+import com.kavinshi.areamonitor.commands.AreaExportCommands;
+import com.kavinshi.areamonitor.commands.AreaStatsCommands;
 import com.kavinshi.areamonitor.commands.BlacklistCommands;
 import com.kavinshi.areamonitor.commands.SelectionCommands;
 import com.kavinshi.areamonitor.commands.VisualCommands;
 import com.kavinshi.areamonitor.commands.ProtectionCommands;
-import com.kavinshi.areamonitor.commands.TemplateCommands;
 import com.kavinshi.areamonitor.commands.TriggerCommands;
 import com.kavinshi.areamonitor.commands.WhitelistCommands;
 import com.kavinshi.areamonitor.network.ModNetwork;
@@ -155,32 +157,24 @@ public class ExtendedCommands {
                                 StringArgumentType.getString(context, "mode"),
                                 context
                             ))))
-                    )
-                    .then(Commands.literal("export")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                            .suggests(AreaCommands::suggestAreaNames)
-                            .executes(context -> AreaCommands.exportArea(
-                                StringArgumentType.getString(context, "name"),
-                                context
-                            ))))
-                    .then(Commands.literal("import")
-                        .then(Commands.argument("name", StringArgumentType.string())
-                            .then(Commands.argument("json", StringArgumentType.greedyString())
-                                .executes(context -> AreaCommands.importArea(
-                                    StringArgumentType.getString(context, "name"),
-                                    StringArgumentType.getString(context, "json"),
-                                    context
-                                )))))
-                    .then(Commands.literal("clone")
-                        .then(Commands.argument("source", StringArgumentType.string())
-                            .suggests(AreaCommands::suggestAreaNames)
-                            .then(Commands.argument("target", StringArgumentType.string())
-                                .executes(context -> AreaCommands.cloneArea(
-                                    StringArgumentType.getString(context, "source"),
-                                    StringArgumentType.getString(context, "target"),
-                                    context
-                                )))))
                 )
+                // P3 #9: realigned export/import as siblings of setLeaveMode (was misleadingly indented)
+                .then(Commands.literal("export")
+                    .then(Commands.argument("name", StringArgumentType.string())
+                        .suggests(AreaCommands::suggestAreaNames)
+                        .executes(context -> AreaExportCommands.exportArea(
+                            StringArgumentType.getString(context, "name"),
+                            context
+                        ))))
+                .then(Commands.literal("import")
+                    .then(Commands.argument("name", StringArgumentType.string())
+                        .then(Commands.argument("json", StringArgumentType.greedyString())
+                            .executes(context -> AreaExportCommands.importArea(
+                                StringArgumentType.getString(context, "name"),
+                                StringArgumentType.getString(context, "json"),
+                                context
+                            )))))
+            )
 
             // --- Visual commands ---
             .then(Commands.literal("visual")
@@ -441,12 +435,12 @@ public class ExtendedCommands {
 
             // --- Stats command ---
             .then(Commands.literal("stats")
-                .executes(AreaCommands::showStats)
+                .executes(AreaStatsCommands::showStats)
             )
 
             // --- Backup command ---
             .then(Commands.literal("backup")
-                .executes(AreaCommands::backupConfigs)
+                .executes(AreaBackupCommands::backupConfigs)
             )
 
             // --- GUI command ---
@@ -463,22 +457,6 @@ public class ExtendedCommands {
                                 .withStyle(ChatFormatting.GRAY)));
                     return 1;
                 })
-            )
-
-            // --- Template commands ---
-            .then(Commands.literal("template")
-                .then(Commands.literal("list")
-                    .executes(TemplateCommands::listTemplates))
-                .then(Commands.literal("info")
-                    .then(Commands.argument("name", StringArgumentType.string())
-                        .executes(context -> TemplateCommands.showTemplateInfo(
-                            StringArgumentType.getString(context, "name"), context))))
-                .then(Commands.literal("create")
-                    .then(Commands.argument("template", StringArgumentType.string())
-                        .then(Commands.argument("areaName", StringArgumentType.string())
-                            .executes(context -> TemplateCommands.createFromTemplate(
-                                StringArgumentType.getString(context, "template"),
-                                StringArgumentType.getString(context, "areaName"), context)))))
             )
         );
     }

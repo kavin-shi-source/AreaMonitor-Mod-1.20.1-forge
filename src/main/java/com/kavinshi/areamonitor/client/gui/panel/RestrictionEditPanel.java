@@ -13,8 +13,11 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import java.util.*;
 
+@OnlyIn(Dist.CLIENT)
 public class RestrictionEditPanel extends Screen {
 
     private static final int PARCH_DARK  = 0xD03A2A1A;
@@ -51,7 +54,10 @@ public class RestrictionEditPanel extends Screen {
             enableItemBlacklist = zb(obj, "enableItemBlacklist", true);
             blockTeleportCommands = zb(obj, "blockTeleportCommands", true);
             zl(obj, "blockedItems", blockedItems); zl(obj, "blockedCommands", blockedCommands);
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            // P2 #39: log parse failures instead of silently swallowing
+            com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Failed to parse restrictions JSON for area '{}': {}", entry.name(), e.getMessage());
+        }
     }
 
     @Override protected void init() {
@@ -144,15 +150,14 @@ public class RestrictionEditPanel extends Screen {
         int btnY = wy + wh - 30;
         int cx = wx + ww / 2;
         saveBtn = GlassButton.create(cx - 78, btnY, 70, 18, "[" + LocalizationManager.translate("gui.save") + "]", b -> {
-            if (dirty) { sendUpdate(); dirty = false; }
+            if (dirty) { sendUpdate(); dirty = false; mainScreen.updateAfterEdit(); }
             onClose();
         });
         cancelBtn = GlassButton.create(cx + 8, btnY, 70, 18, "[" + LocalizationManager.translate("gui.cancel") + "]", b -> {
             dirty = false;
             onClose();
         });
-        addRenderableWidget(saveBtn);
-        addRenderableWidget(cancelBtn);
+        // P1-3 fix: do not register to addRenderableWidget — rendered/hit-tested manually to avoid double rendering.
     }
 
     private void zbtn(int x, int y, int w, String text, Runnable a) { addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> a.run())); }
@@ -177,10 +182,11 @@ public class RestrictionEditPanel extends Screen {
         ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.UPDATE, entry.name(), json.toString()));
     }
 
-    @Override public void onClose() { mainScreen.updateAfterEdit(); if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
+    @Override public void onClose() { if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (confirmDialog.isVisible()) return true;
+        // P2 #29: delegate to confirm dialog for Esc/Enter handling
+        if (confirmDialog.isVisible()) return confirmDialog.keyPressed(keyCode, scanCode, modifiers);
         if (this.addItemBox != null && this.addItemBox.isFocused())
             return this.addItemBox.keyPressed(keyCode, scanCode, modifiers);
         if (this.addCmdBox != null && this.addCmdBox.isFocused())
@@ -189,6 +195,8 @@ public class RestrictionEditPanel extends Screen {
     }
 
     @Override public boolean charTyped(char c, int modifiers) {
+        // P2 #29: consume text input while confirmation dialog is visible
+        if (confirmDialog.isVisible()) return true;
         if (this.addItemBox != null && this.addItemBox.isFocused())
             return this.addItemBox.charTyped(c, modifiers);
         if (this.addCmdBox != null && this.addCmdBox.isFocused())
@@ -231,6 +239,9 @@ public class RestrictionEditPanel extends Screen {
             }
             return true;
         }
+        // P1-3 fix: manually dispatch click to unregistered saveBtn/cancelBtn
+        if (saveBtn != null && saveBtn.isMouseOver(mx, my) && saveBtn.mouseClicked(mx, my, button)) return true;
+        if (cancelBtn != null && cancelBtn.isMouseOver(mx, my) && cancelBtn.mouseClicked(mx, my, button)) return true;
         return super.mouseClicked(mx, my, button);
     }
 

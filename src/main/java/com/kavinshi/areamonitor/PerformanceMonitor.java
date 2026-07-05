@@ -5,11 +5,8 @@ import net.minecraft.server.MinecraftServer;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.atomic.LongAdder;
 
 /**
  * Performance monitoring and optimization system.
@@ -19,18 +16,18 @@ import java.util.concurrent.atomic.LongAdder;
  */
 public class PerformanceMonitor {
     private static final int MONITOR_INTERVAL = 100;
-    private static final double TPS_THRESHOLD_LOW = 18.0;  // Below 18 TPS indicates performance degradation
-    private static final double TPS_THRESHOLD_CRITICAL = 15.0;  // Below 15 TPS is critical
-    private static final long MEMORY_THRESHOLD = 85;  // 85% memory usage threshold
+    private static final double TPS_THRESHOLD_LOW = 18.0;
+    private static final double TPS_THRESHOLD_CRITICAL = 15.0;
+    private static final double TPS_THRESHOLD_HEALTHY = 19.5;
+    private static final int HEALTHY_TICKS_REQUIRED_FOR_RECOVERY = 600;
+    private static final long MEMORY_THRESHOLD = 85;
     private static final int MAX_CHECK_INTERVAL = 20;
     private static final int MIN_CHECK_INTERVAL = 1;
-    private static final int MAX_METRICS_SIZE = 50;  // Limit metrics map size to prevent memory leak
 
     private static int currentCheckInterval = 5;
     private static long lastCheck = 0;
     private static long lastOptimization = 0;
-
-    private static final Map<String, PerformanceMetric> metrics = new ConcurrentHashMap<>();
+    private static int consecutiveHealthyTicks = 0;
 
     private static final int TICK_TIMES_ARRAY_SIZE = 100;
     private static final long[] tickTimes = new long[TICK_TIMES_ARRAY_SIZE];
@@ -59,7 +56,7 @@ public class PerformanceMonitor {
      * Uses AtomicInteger to avoid synchronized block on every tick.
      */
     private static void updateTPS(long currentTime) {
-        int currentIndex = tickIndex.getAndIncrement() % TICK_TIMES_ARRAY_SIZE;
+        int currentIndex = Math.floorMod(tickIndex.getAndIncrement(), TICK_TIMES_ARRAY_SIZE);
         tickTimes[currentIndex] = currentTime;
 
         int nextIndex = (currentIndex + 1) % TICK_TIMES_ARRAY_SIZE;
@@ -78,12 +75,20 @@ public class PerformanceMonitor {
         double currentTPS = getTPS();
         long memoryUsage = getMemoryUsagePercentage();
 
-        recordMetric("tps", currentTPS);
-        recordMetric("memory", memoryUsage);
-        recordMetric("check_interval", currentCheckInterval);
-
         if (currentTPS < TPS_THRESHOLD_LOW) {
             handleLowTPS(currentTPS);
+            consecutiveHealthyTicks = 0;
+        } else if (currentTPS >= TPS_THRESHOLD_HEALTHY && currentCheckInterval > MIN_CHECK_INTERVAL) {
+            consecutiveHealthyTicks++;
+            if (consecutiveHealthyTicks >= HEALTHY_TICKS_REQUIRED_FOR_RECOVERY) {
+                int newInterval = Math.max(MIN_CHECK_INTERVAL, currentCheckInterval / 2);
+                adjustCheckInterval(newInterval);
+                consecutiveHealthyTicks = 0;
+                AreaMonitorMod.LOGGER.info("TPS recovered to {}, reducing check interval to {}",
+                    String.format("%.1f", currentTPS), currentCheckInterval);
+            }
+        } else {
+            consecutiveHealthyTicks = 0;
         }
 
         if (memoryUsage > MEMORY_THRESHOLD) {
@@ -150,16 +155,6 @@ public class PerformanceMonitor {
         return currentCheckInterval;
     }
 
-    private static void recordMetric(String name, double value) {
-        // Limit metrics map size to prevent memory leak
-        if (metrics.size() >= MAX_METRICS_SIZE && !metrics.containsKey(name)) {
-            AreaMonitorMod.LOGGER.debug("Metrics map size limit reached, skipping new metric: {}", name);
-            return;
-        }
-        PerformanceMetric metric = metrics.computeIfAbsent(name, k -> new PerformanceMetric());
-        metric.addValue(value);
-    }
-
     public static Map<String, String> getPerformanceStats() {
         Map<String, String> stats = new HashMap<>();
 
@@ -172,62 +167,11 @@ public class PerformanceMonitor {
 
     public static void clearAllCaches() {
         AreaManager.getInstance().clearUnusedCaches();
-        metrics.clear();
-        AreaMonitorMod.LOGGER.debug("All caches and metrics cleared");
+        AreaMonitorMod.LOGGER.debug("All caches cleared");
     }
 
     public static void clearUnusedCaches() {
         AreaManager.getInstance().clearUnusedCaches();
         AreaMonitorMod.LOGGER.debug("Unused caches cleaned");
-    }
-
-    /**
-     * Lock-free performance metric using concurrent data structures.
-     * Eliminates synchronized overhead and uses efficient atomic operations.
-     */
-    private static class PerformanceMetric {
-        private final ConcurrentLinkedDeque<Double> values = new ConcurrentLinkedDeque<>();
-        private final AtomicReference<Double> min = new AtomicReference<>(Double.MAX_VALUE);
-        private final AtomicReference<Double> max = new AtomicReference<>(Double.MIN_VALUE);
-        private final LongAdder sum = new LongAdder();
-        private final AtomicInteger count = new AtomicInteger(0);
-
-        public void addValue(double value) {
-            values.addLast(value);
-            count.incrementAndGet();
-
-            // Update min atomically
-            min.updateAndGet(current -> Math.min(current, value));
-
-            // Update max atomically
-            max.updateAndGet(current -> Math.max(current, value));
-
-            // Add to sum (LongAdder is lock-free and efficient)
-            sum.add((long)(value * 1000)); // Store as millis to avoid precision loss
-
-            // Keep only last 100 values
-            if (count.get() > 100) {
-                Double removed = values.pollFirst();
-                if (removed != null) {
-                    sum.add(-(long)(removed * 1000));
-                    count.decrementAndGet();
-                }
-            }
-        }
-
-        public double getAverage() {
-            int size = count.get();
-            return size == 0 ? 0 : sum.sum() / 1000.0 / size;
-        }
-
-        public double getMin() {
-            double minValue = min.get();
-            return minValue == Double.MAX_VALUE ? 0 : minValue;
-        }
-
-        public double getMax() {
-            double maxValue = max.get();
-            return maxValue == Double.MIN_VALUE ? 0 : maxValue;
-        }
     }
 }

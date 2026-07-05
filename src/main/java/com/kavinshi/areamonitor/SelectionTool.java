@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -53,7 +54,6 @@ public class SelectionTool {
     public static final int HELP_MESSAGE_COOLDOWN_MS = 5000;
 
     private static final Map<UUID, SelectionPoints> playerSelections = new ConcurrentHashMap<>();
-    private static final Map<UUID, Long> lastHelpTimes = new ConcurrentHashMap<>();
 
     private SelectionTool() {
     }
@@ -148,7 +148,7 @@ public class SelectionTool {
         }
 
         if (!selection.hasFirstPoint()) {
-            selection.setFirstPoint(pos);
+            selection.setFirstPoint(pos, player.level().dimension().location().toString());
 
             player.displayClientMessage(
                 MessageUtils.smartComponent(player, "selection.mode.header").withStyle(net.minecraft.ChatFormatting.BOLD),
@@ -169,6 +169,15 @@ public class SelectionTool {
                                   net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 2.0f);
 
         } else {
+            String currentDim = player.level().dimension().location().toString();
+            if (!currentDim.equals(selection.getFirstPointDimension())) {
+                player.displayClientMessage(
+                    MessageUtils.smartComponent(player, "selection.cross_dimension_denied"),
+                    true
+                );
+                return;
+            }
+
             BlockPos firstPos = selection.getFirstPoint();
             double distance = Math.sqrt(
                 Math.pow(pos.getX() - firstPos.getX(), 2) +
@@ -192,7 +201,7 @@ public class SelectionTool {
                 return;
             }
 
-            selection.setSecondPoint(pos);
+            selection.setSecondPoint(pos, currentDim);
 
             AreaVisualizer.showSelection(player, selection.getFirstPoint(), selection.getSecondPoint());
 
@@ -260,12 +269,7 @@ public class SelectionTool {
             false
         );
 
-        if (area > MAX_SELECTION_AREA) {
-            player.displayClientMessage(
-                MessageUtils.smartComponent(player, "selection.warning.area_too_large"),
-                false
-            );
-        } else if (area > LARGE_AREA_WARNING_THRESHOLD) {
+        if (area > LARGE_AREA_WARNING_THRESHOLD) {
             player.displayClientMessage(
                 MessageUtils.smartComponent(player, "selection.note.area_large"),
                 false
@@ -305,6 +309,10 @@ public class SelectionTool {
      * Create area from current selection.
      */
     public static void createAreaFromSelection(ServerPlayer player, String areaName) {
+        if (!AreaManager.isValidAreaName(areaName)) {
+            player.displayClientMessage(Component.translatable("gui.error.invalid_area_name"), true);
+            return;
+        }
         SelectionPoints selection = playerSelections.get(player.getUUID());
         if (selection == null || !selection.isComplete()) {
             player.displayClientMessage(
@@ -510,20 +518,6 @@ public class SelectionTool {
     }
 
     /**
-     * Get last help time for player.
-     */
-    public static Long getLastHelpTime(UUID playerId) {
-        return lastHelpTimes.get(playerId);
-    }
-
-    /**
-     * Set last help time for player.
-     */
-    public static void setLastHelpTime(UUID playerId, long time) {
-        lastHelpTimes.put(playerId, time);
-    }
-
-    /**
      * Show current selection info to player.
      */
     public static void showCurrentSelection(ServerPlayer player) {
@@ -565,7 +559,6 @@ public class SelectionTool {
      */
     public static void cleanupPlayerData(UUID playerId) {
         playerSelections.remove(playerId);
-        lastHelpTimes.remove(playerId);
     }
 
     /**
@@ -573,6 +566,5 @@ public class SelectionTool {
      */
     public static void cleanupAllData() {
         playerSelections.clear();
-        lastHelpTimes.clear();
     }
 }

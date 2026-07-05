@@ -3,6 +3,7 @@ package com.kavinshi.areamonitor.commands;
 import com.kavinshi.areamonitor.AreaMonitorMod;
 import com.kavinshi.areamonitor.ConfigManager;
 import com.kavinshi.areamonitor.WhitelistManager;
+import com.kavinshi.areamonitor.util.AuditLogger;
 import com.kavinshi.areamonitor.util.MessageUtils;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.ChatFormatting;
@@ -41,7 +42,12 @@ public class WhitelistCommands {
     // ---- Whitelist add ----
 
     public static int addToWhitelist(String player, CommandContext<CommandSourceStack> context) {
+        if (!isValidPlayerName(player)) {
+            context.getSource().sendSystemMessage(Component.translatable("gui.error.invalid_player_name"));
+            return 0;
+        }
         if (WhitelistManager.addToWhitelist(player)) {
+            AuditLogger.log(context.getSource(), "WHITELIST_ADD", player);
             MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.add.success", true, player);
         } else {
             MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.add.exists", true, player);
@@ -52,7 +58,12 @@ public class WhitelistCommands {
     // ---- Whitelist remove ----
 
     public static int removeFromWhitelist(String player, CommandContext<CommandSourceStack> context) {
+        if (!isValidPlayerName(player)) {
+            context.getSource().sendSystemMessage(Component.translatable("gui.error.invalid_player_name"));
+            return 0;
+        }
         if (WhitelistManager.removeFromWhitelist(player)) {
+            AuditLogger.log(context.getSource(), "WHITELIST_REMOVE", player);
             MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.remove.success", true, player);
         } else {
             MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.remove.not_found", true, player);
@@ -77,7 +88,7 @@ public class WhitelistCommands {
                 final String player = whitelistArray.get(i);
 
                 context.getSource().sendSuccess(
-                        () -> Component.literal(String.format("§e%d. §f%s", index, player)),
+                        () -> Component.translatable("whitelist.list.entry", index, player),
                         false
                 );
             }
@@ -91,6 +102,7 @@ public class WhitelistCommands {
 
     public static int clearWhitelist(CommandContext<CommandSourceStack> context) {
         WhitelistManager.clearWhitelist();
+        AuditLogger.log(context.getSource(), "WHITELIST_CLEAR");
         MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.whitelist.clear.success", true);
         return 1;
     }
@@ -144,5 +156,17 @@ public class WhitelistCommands {
         MessageUtils.sendSuccess(context.getSource(), "command.areamonitor.help.config.generate", false);
 
         return 1;
+    }
+
+    /**
+     * P2 #26: Validate Minecraft player name format (3-16 chars, alphanumeric + underscore).
+     */
+    private static boolean isValidPlayerName(String name) {
+        if (name == null || name.length() < 3 || name.length() > 16) return false;
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (!(Character.isLetterOrDigit(c) || c == '_')) return false;
+        }
+        return true;
     }
 }

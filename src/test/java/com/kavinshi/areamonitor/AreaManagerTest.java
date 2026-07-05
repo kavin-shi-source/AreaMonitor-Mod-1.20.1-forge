@@ -96,7 +96,7 @@ class AreaManagerTest {
     }
 
     @Test
-    void testClearAllData_KeepsAreas() {
+    void testClearAllData_ClearsAreas() {
         String a = testPrefix + "cda1";
         String b = testPrefix + "cda2";
         areaManager.addArea(new MonitorArea(a));
@@ -104,9 +104,10 @@ class AreaManagerTest {
 
         areaManager.clearAllData();
 
-        // clearAllData only clears player data, not areas
-        assertNotNull(areaManager.getArea(a));
-        assertNotNull(areaManager.getArea(b));
+        // clearAllData clears all state including areas (prevents cross-world data leakage)
+        assertNull(areaManager.getArea(a));
+        assertNull(areaManager.getArea(b));
+        assertTrue(areaManager.getAllAreas().isEmpty());
     }
 
     @Test

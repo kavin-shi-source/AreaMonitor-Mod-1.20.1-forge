@@ -7,9 +7,9 @@ import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
 
 @Mod(AreaMonitorMod.MOD_ID)
@@ -50,16 +50,57 @@ public class AreaMonitorMod {
 
     @SubscribeEvent
     public void onServerStopping(ServerStoppingEvent event) {
+        // P2 #11 fix: wrap each cleanup step in its own try-catch so an exception in one
+        // manager does not skip the others. Forge does not guarantee cross-class handler
+        // ordering, so each @SubscribeEvent method must be self-sufficient and resilient.
         AreaMonitorMod.LOGGER.info("Server stopping, saving area monitor data...");
-        
-        ConfigManager.saveAreasConfig();
-        ItemBlacklistManager.saveBlacklistConfig();
-        
-        PerformanceMonitor.clearAllCaches();
-        SelectionTool.cleanupAllData();
-        AreaVisualizer.cleanupAllData();
-        AreaManager.getInstance().clearUnusedCaches();
-        
+
+        try {
+            ConfigManager.saveAreasConfig();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("Failed to save areas config on shutdown", ex);
+        }
+        try {
+            ItemBlacklistManager.saveBlacklistConfig();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("Failed to save item blacklist on shutdown", ex);
+        }
+
+        try {
+            WhitelistManager.saveWhitelist();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("Failed to save whitelist on shutdown", ex);
+        }
+
+        try {
+            PerformanceMonitor.clearAllCaches();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("Failed to clear performance caches on shutdown", ex);
+        }
+        try {
+            SelectionTool.cleanupAllData();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("Failed to clean up selection tool data on shutdown", ex);
+        }
+        try {
+            AreaVisualizer.cleanupAllData();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("Failed to clean up area visualizer on shutdown", ex);
+        }
+
+        try {
+            AreaManager.getInstance().clearAllData();
+            AreaManager.getInstance().clearUnusedCaches();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("Failed to clear area manager data on shutdown", ex);
+        }
+
+        try {
+            WhitelistManager.clearAllData();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("Failed to clear whitelist data on shutdown", ex);
+        }
+
         AreaMonitorMod.LOGGER.info("AreaMonitor data saved and resources cleaned up");
     }
 }

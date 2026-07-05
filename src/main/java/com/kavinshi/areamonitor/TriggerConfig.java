@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Configuration for area triggers — actions executed when a player enters or leaves an area.
@@ -77,21 +78,85 @@ public class TriggerConfig {
             || teleportTarget != null || actionBar != null || potion != null;
     }
 
+    // P3 #15: equals/hashCode so TriggerConfig can be used in sets/maps and compared in tests
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof TriggerConfig that)) return false;
+        return Float.compare(that.soundVolume, soundVolume) == 0 &&
+               Float.compare(that.soundPitch, soundPitch) == 0 &&
+               potionDuration == that.potionDuration &&
+               potionAmplifier == that.potionAmplifier &&
+               cooldownTicks == that.cooldownTicks &&
+               debounceTicks == that.debounceTicks &&
+               Objects.equals(commands, that.commands) &&
+               Objects.equals(soundEvent, that.soundEvent) &&
+               Objects.equals(titleMain, that.titleMain) &&
+               Objects.equals(titleSub, that.titleSub) &&
+               Objects.equals(teleportTarget, that.teleportTarget) &&
+               Objects.equals(actionBar, that.actionBar) &&
+               Objects.equals(potion, that.potion) &&
+               Objects.equals(condition, that.condition);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(commands, soundEvent, soundVolume, soundPitch, titleMain, titleSub,
+            teleportTarget, actionBar, potion, potionDuration, potionAmplifier,
+            cooldownTicks, debounceTicks, condition);
+    }
+
     /**
      * Condition that must be met for the trigger to fire.
      * All non-null fields are AND-ed together.
      */
     public static class TriggerCondition {
         /** Player must have this item (resource location). */
-        public String playerHasItem = null;
+        private String playerHasItem = null;
         /** Min game time (0-24000 ticks). */
-        public Integer timeMin = null;
+        private Integer timeMin = null;
         /** Max game time (0-24000 ticks). */
-        public Integer timeMax = null;
+        private Integer timeMax = null;
         /** Required weather: "clear", "rain", "thunder". */
-        public String weather = null;
+        private String weather = null;
         /** Minimum online players on the server. */
-        public Integer minPlayers = null;
+        private Integer minPlayers = null;
+
+        public String getPlayerHasItem() { return playerHasItem; }
+        public void setPlayerHasItem(String v) { this.playerHasItem = v; }
+
+        public Integer getTimeMin() { return timeMin; }
+        public void setTimeMin(Integer v) {
+            // P2 #47: validate game time range (0..24000)
+            if (v != null && (v < 0 || v > 24000)) {
+                throw new IllegalArgumentException("timeMin must be 0..24000, got " + v);
+            }
+            this.timeMin = v;
+        }
+
+        public Integer getTimeMax() { return timeMax; }
+        public void setTimeMax(Integer v) {
+            if (v != null && (v < 0 || v > 24000)) {
+                throw new IllegalArgumentException("timeMax must be 0..24000, got " + v);
+            }
+            this.timeMax = v;
+        }
+
+        public String getWeather() { return weather; }
+        public void setWeather(String v) {
+            if (v != null && !v.equals("clear") && !v.equals("rain") && !v.equals("thunder")) {
+                throw new IllegalArgumentException("weather must be clear/rain/thunder, got " + v);
+            }
+            this.weather = v;
+        }
+
+        public Integer getMinPlayers() { return minPlayers; }
+        public void setMinPlayers(Integer v) {
+            if (v != null && v < 0) {
+                throw new IllegalArgumentException("minPlayers must be >= 0, got " + v);
+            }
+            this.minPlayers = v;
+        }
 
         public boolean isActive() {
             return playerHasItem != null || timeMin != null || timeMax != null

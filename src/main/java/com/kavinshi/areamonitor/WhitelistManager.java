@@ -15,7 +15,10 @@ import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.*;
 import java.lang.reflect.Type;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -58,9 +61,20 @@ public class WhitelistManager {
 
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
-        saveWhitelist();
-        whitelistEntries.clear();
-        nameIndex.clear();
+        // P2 #11 fix: defensive — AreaMonitorMod's central handler also calls clearAllData,
+        // but Forge does not guarantee handler ordering across classes. Wrap each step so a
+        // failure here does not propagate and skip subsequent cleanup in other handlers.
+        try {
+            saveWhitelist();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("WhitelistManager: failed to save whitelist on shutdown", ex);
+        }
+        try {
+            whitelistEntries.clear();
+            nameIndex.clear();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("WhitelistManager: failed to clear in-memory state on shutdown", ex);
+        }
         minecraftServer = null;
     }
 
@@ -122,7 +136,7 @@ public class WhitelistManager {
             return;
         }
 
-        try (FileReader reader = new FileReader(whitelistFile)) {
+        try (InputStreamReader reader = new InputStreamReader(new FileInputStream(whitelistFile), StandardCharsets.UTF_8)) {
             Type type = new TypeToken<Map<String, String>>(){}.getType();
             Map<String, String> loaded = GSON.fromJson(reader, type);
             if (loaded != null) {
@@ -150,7 +164,7 @@ public class WhitelistManager {
      */
     private static void migrateFromOldFormat(File oldFile) {
         AreaMonitorMod.LOGGER.info("Migrating whitelist from old format: {}", oldFile.getAbsolutePath());
-        try (BufferedReader reader = new BufferedReader(new FileReader(oldFile))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(oldFile), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
@@ -167,20 +181,24 @@ public class WhitelistManager {
                     if (uuid != null) {
                         whitelistEntries.put(uuid, name);
                         nameIndex.put(name.toLowerCase(), uuid);
-                    } else {
-                        // Store with offline-mode UUID derived from name for now
-                        // This will be corrected when the player next logs in
-                        AreaMonitorMod.LOGGER.warn("Cannot resolve UUID for offline player '{}', storing as pending", name);
-                        // Use a name-based UUID as placeholder
-                        UUID offlineUuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes());
+                    } else if (minecraftServer != null && !minecraftServer.usesAuthentication()) {
+                        // Only use offline-mode UUID on offline-mode servers
+                        AreaMonitorMod.LOGGER.warn("Offline-mode server: storing offline UUID for player '{}'", name);
+                        UUID offlineUuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
                         whitelistEntries.put(offlineUuid, name);
                         nameIndex.put(name.toLowerCase(), offlineUuid);
+                    } else {
+                        AreaMonitorMod.LOGGER.warn("Cannot resolve UUID for offline player '{}' on online-mode server, skipping", name);
                     }
                 }
             }
             if (!whitelistEntries.isEmpty()) {
                 saveWhitelist();
                 AreaMonitorMod.LOGGER.info("Migrated {} entries from old whitelist format", whitelistEntries.size());
+                // P2 #45: delete the old .txt file to avoid future confusion and re-migration
+                if (!oldFile.delete()) {
+                    AreaMonitorMod.LOGGER.warn("Failed to delete old whitelist file after migration: {}", oldFile.getAbsolutePath());
+                }
             }
         } catch (IOException e) {
             AreaMonitorMod.LOGGER.error("Failed to migrate whitelist from old format", e);
@@ -210,14 +228,21 @@ public class WhitelistManager {
                 toSave.put(entry.getKey().toString(), entry.getValue());
             }
 
-            try (FileWriter writer = new FileWriter(whitelistFile)) {
+            // Atomic write: write to temp file then move into place
+            File tempFile = new File(whitelistFile.getParentFile(), whitelistFile.getName() + ".tmp");
+            try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(tempFile), StandardCharsets.UTF_8)) {
                 GSON.toJson(toSave, writer);
             }
+            Files.move(tempFile.toPath(), whitelistFile.toPath(),
+                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
 
             dirty = false;
             AreaMonitorMod.LOGGER.debug("Whitelist saved ({} entries)", whitelistEntries.size());
         } catch (IOException e) {
+            // P2 #44: keep dirty=true so next auto-save retries; reset lastAutoSave so the
+            // retry happens on the next tick instead of waiting a full AUTO_SAVE_INTERVAL_MS.
             AreaMonitorMod.LOGGER.error("Failed to save whitelist file: {}", whitelistFile.getAbsolutePath(), e);
+            lastAutoSave = 0;
         }
     }
 
@@ -238,7 +263,12 @@ public class WhitelistManager {
     }
 
     public static boolean isWhitelisted(ServerPlayer player) {
-        return isWhitelisted(player.getUUID()) || isWhitelisted(player.getName().getString());
+        // P2 #43: prefer UUID match; only fall back to name lookup if the name index
+        // points to a UUID that matches this player's UUID (avoids name collision on
+        // offline-mode servers where two different players may share a name).
+        if (isWhitelisted(player.getUUID())) return true;
+        UUID indexed = nameIndex.get(player.getName().getString().toLowerCase());
+        return indexed != null && indexed.equals(player.getUUID()) && whitelistEntries.containsKey(indexed);
     }
 
     /**
@@ -262,13 +292,16 @@ public class WhitelistManager {
         }
 
         if (uuid == null) {
-            // Player not online, use offline UUID as placeholder
-            uuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + playerName).getBytes());
-            AreaMonitorMod.LOGGER.info("Player '{}' not online, stored with offline UUID. Will update on next login.", playerName);
+            if (minecraftServer != null && minecraftServer.usesAuthentication()) {
+                AreaMonitorMod.LOGGER.warn("Cannot add offline player '{}' on online-mode server: UUID unknown until login", playerName);
+                return false;
+            }
+            uuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + playerName).getBytes(StandardCharsets.UTF_8));
+            AreaMonitorMod.LOGGER.info("Player '{}' not online (offline-mode server), stored with offline UUID. Will update on next login.", playerName);
         }
 
-        whitelistEntries.put(uuid, playerName);
         nameIndex.put(nameLower, uuid);
+        whitelistEntries.put(uuid, playerName);
         markDirty();
         return true;
     }
@@ -293,5 +326,16 @@ public class WhitelistManager {
         whitelistEntries.clear();
         nameIndex.clear();
         markDirty();
+    }
+
+    /**
+     * P2 #11: clear all runtime state — called from the central shutdown handler in
+     * AreaMonitorMod so cross-class handler ordering is no longer a concern.
+     */
+    public static void clearAllData() {
+        whitelistEntries.clear();
+        nameIndex.clear();
+        dirty = false;
+        minecraftServer = null;
     }
 }

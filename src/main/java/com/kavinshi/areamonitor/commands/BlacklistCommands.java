@@ -90,7 +90,8 @@ public class BlacklistCommands {
             if (!itemName.contains(":")) {
                 itemName = "minecraft:" + itemName;
             }
-            ResourceLocation location = new ResourceLocation(itemName);
+            ResourceLocation location = ResourceLocation.tryParse(itemName);
+            if (location == null) return null;
             Item item = BuiltInRegistries.ITEM.get(location);
             if (item == Items.AIR && !itemName.equals("minecraft:air")) {
                 return null;
@@ -121,11 +122,8 @@ public class BlacklistCommands {
     // ---- Add item to area blacklist ----
 
     public static int addItemToAreaBlacklist(String areaName, String itemName, CommandContext<CommandSourceStack> context) {
-        MonitorArea area = AreaManager.getInstance().getArea(areaName);
-        if (area == null) {
-            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
-            return 0;
-        }
+        MonitorArea area = AreaCommandHelper.requireArea(context, areaName);
+        if (area == null) return 0;
 
         Item item = parseItem(itemName);
         if (item == null) {
@@ -153,11 +151,8 @@ public class BlacklistCommands {
     // ---- Remove item from area blacklist ----
 
     public static int removeItemFromAreaBlacklist(String areaName, String itemName, CommandContext<CommandSourceStack> context) {
-        MonitorArea area = AreaManager.getInstance().getArea(areaName);
-        if (area == null) {
-            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
-            return 0;
-        }
+        MonitorArea area = AreaCommandHelper.requireArea(context, areaName);
+        if (area == null) return 0;
 
         Item item = parseItem(itemName);
         if (item == null) {
@@ -184,11 +179,8 @@ public class BlacklistCommands {
     // ---- List area blacklist ----
 
     public static int listAreaBlacklist(String areaName, CommandContext<CommandSourceStack> context) {
-        MonitorArea area = AreaManager.getInstance().getArea(areaName);
-        if (area == null) {
-            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
-            return 0;
-        }
+        MonitorArea area = AreaCommandHelper.requireArea(context, areaName);
+        if (area == null) return 0;
 
         Set<Item> areaBlacklist = ItemBlacklistManager.getAreaBlacklist(areaName);
 
@@ -199,7 +191,7 @@ public class BlacklistCommands {
         } else {
             for (Item item : areaBlacklist) {
                 context.getSource().sendSuccess(
-                    () -> Component.literal("§c- " + getItemDisplayName(item)),
+                    () -> Component.translatable("blacklist.item.entry_active", getItemDisplayName(item)),
                     false
                 );
             }
@@ -210,7 +202,7 @@ public class BlacklistCommands {
             MessageUtils.sendSuccess(context.getSource(), "blacklist.global_items", false);
             for (Item item : globalBlacklist) {
                 context.getSource().sendSuccess(
-                    () -> Component.literal("§7- " + getItemDisplayName(item)),
+                    () -> Component.translatable("blacklist.item.entry_inactive", getItemDisplayName(item)),
                     false
                 );
             }
@@ -222,15 +214,12 @@ public class BlacklistCommands {
     // ---- Toggle area blacklist ----
 
     public static int toggleAreaBlacklist(String areaName, CommandContext<CommandSourceStack> context) {
-        MonitorArea area = AreaManager.getInstance().getArea(areaName);
-        if (area == null) {
-            MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.not_found", areaName);
-            return 0;
-        }
+        MonitorArea area = AreaCommandHelper.requireArea(context, areaName);
+        if (area == null) return 0;
 
         boolean currentState = area.getRestrictions().isEnableItemBlacklist();
         area.getRestrictions().setEnableItemBlacklist(!currentState);
-        ConfigManager.saveAreasConfig();
+        ConfigManager.safeSaveConfig();
 
         String newState = !currentState ? "area.enabled" : "area.disabled";
         MessageUtils.sendSuccess(context.getSource(), "blacklist.area_toggle", true, areaName, newState);
@@ -246,6 +235,7 @@ public class BlacklistCommands {
             MessageUtils.sendSuccess(context.getSource(), "blacklist.reloaded", true);
         } catch (Exception e) {
             MessageUtils.sendFailure(context.getSource(), "blacklist.reload_failed", e.getMessage());
+            return 0;
         }
         return 1;
     }

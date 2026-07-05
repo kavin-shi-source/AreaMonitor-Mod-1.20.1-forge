@@ -18,28 +18,25 @@ public class ProtectionCommands {
     private ProtectionCommands() {}
 
     public static int setProtection(String areaName, String type, boolean enable, CommandContext<CommandSourceStack> context) {
-        MonitorArea area = AreaManager.getInstance().getArea(areaName);
-        if (area == null) {
-            MessageUtils.sendFailure(context.getSource(), "error.area_not_found", areaName);
-            return 0;
-        }
-        ProtectionSettings p = area.getProtection();
+        MonitorArea area = AreaCommandHelper.requireArea(context, areaName);
+        if (area == null) return 0;
+        ProtectionSettings protection = area.getProtection();
         switch (type) {
-            case "blockBreak" -> p.setBlockBreak(enable);
-            case "blockPlace" -> p.setBlockPlace(enable);
-            case "blockInteract" -> p.setBlockInteract(enable);
-            case "pvp" -> p.setPvp(enable);
-            case "explosion" -> p.setExplosion(enable);
-            case "entityDamage" -> p.setEntityDamage(enable);
-            case "containerInteract" -> p.setContainerInteract(enable);
-            case "fluidPlace" -> p.setFluidPlace(enable);
-            case "itemDrop" -> p.setItemDrop(enable);
+            case "blockBreak" -> protection.setBlockBreak(enable);
+            case "blockPlace" -> protection.setBlockPlace(enable);
+            case "blockInteract" -> protection.setBlockInteract(enable);
+            case "pvp" -> protection.setPvp(enable);
+            case "explosion" -> protection.setExplosion(enable);
+            case "entityDamage" -> protection.setEntityDamage(enable);
+            case "containerInteract" -> protection.setContainerInteract(enable);
+            case "fluidPlace" -> protection.setFluidPlace(enable);
+            case "itemDrop" -> protection.setItemDrop(enable);
             default -> {
                 MessageUtils.sendFailure(context.getSource(), "protection.invalid_type", type);
                 return 0;
             }
         }
-        ConfigManager.saveAreasConfig();
+        ConfigManager.safeSaveConfig();
         String typeDisplay = LocalizationManager.translate("protection." + type);
         MessageUtils.sendSuccess(context.getSource(),
             enable ? "protection.enabled" : "protection.disabled", true, typeDisplay, areaName);
@@ -47,55 +44,49 @@ public class ProtectionCommands {
     }
 
     public static int setAllProtection(String areaName, boolean enable, CommandContext<CommandSourceStack> context) {
-        MonitorArea area = AreaManager.getInstance().getArea(areaName);
-        if (area == null) {
-            MessageUtils.sendFailure(context.getSource(), "error.area_not_found", areaName);
-            return 0;
-        }
-        ProtectionSettings p = area.getProtection();
-        p.setBlockBreak(enable);
-        p.setBlockPlace(enable);
-        p.setBlockInteract(enable);
-        p.setPvp(enable);
-        p.setExplosion(enable);
-        p.setEntityDamage(enable);
-        p.setContainerInteract(enable);
-        p.setFluidPlace(enable);
-        p.setItemDrop(enable);
-        ConfigManager.saveAreasConfig();
+        MonitorArea area = AreaCommandHelper.requireArea(context, areaName);
+        if (area == null) return 0;
+        ProtectionSettings protection = area.getProtection();
+        protection.setBlockBreak(enable);
+        protection.setBlockPlace(enable);
+        protection.setBlockInteract(enable);
+        protection.setPvp(enable);
+        protection.setExplosion(enable);
+        protection.setEntityDamage(enable);
+        protection.setContainerInteract(enable);
+        protection.setFluidPlace(enable);
+        protection.setItemDrop(enable);
+        ConfigManager.safeSaveConfig();
         MessageUtils.sendSuccess(context.getSource(),
             enable ? "protection.all_enabled" : "protection.all_disabled", true, areaName);
         return 1;
     }
 
     public static int showProtectionInfo(String areaName, CommandContext<CommandSourceStack> context) {
-        MonitorArea area = AreaManager.getInstance().getArea(areaName);
-        if (area == null) {
-            MessageUtils.sendFailure(context.getSource(), "error.area_not_found", areaName);
-            return 0;
-        }
-        ProtectionSettings p = area.getProtection();
+        MonitorArea area = AreaCommandHelper.requireArea(context, areaName);
+        if (area == null) return 0;
+        ProtectionSettings protection = area.getProtection();
         context.getSource().sendSystemMessage(
             Component.literal(String.format(
                 LocalizationManager.translate("protection.info_header"), areaName)));
         context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.blockBreak"), p.isBlockBreak())));
+            Component.literal(formatLine(LocalizationManager.translate("protection.blockBreak"), protection.isBlockBreak())));
         context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.blockPlace"), p.isBlockPlace())));
+            Component.literal(formatLine(LocalizationManager.translate("protection.blockPlace"), protection.isBlockPlace())));
         context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.blockInteract"), p.isBlockInteract())));
+            Component.literal(formatLine(LocalizationManager.translate("protection.blockInteract"), protection.isBlockInteract())));
         context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.pvp"), p.isPvp())));
+            Component.literal(formatLine(LocalizationManager.translate("protection.pvp"), protection.isPvp())));
         context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.explosion"), p.isExplosion())));
+            Component.literal(formatLine(LocalizationManager.translate("protection.explosion"), protection.isExplosion())));
         context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.entityDamage"), p.isEntityDamage())));
+            Component.literal(formatLine(LocalizationManager.translate("protection.entityDamage"), protection.isEntityDamage())));
         context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.containerInteract"), p.isContainerInteract())));
+            Component.literal(formatLine(LocalizationManager.translate("protection.containerInteract"), protection.isContainerInteract())));
         context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.fluidPlace"), p.isFluidPlace())));
+            Component.literal(formatLine(LocalizationManager.translate("protection.fluidPlace"), protection.isFluidPlace())));
         context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.itemDrop"), p.isItemDrop())));
+            Component.literal(formatLine(LocalizationManager.translate("protection.itemDrop"), protection.isItemDrop())));
         return 1;
     }
 

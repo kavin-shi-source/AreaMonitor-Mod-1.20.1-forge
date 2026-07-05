@@ -5,15 +5,17 @@ package com.kavinshi.areamonitor;
  * Each boolean field represents a protection type, default false (no protection).
  */
 public class ProtectionSettings {
-    private boolean blockBreak = false;
-    private boolean blockPlace = false;
-    private boolean blockInteract = false;
-    private boolean pvp = false;
-    private boolean explosion = false;
-    private boolean entityDamage = false;
-    private boolean containerInteract = false;
-    private boolean fluidPlace = false;
-    private boolean itemDrop = false;
+    // P2 #46: volatile — these fields are mutated by command threads and read by
+    // event handlers (world tick / Forge event bus) on potentially different threads.
+    private volatile boolean blockBreak = false;
+    private volatile boolean blockPlace = false;
+    private volatile boolean blockInteract = false;
+    private volatile boolean pvp = false;
+    private volatile boolean explosion = false;
+    private volatile boolean entityDamage = false;
+    private volatile boolean containerInteract = false;
+    private volatile boolean fluidPlace = false;
+    private volatile boolean itemDrop = false;
 
     // Getters
     public boolean isBlockBreak() { return blockBreak; }

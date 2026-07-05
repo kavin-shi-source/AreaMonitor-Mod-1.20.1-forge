@@ -24,11 +24,16 @@ import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -60,13 +65,14 @@ public class ItemBlacklistManager {
     public static void initializeDefaultBlacklist() {
         if (initialized) return;
         initialized = true;
-        
+
+        // P2 #41: keep default set consistent with createDefaultBlacklistConfig()
+        // so subsequent loadBlacklistConfig() doesn't wipe items the user expected
         GLOBAL_BLACKLISTED_ITEMS.add(Items.ENDER_PEARL);
         GLOBAL_BLACKLISTED_ITEMS.add(Items.CHORUS_FRUIT);
-        GLOBAL_BLACKLISTED_ITEMS.add(Items.RECOVERY_COMPASS);
         GLOBAL_BLACKLISTED_ITEMS.add(Items.COMPASS);
         GLOBAL_BLACKLISTED_ITEMS.add(Items.CLOCK);
-        
+
         AreaMonitorMod.LOGGER.info("Default item blacklist initialized");
     }
 
@@ -74,8 +80,10 @@ public class ItemBlacklistManager {
      * Add custom blacklist for a player area.
      */
     public static void addAreaBlacklist(String areaName, Set<Item> blacklistedItems) {
-        AREA_BLACKLISTS.put(areaName, ConcurrentHashMap.newKeySet());
-        AREA_BLACKLISTS.get(areaName).addAll(blacklistedItems);
+        // P2 #42: build the set fully before publishing — avoid put-then-get race
+        Set<Item> set = ConcurrentHashMap.newKeySet();
+        set.addAll(blacklistedItems);
+        AREA_BLACKLISTS.put(areaName, set);
     }
 
     /**
@@ -114,7 +122,10 @@ public class ItemBlacklistManager {
         }
 
         // Check area-specific blacklist
+        // P2 #40: respect enableItemBlacklist toggle for area-specific blacklists too
         for (String areaName : currentAreas) {
+            MonitorArea area = AreaManager.getInstance().getArea(areaName);
+            if (area == null || !area.getRestrictions().isEnableItemBlacklist()) continue;
             Set<Item> areaBlacklist = AREA_BLACKLISTS.get(areaName);
             if (areaBlacklist != null && areaBlacklist.contains(item)) {
                 return true;
@@ -143,15 +154,42 @@ public class ItemBlacklistManager {
      */
     public static boolean isCommandBlocked(String command, ServerPlayer player) {
         String baseCommand = command.split(" ")[0].toLowerCase();
-
-        if (!TELEPORT_COMMANDS.contains(baseCommand)) {
-            return false;
-        }
+        while (baseCommand.startsWith("/")) baseCommand = baseCommand.substring(1);
+        String normalized = stripNamespace(baseCommand);
 
         Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
         for (String areaName : currentAreas) {
             MonitorArea area = AreaManager.getInstance().getArea(areaName);
-            if (area != null && area.getRestrictions().isBlockTeleportCommands()) {
+            if (area == null) continue;
+            RestrictionSettings rs = area.getRestrictions();
+            if (rs.isBlockTeleportCommands() && isTeleportCommand(baseCommand)) {
+                return true;
+            }
+            for (String blocked : rs.getBlockedCommands()) {
+                String b = blocked.toLowerCase();
+                while (b.startsWith("/")) b = b.substring(1);
+                if (stripNamespace(b).equals(normalized)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static String stripNamespace(String command) {
+        int idx = command.indexOf(':');
+        if (idx > 0) {
+            return command.substring(idx + 1);
+        }
+        return command;
+    }
+
+    private static boolean isTeleportCommand(String command) {
+        // P3 #1: strip namespace once and compare against the (already-stripped) command
+        String normalized = stripNamespace(command);
+        for (String tc : TELEPORT_COMMANDS) {
+            String stripped = tc;
+            while (stripped.startsWith("/")) stripped = stripped.substring(1);
+            stripped = stripNamespace(stripped);
+            if (stripped.equals(normalized)) {
                 return true;
             }
         }
@@ -288,27 +326,6 @@ public class ItemBlacklistManager {
         AreaMonitorMod.LOGGER.info("Removed item from global blacklist: {}", item.toString());
     }
 
-    /**
-     * Add teleport command to blacklist.
-     */
-    public static void addTeleportCommand(String command) {
-        TELEPORT_COMMANDS.add(command.toLowerCase());
-    }
-
-    /**
-     * Remove teleport command from blacklist.
-     */
-    public static void removeTeleportCommand(String command) {
-        TELEPORT_COMMANDS.remove(command.toLowerCase());
-    }
-
-    /**
-     * Get all blocked teleport commands.
-     */
-    public static Set<String> getTeleportCommands() {
-        return new HashSet<>(TELEPORT_COMMANDS);
-    }
-
     // Blacklist config data class
     private static class BlacklistConfigData {
         public List<String> global_blacklist = new ArrayList<>();
@@ -342,7 +359,7 @@ public class ItemBlacklistManager {
             return;
         }
 
-        try (FileReader reader = new FileReader(blacklistConfigFile)) {
+        try (InputStreamReader reader = new InputStreamReader(new FileInputStream(blacklistConfigFile), StandardCharsets.UTF_8)) {
             BlacklistConfigData configData = GSON.fromJson(reader, BlacklistConfigData.class);
             if (configData != null) {
                 // Load global blacklist
@@ -360,7 +377,8 @@ public class ItemBlacklistManager {
                 AREA_BLACKLISTS.clear();
                 if (configData.area_blacklists != null) {
                     for (Map.Entry<String, List<String>> entry : configData.area_blacklists.entrySet()) {
-                        Set<Item> itemSet = new HashSet<>();
+                        // Use concurrent set — isItemBlacklisted reads these from event-handler threads
+                        Set<Item> itemSet = ConcurrentHashMap.newKeySet();
                         for (String itemId : entry.getValue()) {
                             Item item = parseItemFromId(itemId);
                             if (item != null) {
@@ -421,9 +439,13 @@ public class ItemBlacklistManager {
                 configData.area_blacklists.put(entry.getKey(), itemIds);
             }
 
-            try (FileWriter writer = new FileWriter(blacklistConfigFile)) {
+            // Atomic write: write to temp file then move into place
+            File tempFile = new File(blacklistConfigFile.getParentFile(), blacklistConfigFile.getName() + ".tmp");
+            try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(tempFile), StandardCharsets.UTF_8)) {
                 GSON.toJson(configData, writer);
             }
+            Files.move(tempFile.toPath(), blacklistConfigFile.toPath(),
+                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
 
             AreaMonitorMod.LOGGER.info("Blacklist config saved");
         } catch (IOException e) {
@@ -460,8 +482,14 @@ public class ItemBlacklistManager {
         defaultConfig.global_blacklist.add("minecraft:compass");
         defaultConfig.global_blacklist.add("minecraft:clock");
 
-        try (FileWriter writer = new FileWriter(blacklistConfigFile)) {
-            GSON.toJson(defaultConfig, writer);
+        // Atomic write: write to temp file then move into place
+        try {
+            File tempFile = new File(blacklistConfigFile.getParentFile(), blacklistConfigFile.getName() + ".tmp");
+            try (OutputStreamWriter writer = new OutputStreamWriter(new FileOutputStream(tempFile), StandardCharsets.UTF_8)) {
+                GSON.toJson(defaultConfig, writer);
+            }
+            Files.move(tempFile.toPath(), blacklistConfigFile.toPath(),
+                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             AreaMonitorMod.LOGGER.info("Created default blacklist config: {}", blacklistConfigFile.getAbsolutePath());
         } catch (IOException e) {
             AreaMonitorMod.LOGGER.error("Failed to create default blacklist config: {}", blacklistConfigFile.getAbsolutePath(), e);
@@ -473,7 +501,11 @@ public class ItemBlacklistManager {
      */
     private static Item parseItemFromId(String itemId) {
         try {
-            ResourceLocation location = new ResourceLocation(itemId);
+            ResourceLocation location = ResourceLocation.tryParse(itemId);
+            if (location == null) {
+                AreaMonitorMod.LOGGER.warn("Invalid item ID format: {}", itemId);
+                return null;
+            }
             Item item = BuiltInRegistries.ITEM.get(location);
             if (item == Items.AIR && !itemId.equals("minecraft:air")) {
                 return null;

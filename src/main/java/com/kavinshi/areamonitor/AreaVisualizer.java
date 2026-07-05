@@ -133,17 +133,33 @@ public class AreaVisualizer {
             return;
         }
 
-        // Get all server players once
-        List<ServerPlayer> players = new ArrayList<>();
+        // Compute batch bounding box to pre-filter nearby players once,
+        // avoiding O(particles × players) distance checks for far-away players.
+        double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, minZ = Double.MAX_VALUE;
+        double maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE, maxZ = -Double.MAX_VALUE;
+        for (ParticleData p : batch) {
+            if (p.x < minX) minX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.z < minZ) minZ = p.z;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y > maxY) maxY = p.y;
+            if (p.z > maxZ) maxZ = p.z;
+        }
+        double renderDist = Math.sqrt(MAX_PARTICLE_RENDER_DISTANCE_SQ);
+        List<ServerPlayer> nearbyPlayers = new ArrayList<>();
         for (net.minecraft.world.entity.player.Player p : level.players()) {
-            if (p instanceof ServerPlayer serverPlayer) {
-                players.add(serverPlayer);
+            if (!(p instanceof ServerPlayer sp)) continue;
+            // Coarse AABB overlap check before per-particle distance check
+            if (sp.getX() >= minX - renderDist && sp.getX() <= maxX + renderDist &&
+                sp.getY() >= minY - renderDist && sp.getY() <= maxY + renderDist &&
+                sp.getZ() >= minZ - renderDist && sp.getZ() <= maxZ + renderDist) {
+                nearbyPlayers.add(sp);
             }
         }
 
-        // Send particles to nearby players
+        // Send particles to nearby players only
         for (ParticleData particle : batch) {
-            for (ServerPlayer player : players) {
+            for (ServerPlayer player : nearbyPlayers) {
                 if (player.distanceToSqr(particle.x, particle.y, particle.z) <= MAX_PARTICLE_RENDER_DISTANCE_SQ) {
                     player.connection.send(new ClientboundLevelParticlesPacket(
                         particle.particle, false, particle.x, particle.y, particle.z, 0, 0, 0, 0, 1
@@ -215,12 +231,10 @@ public class AreaVisualizer {
 
         List<ParticleData> batch = new ArrayList<>();
 
+        // P3 #7: removed dead null check — pos1.getX() above would already have NPE'd if pos1 were null
         batch.add(new ParticleData(pos1.getX() + 0.5, y, pos1.getZ() + 0.5, ParticleTypes.ANGRY_VILLAGER));
         batch.add(new ParticleData(pos2.getX() + 0.5, y, pos2.getZ() + 0.5, ParticleTypes.ANGRY_VILLAGER));
-
-        if (pos1 != null && pos2 != null) {
-            collectLineBetweenParticles(pos1, pos2, y, ParticleTypes.END_ROD, batch);
-        }
+        collectLineBetweenParticles(pos1, pos2, y, ParticleTypes.END_ROD, batch);
 
         sendParticleBatch(level, batch);
     }

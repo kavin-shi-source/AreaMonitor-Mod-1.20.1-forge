@@ -16,6 +16,8 @@ import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -100,6 +102,8 @@ public class AreaProtectionManager {
 
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onLivingHurt(LivingHurtEvent event) {
+        // P1-12 fix: fast short-circuit when no areas exist — avoids per-event branch checks and HashSet allocation
+        if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
         // PVP: Player attacking another player
         if (event.getSource().getEntity() instanceof ServerPlayer attacker &&
             event.getEntity() instanceof ServerPlayer victim) {
@@ -123,20 +127,32 @@ public class AreaProtectionManager {
         // Protects all living entities inside entityDamage-protected areas
         if (!(event.getEntity() instanceof Player)) {
             net.minecraft.world.entity.LivingEntity victim = event.getEntity();
-            if (isProtectedAtLocation(victim.getX(), victim.getZ(), "entityDamage")) {
-                // Whitelisted players bypass entity damage protection
-                if (event.getSource().getEntity() instanceof ServerPlayer attacker) {
-                    if (WhitelistManager.isWhitelisted(attacker)) return;
-                    String attackerName = attacker.getGameProfile().getName().toLowerCase();
-                    AreaManager am = AreaManager.getInstance();
-                    for (MonitorArea area : am.getAllAreas()) {
-                        if (area.isEnabled() && area.getProtection().isEntityDamage() &&
-                            area.getBounds().contains(victim.getX(), victim.getZ()) &&
-                            area.getProtectionWhitelist().contains(attackerName)) {
-                            return; // attacker is in this area's protection whitelist
-                        }
-                    }
+            String dimension = victim.level().dimension().location().toString();
+            // P2 #6 fix: previously the first area whose protection whitelist contained the
+            // attacker caused a `return`, bypassing every other overlapping protected area.
+            // Now we require the attacker to be whitelisted in ALL overlapping protected areas
+            // (or globally whitelisted) before allowing the damage.
+            AreaManager am = AreaManager.getInstance();
+            boolean anyProtection = false;
+            boolean allWhitelisted = true;
+            ServerPlayer attacker = event.getSource().getEntity() instanceof ServerPlayer sp ? sp : null;
+            if (attacker != null && WhitelistManager.isWhitelisted(attacker)) {
+                return; // global whitelist bypasses everything
+            }
+            String attackerName = attacker != null ? attacker.getGameProfile().getName().toLowerCase() : null;
+            for (MonitorArea area : am.getPotentialAreasAt(victim.getX(), victim.getZ(), dimension)) {
+                if (area == null || !area.isEnabled()) continue;
+                if (!area.getDimension().equals(dimension)) continue;
+                if (!area.getProtection().isEntityDamage()) continue;
+                if (!area.getBounds().contains(victim.getX(), victim.getZ())) continue;
+                anyProtection = true;
+                if (attacker == null || attackerName == null ||
+                    !area.getProtectionWhitelist().contains(attackerName)) {
+                    allWhitelisted = false;
+                    break;
                 }
+            }
+            if (anyProtection && !allWhitelisted) {
                 event.setCanceled(true);
             }
         }
@@ -144,22 +160,58 @@ public class AreaProtectionManager {
 
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onExplosionDetonate(ExplosionEvent.Detonate event) {
-        // Remove blocks and entities within explosion-protected areas from affected lists
         AreaManager am = AreaManager.getInstance();
+        String dimension = event.getLevel().dimension().location().toString();
+        double centerX = event.getExplosion().getPosition().x;
+        double centerZ = event.getExplosion().getPosition().z;
+
+        // P2 #5 fix: collect candidate areas from every grid cell covered by the explosion's
+        // affected blocks/entities, not just the center cell. An explosion near a grid boundary
+        // can damage blocks in a neighbouring cell that contains a protected area which the
+        // center-only lookup would miss.
+        double minX = centerX, maxX = centerX;
+        double minZ = centerZ, maxZ = centerZ;
+        for (var pos : event.getAffectedBlocks()) {
+            if (pos.getX() < minX) minX = pos.getX();
+            if (pos.getX() > maxX) maxX = pos.getX();
+            if (pos.getZ() < minZ) minZ = pos.getZ();
+            if (pos.getZ() > maxZ) maxZ = pos.getZ();
+        }
+        for (var ent : event.getAffectedEntities()) {
+            if (ent.getX() < minX) minX = ent.getX();
+            if (ent.getX() > maxX) maxX = ent.getX();
+            if (ent.getZ() < minZ) minZ = ent.getZ();
+            if (ent.getZ() > maxZ) maxZ = ent.getZ();
+        }
+
+        Set<MonitorArea> candidateAreas = am.getPotentialAreasInBox(minX, minZ, maxX, maxZ, dimension);
+
+        if (candidateAreas.isEmpty()) {
+            return;
+        }
+
+        List<MonitorArea> explosionProtected = new ArrayList<>();
+        for (MonitorArea area : candidateAreas) {
+            if (area.isEnabled() && area.getProtection().isExplosion() &&
+                area.getDimension().equals(dimension)) {
+                explosionProtected.add(area);
+            }
+        }
+        if (explosionProtected.isEmpty()) {
+            return;
+        }
+
         event.getAffectedBlocks().removeIf(pos -> {
-            for (MonitorArea area : am.getAllAreas()) {
-                if (area.isEnabled() && area.getProtection().isExplosion() &&
-                    area.getBounds().contains(pos.getX(), pos.getZ())) {
+            for (MonitorArea area : explosionProtected) {
+                if (area.getBounds().contains(pos.getX(), pos.getZ())) {
                     return true;
                 }
             }
             return false;
         });
-        // Also protect entities (players, mobs, villagers, etc.) from explosion damage
         event.getAffectedEntities().removeIf(ent -> {
-            for (MonitorArea area : am.getAllAreas()) {
-                if (area.isEnabled() && area.getProtection().isExplosion() &&
-                    area.getBounds().contains(ent.getX(), ent.getZ())) {
+            for (MonitorArea area : explosionProtected) {
+                if (area.getBounds().contains(ent.getX(), ent.getZ())) {
                     return true;
                 }
             }
@@ -174,39 +226,61 @@ public class AreaProtectionManager {
         // Global whitelist bypass
         if (WhitelistManager.isWhitelisted(player)) return false;
 
-        Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
-        if (currentAreas.isEmpty()) return false;
-
         AreaManager am = AreaManager.getInstance();
         String playerName = player.getGameProfile().getName().toLowerCase();
+        String dimension = player.level().dimension().location().toString();
+
+        Set<String> currentAreas = am.getCurrentAreas(player);
+        // P2 #7 fix: when the playerAreas cache is empty (player just entered and checkPlayer
+        // hasn't ticked yet — up to 5 ticks of window), fall back to a live spatial lookup so
+        // protection is enforced from the first interaction rather than after the cache warms.
+        if (currentAreas.isEmpty()) {
+            for (MonitorArea area : am.getPotentialAreasAt(player.getX(), player.getZ(), dimension)) {
+                if (area == null || !area.isEnabled()) continue;
+                if (!area.getDimension().equals(dimension)) continue;
+                if (!area.getBounds().contains(player.getX(), player.getZ())) continue;
+                if (area.getProtectionWhitelist().contains(playerName)) continue;
+                ProtectionSettings p = area.getProtection();
+                if (matchesProtection(p, protectionType)) return true;
+            }
+            return false;
+        }
+
         for (String areaName : currentAreas) {
             MonitorArea area = am.getArea(areaName);
             if (area == null || !area.isEnabled()) continue;
             // Per-area protection whitelist: player bypasses protection but still gets game mode changes
             if (area.getProtectionWhitelist().contains(playerName)) continue;
             ProtectionSettings p = area.getProtection();
-            switch (protectionType) {
-                case "blockBreak": if (p.isBlockBreak()) return true; break;
-                case "blockPlace": if (p.isBlockPlace()) return true; break;
-                case "blockInteract": if (p.isBlockInteract()) return true; break;
-                case "pvp": if (p.isPvp()) return true; break;
-                case "entityDamage": if (p.isEntityDamage()) return true; break;
-                case "containerInteract": if (p.isContainerInteract()) return true; break;
-                case "fluidPlace": if (p.isFluidPlace()) return true; break;
-                case "itemDrop": if (p.isItemDrop()) return true; break;
-            }
+            if (matchesProtection(p, protectionType)) return true;
         }
         return false;
+    }
+
+    private static boolean matchesProtection(ProtectionSettings p, String protectionType) {
+        switch (protectionType) {
+            case "blockBreak": return p.isBlockBreak();
+            case "blockPlace": return p.isBlockPlace();
+            case "blockInteract": return p.isBlockInteract();
+            case "pvp": return p.isPvp();
+            case "entityDamage": return p.isEntityDamage();
+            case "containerInteract": return p.isContainerInteract();
+            case "fluidPlace": return p.isFluidPlace();
+            case "itemDrop": return p.isItemDrop();
+            default: return false;
+        }
     }
 
     /**
      * Location-based protection check for non-player entities (villagers, animals, etc.)
      * that have no whitelist concept. Used by entityDamage and explosion protection.
+     * Uses spatial partitioning for O(k) lookup instead of O(n).
      */
-    private static boolean isProtectedAtLocation(double x, double z, String protectionType) {
+    private static boolean isProtectedAtLocation(double x, double z, String dimension, String protectionType) {
         AreaManager am = AreaManager.getInstance();
-        for (MonitorArea area : am.getAllAreas()) {
+        for (MonitorArea area : am.getPotentialAreasAt(x, z, dimension)) {
             if (area == null || !area.isEnabled()) continue;
+            if (!area.getDimension().equals(dimension)) continue;
             if (!area.getBounds().contains(x, z)) continue;
             ProtectionSettings p = area.getProtection();
             switch (protectionType) {

@@ -4,11 +4,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
  * Button styled with Warm Parchment theme.
  * Renders a semi-transparent amber/parchment background with gold-brown borders.
  */
+@OnlyIn(Dist.CLIENT)
 public class GlassButton extends Button {
 
     // Parchment palette

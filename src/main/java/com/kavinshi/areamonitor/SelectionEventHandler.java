@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.Level;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -16,8 +17,11 @@ public class SelectionEventHandler {
 
     /**
      * Handle player right-click block event.
+     * Uses HIGHEST priority and receiveCanceled=true so that OPs holding the
+     * selection tool can still select points inside protected areas where
+     * AreaProtectionManager (HIGH priority) cancels the event.
      */
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST, receiveCanceled = true)
     public static void onPlayerRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
 
@@ -30,7 +34,7 @@ public class SelectionEventHandler {
     /**
      * Handle player right-click air event (optional, for showing help).
      */
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST, receiveCanceled = true)
     public static void onPlayerRightClickAir(PlayerInteractEvent.RightClickItem event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
 

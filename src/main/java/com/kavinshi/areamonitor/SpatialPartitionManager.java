@@ -11,47 +11,31 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class SpatialPartitionManager {
     private static final int GRID_SIZE = 256;
-    private static final int MAX_REGIONS_PER_GRID = 50;
 
-    private final Map<GridKey, Set<String>> spatialGrid = new ConcurrentHashMap<>();
+    private final Map<Long, Set<String>> spatialGrid = new ConcurrentHashMap<>();
     private final Map<String, MonitorArea> allRegions = new ConcurrentHashMap<>();
     // Reverse index: region name -> grid keys it occupies
-    private final Map<String, Set<GridKey>> regionGrids = new ConcurrentHashMap<>();
+    private final Map<String, Set<Long>> regionGrids = new ConcurrentHashMap<>();
 
     /**
-     * Grid key class to avoid string concatenation overhead.
-     * Uses proper hashCode and equals for efficient HashMap lookups.
+     * Pack grid (x, z) into a single long key to avoid allocating a GridKey object per lookup.
+     * P1-13 fix: replaces the old GridKey class — Long.valueOf reuses cached instances for small ranges
+     * and avoids the per-call allocation that produced 600-1000 temporary objects per second.
      */
-    private static class GridKey {
-        private final int x;
-        private final int z;
-        private final int hash;
-
-        GridKey(int x, int z) {
-            this.x = x;
-            this.z = z;
-            // Pre-compute hash to avoid repeated calculations
-            this.hash = 31 * x + z;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof GridKey)) return false;
-            GridKey gridKey = (GridKey) o;
-            return x == gridKey.x && z == gridKey.z;
-        }
-
-        @Override
-        public int hashCode() {
-            return hash;
-        }
+    private static long toKey(int x, int z) {
+        return ((long) x << 32) | (z & 0xFFFFFFFFL);
     }
 
     /**
      * Add region to spatial partition.
      */
     public void addRegion(MonitorArea region) {
+        // P2 #12 fix: if a region with the same name already exists (e.g., re-add after bounds
+        // change), the old grid entries would leak and produce phantom matches. Remove the stale
+        // grid registration before inserting the new one.
+        if (allRegions.containsKey(region.getName())) {
+            removeRegionFromGrid(region.getName());
+        }
         allRegions.put(region.getName(), region);
         addRegionToGrid(region);
     }
@@ -68,64 +52,57 @@ public class SpatialPartitionManager {
     }
 
     /**
-     * Update region position in spatial partition.
-     */
-    public void updateRegion(MonitorArea region) {
-        removeRegionFromGrid(region.getName());
-        addRegionToGrid(region);
-    }
-
-    /**
      * Get potential regions that may intersect with given position.
-     * Optimized to only check the player's current grid cell and adjacent cells
-     * only if regions span multiple grid cells.
+     * Only checks the player's current grid cell, because addRegionToGrid
+     * registers a region into every grid cell it covers, so any region
+     * containing the player's position must be present in the current cell.
      */
     public Set<MonitorArea> getPotentialRegions(double x, double z, String dimension) {
-        Set<MonitorArea> result = new HashSet<>();
-
+        // P1-13 fix: avoid HashSet allocation when no regions occupy this grid cell (the common path)
         int gridX = (int) Math.floor(x / GRID_SIZE);
         int gridZ = (int) Math.floor(z / GRID_SIZE);
 
-        // First check the player's current grid cell
-        GridKey gridKey = new GridKey(gridX, gridZ);
-        Set<String> regionNames = spatialGrid.get(gridKey);
+        Long key = Long.valueOf(toKey(gridX, gridZ));
+        Set<String> regionNames = spatialGrid.get(key);
 
-        if (regionNames != null) {
-            for (String regionName : regionNames) {
-                MonitorArea region = allRegions.get(regionName);
-                if (region != null && region.getDimension().equals(dimension)) {
-                    result.add(region);
-                }
+        if (regionNames == null) return Collections.emptySet();
+
+        Set<MonitorArea> result = new HashSet<>(regionNames.size());
+        for (String regionName : regionNames) {
+            MonitorArea region = allRegions.get(regionName);
+            if (region != null && region.getDimension().equals(dimension)) {
+                result.add(region);
             }
         }
+        return result;
+    }
 
-        // Only check adjacent cells if we're near a grid boundary
-        // This reduces unnecessary checks by ~66% in most cases
-        double cellX = x % GRID_SIZE;
-        double cellZ = z % GRID_SIZE;
-        boolean nearXBoundary = cellX < 16 || cellX > (GRID_SIZE - 16);
-        boolean nearZBoundary = cellZ < 16 || cellZ > (GRID_SIZE - 16);
+    /**
+     * Get potential regions that may intersect with an AABB.
+     * P2 #5 fix: explosions and area-effect events span multiple grid cells; querying only the
+     * center cell misses protected areas whose grid cell does not include the explosion origin
+     * but contains affected blocks/entities.
+     */
+    public Set<MonitorArea> getPotentialRegionsInBox(double minX, double minZ, double maxX, double maxZ, String dimension) {
+        int minGridX = (int) Math.floor(minX / GRID_SIZE);
+        int maxGridX = (int) Math.floor(maxX / GRID_SIZE);
+        int minGridZ = (int) Math.floor(minZ / GRID_SIZE);
+        int maxGridZ = (int) Math.floor(maxZ / GRID_SIZE);
 
-        if (nearXBoundary || nearZBoundary) {
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    if (dx == 0 && dz == 0) continue; // Already checked
-
-                    GridKey adjacentKey = new GridKey(gridX + dx, gridZ + dz);
-                    Set<String> adjacentRegions = spatialGrid.get(adjacentKey);
-
-                    if (adjacentRegions != null) {
-                        for (String regionName : adjacentRegions) {
-                            MonitorArea region = allRegions.get(regionName);
-                            if (region != null && region.getDimension().equals(dimension)) {
-                                result.add(region);
-                            }
-                        }
+        Set<MonitorArea> result = new HashSet<>();
+        for (int gx = minGridX; gx <= maxGridX; gx++) {
+            for (int gz = minGridZ; gz <= maxGridZ; gz++) {
+                Long key = Long.valueOf(toKey(gx, gz));
+                Set<String> regionNames = spatialGrid.get(key);
+                if (regionNames == null) continue;
+                for (String regionName : regionNames) {
+                    MonitorArea region = allRegions.get(regionName);
+                    if (region != null && region.getDimension().equals(dimension)) {
+                        result.add(region);
                     }
                 }
             }
         }
-
         return result;
     }
 
@@ -141,30 +118,6 @@ public class SpatialPartitionManager {
      */
     public int getRegionCount() {
         return allRegions.size();
-    }
-
-    /**
-     * Get grid statistics.
-     */
-    public Map<String, Object> getGridStats() {
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("total_regions", allRegions.size());
-        stats.put("total_grids", spatialGrid.size());
-
-        int maxRegionsInGrid = 0;
-        int totalRegionsInGrids = 0;
-
-        for (Set<String> regions : spatialGrid.values()) {
-            int count = regions.size();
-            maxRegionsInGrid = Math.max(maxRegionsInGrid, count);
-            totalRegionsInGrids += count;
-        }
-
-        stats.put("max_regions_per_grid", maxRegionsInGrid);
-        stats.put("avg_regions_per_grid", spatialGrid.isEmpty() ? 0 :
-                  (double) totalRegionsInGrids / spatialGrid.size());
-
-        return stats;
     }
 
     /**
@@ -184,11 +137,11 @@ public class SpatialPartitionManager {
         int minGridZ = (int) Math.floor(bounds.minZ / GRID_SIZE);
         int maxGridZ = (int) Math.floor(bounds.maxZ / GRID_SIZE);
 
-        Set<GridKey> occupiedGrids = ConcurrentHashMap.newKeySet();
+        Set<Long> occupiedGrids = ConcurrentHashMap.newKeySet();
 
         for (int x = minGridX; x <= maxGridX; x++) {
             for (int z = minGridZ; z <= maxGridZ; z++) {
-                GridKey gridKey = new GridKey(x, z);
+                Long gridKey = Long.valueOf(toKey(x, z));
 
                 spatialGrid.computeIfAbsent(gridKey, k -> ConcurrentHashMap.newKeySet())
                           .add(region.getName());
@@ -206,18 +159,17 @@ public class SpatialPartitionManager {
      * O(k) where k is the number of grids the region occupies, instead of O(n) where n is total grids.
      */
     private void removeRegionFromGrid(String regionName) {
-        Set<GridKey> occupiedGrids = regionGrids.remove(regionName);
+        Set<Long> occupiedGrids = regionGrids.remove(regionName);
 
         if (occupiedGrids != null) {
-            for (GridKey gridKey : occupiedGrids) {
-                Set<String> regions = spatialGrid.get(gridKey);
-                if (regions != null) {
+            for (Long gridKey : occupiedGrids) {
+                // Atomically remove region name and drop the cell if empty.
+                // Using computeIfPresent prevents the race where another thread adds a new
+                // region to this cell between our isEmpty() check and spatialGrid.remove().
+                spatialGrid.computeIfPresent(gridKey, (k, regions) -> {
                     regions.remove(regionName);
-                    // Clean up empty grid cells
-                    if (regions.isEmpty()) {
-                        spatialGrid.remove(gridKey);
-                    }
-                }
+                    return regions.isEmpty() ? null : regions;
+                });
             }
         }
     }

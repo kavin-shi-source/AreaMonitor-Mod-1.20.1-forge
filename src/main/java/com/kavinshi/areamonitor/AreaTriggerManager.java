@@ -25,11 +25,17 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class AreaTriggerManager {
 
-    private static final Set<UUID> triggeredThisTick = new HashSet<>();
-    /** Player+Area → last trigger time (for cooldown) */
+    private static final Set<TriggerLockKey> triggeredThisTick = ConcurrentHashMap.newKeySet();
     private static final Map<String, Long> cooldownMap = new ConcurrentHashMap<>();
-    /** Player+Area → queued debounce task timestamp */
-    private static final Map<String, Long> debounceMap = new ConcurrentHashMap<>();
+    private static final Map<DebounceKey, Long> debounceMap = new ConcurrentHashMap<>();
+    private static volatile long currentTick = 0;
+    private static final long COOLDOWN_EXPIRY_TICKS = 72000L;
+    private static long lastCooldownCleanup = 0;
+
+    private record DebounceKey(UUID playerId, String areaName, boolean isEnter) {}
+    // P2 #8 fix: per-(player, area, direction) lock so a player entering one area and leaving
+    // another in the same tick no longer has the second trigger silently dropped.
+    private record TriggerLockKey(UUID playerId, String areaName, boolean isEnter) {}
 
     private AreaTriggerManager() {}
 
@@ -38,7 +44,7 @@ public class AreaTriggerManager {
      */
     public static void executeEnterTriggers(ServerPlayer player, MonitorArea area) {
         if (!area.hasEnterTrigger()) return;
-        if (!tryAcquireTriggerLock(player.getUUID())) return;
+        if (!tryAcquireTriggerLock(player.getUUID(), area.getName(), true)) return;
         TriggerConfig config = area.getEnterTrigger();
         if (!checkCooldown(player.getUUID(), area.getName(), config, true)) return;
         if (config.getDebounceTicks() > 0) {
@@ -53,7 +59,7 @@ public class AreaTriggerManager {
      */
     public static void executeLeaveTriggers(ServerPlayer player, MonitorArea area) {
         if (!area.hasLeaveTrigger()) return;
-        if (!tryAcquireTriggerLock(player.getUUID())) return;
+        if (!tryAcquireTriggerLock(player.getUUID(), area.getName(), false)) return;
         TriggerConfig config = area.getLeaveTrigger();
         if (!checkCooldown(player.getUUID(), area.getName(), config, false)) return;
         if (config.getDebounceTicks() > 0) {
@@ -64,10 +70,17 @@ public class AreaTriggerManager {
     }
 
     /**
-     * Prevent the same player from triggering multiple times within the same tick.
+     * Prevent the same (player, area, direction) tuple from triggering multiple times within the same tick.
      */
-    private static boolean tryAcquireTriggerLock(UUID playerId) {
-        return triggeredThisTick.add(playerId);
+    private static boolean tryAcquireTriggerLock(UUID playerId, String areaName, boolean isEnter) {
+        return triggeredThisTick.add(new TriggerLockKey(playerId, areaName, isEnter));
+    }
+
+    /**
+     * Update current tick count. Called once per server tick by AreaMonitor.
+     */
+    public static void setCurrentTick(long tick) {
+        currentTick = tick;
     }
 
     /**
@@ -76,9 +89,9 @@ public class AreaTriggerManager {
     private static boolean checkCooldown(UUID playerId, String areaName, TriggerConfig config, boolean isEnter) {
         if (config.getCooldownTicks() <= 0) return true;
         String key = playerId + ":" + areaName + ":" + (isEnter ? "enter" : "leave");
-        long now = System.currentTimeMillis();
+        long now = currentTick;
         Long last = cooldownMap.get(key);
-        if (last != null && (now - last) < config.getCooldownTicks() * 50L) {
+        if (last != null && (now - last) < config.getCooldownTicks()) {
             return false;
         }
         cooldownMap.put(key, now);
@@ -89,39 +102,62 @@ public class AreaTriggerManager {
      * Schedule a debounced trigger execution.
      */
     private static void scheduleDebounce(ServerPlayer player, MonitorArea area, TriggerConfig config, boolean isEnter) {
-        String key = player.getUUID() + ":" + area.getName() + ":" + (isEnter ? "enter" : "leave");
-        long execTime = System.currentTimeMillis() + config.getDebounceTicks() * 50L;
+        DebounceKey key = new DebounceKey(player.getUUID(), area.getName(), isEnter);
+        long execTick = currentTick + config.getDebounceTicks();
         // Simple: overwrite previous pending task for same key
-        debounceMap.put(key, execTime);
+        debounceMap.put(key, execTick);
     }
 
     /**
      * Process pending debounced triggers. Called each server tick.
      */
     public static void processDebouncedTriggers(net.minecraft.server.MinecraftServer server) {
-        long now = System.currentTimeMillis();
-        List<String> toRemove = new ArrayList<>();
+        long now = currentTick;
+        List<DebounceKey> toRemove = new ArrayList<>();
         for (var entry : debounceMap.entrySet()) {
             if (now >= entry.getValue()) {
                 toRemove.add(entry.getKey());
-                // Parse key: uuid:areaName:direction
-                String[] parts = entry.getKey().split(":", 3);
-                if (parts.length == 3) {
-                    ServerPlayer player = server.getPlayerList().getPlayer(UUID.fromString(parts[0]));
-                    if (player != null) {
-                        MonitorArea area = AreaManager.getInstance().getArea(parts[1]);
-                        if (area != null) {
-                            TriggerConfig config = "enter".equals(parts[2])
-                                ? area.getEnterTrigger() : area.getLeaveTrigger();
-                            if (config != null) {
+                DebounceKey key = entry.getKey();
+                ServerPlayer player = server.getPlayerList().getPlayer(key.playerId());
+                if (player != null) {
+                    MonitorArea area = AreaManager.getInstance().getArea(key.areaName());
+                    if (area != null) {
+                        TriggerConfig config = key.isEnter()
+                            ? area.getEnterTrigger() : area.getLeaveTrigger();
+                        if (config != null) {
+                            // P2 #9 fix: skip if player's state no longer matches the trigger direction.
+                            // Enter triggers require the player to still be inside the area;
+                            // leave triggers require them to still be outside. This prevents stale
+                            // debounces from firing after the player has already moved on.
+                            boolean stillInArea = AreaManager.getInstance().getCurrentAreas(player).contains(key.areaName());
+                            if (key.isEnter() && !stillInArea) {
+                                AreaMonitorMod.LOGGER.debug("Skipping debounced enter trigger for area '{}' — player {} is no longer in the area",
+                                    area.getName(), player.getName().getString());
+                                continue;
+                            }
+                            if (!key.isEnter() && stillInArea) {
+                                AreaMonitorMod.LOGGER.debug("Skipping debounced leave trigger for area '{}' — player {} re-entered the area",
+                                    area.getName(), player.getName().getString());
+                                continue;
+                            }
+                            // P1-9 fix: wrap executeTrigger so a single failure does not skip toRemove cleanup / cooldown cleanup
+                            try {
                                 executeTrigger(player, config);
+                            } catch (Exception ex) {
+                                AreaMonitorMod.LOGGER.error("Failed to execute {} trigger for area '{}' on player '{}'",
+                                    key.isEnter() ? "enter" : "leave", area.getName(), player.getName().getString(), ex);
                             }
                         }
                     }
                 }
             }
         }
-        for (String key : toRemove) debounceMap.remove(key);
+        for (DebounceKey key : toRemove) debounceMap.remove(key);
+
+        if (now - lastCooldownCleanup >= 6000L) {
+            cooldownMap.entrySet().removeIf(e -> now - e.getValue() > COOLDOWN_EXPIRY_TICKS);
+            lastCooldownCleanup = now;
+        }
     }
 
     /**
@@ -129,6 +165,27 @@ public class AreaTriggerManager {
      */
     public static void clearTickLocks() {
         triggeredThisTick.clear();
+    }
+
+    /**
+     * Clear all trigger state. Should be called on server stopping to prevent
+     * cross-world data leakage in integrated server scenarios.
+     */
+    public static void clearAll() {
+        triggeredThisTick.clear();
+        cooldownMap.clear();
+        debounceMap.clear();
+        lastCooldownCleanup = 0;
+    }
+
+    /**
+     * Clear trigger state for a specific player. Should be called on player logout
+     * to prevent memory leaks from accumulating per-player entries.
+     */
+    public static void clearPlayer(UUID playerId) {
+        String prefix = playerId.toString() + ":";
+        cooldownMap.keySet().removeIf(k -> k.startsWith(prefix));
+        debounceMap.keySet().removeIf(k -> k.playerId().equals(playerId));
     }
 
     /**
@@ -144,7 +201,8 @@ public class AreaTriggerManager {
             CommandSourceStack source = server.createCommandSourceStack()
                 .withPosition(new Vec3(player.getX(), player.getY(), player.getZ()))
                 .withRotation(new Vec2(player.getXRot(), player.getYRot()))
-                .withLevel((ServerLevel) player.level());
+                .withLevel((ServerLevel) player.level())
+                .withPermission(2);
             for (String cmd : config.getCommands()) {
                 try {
                     server.getCommands().performPrefixedCommand(source, cmd);
@@ -172,17 +230,25 @@ public class AreaTriggerManager {
 
         // 3. Show title
         if (config.getTitleMain() != null) {
-            player.connection.send(new ClientboundSetTitlesAnimationPacket(5, 40, 10));
-            player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(config.getTitleMain())));
-            if (config.getTitleSub() != null) {
-                player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(config.getTitleSub())));
+            try {
+                player.connection.send(new ClientboundSetTitlesAnimationPacket(5, 40, 10));
+                player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(config.getTitleMain())));
+                if (config.getTitleSub() != null) {
+                    player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(config.getTitleSub())));
+                }
+            } catch (Exception e) {
+                AreaMonitorMod.LOGGER.error("Error showing trigger title", e);
             }
         }
 
         // 4. ActionBar message
         if (config.getActionBar() != null) {
-            player.connection.send(new ClientboundSetActionBarTextPacket(
-                Component.literal(config.getActionBar())));
+            try {
+                player.connection.send(new ClientboundSetActionBarTextPacket(
+                    Component.literal(config.getActionBar())));
+            } catch (Exception e) {
+                AreaMonitorMod.LOGGER.error("Error showing trigger action bar", e);
+            }
         }
 
         // 5. Potion effect
@@ -205,12 +271,15 @@ public class AreaTriggerManager {
         // 6. Teleport
         if (config.getTeleportTarget() != null && server != null) {
             try {
-                String[] parts = config.getTeleportTarget().split(",", 4);
+                String tp = config.getTeleportTarget().trim();
+                // P2 #20 fix: support both space-separated (current, from GUI/commands) and
+                // comma-separated (legacy configs) formats.
+                String[] parts = tp.contains(" ") ? tp.split("\\s+", 4) : tp.split(",", 4);
                 if (parts.length == 4) {
-                    String dim = parts[0];
-                    double x = Double.parseDouble(parts[1]);
-                    double y = Double.parseDouble(parts[2]);
-                    double z = Double.parseDouble(parts[3]);
+                    String dim = parts[0].trim();
+                    double x = Double.parseDouble(parts[1].trim());
+                    double y = Double.parseDouble(parts[2].trim());
+                    double z = Double.parseDouble(parts[3].trim());
                     ResourceLocation dimKey = ResourceLocation.tryParse(dim);
                     if (dimKey != null) {
                         ServerLevel targetLevel = server.getLevel(
@@ -255,33 +324,39 @@ public class AreaTriggerManager {
         if (c == null || !c.isActive()) return true;
 
         // playerHasItem: check inventory
-        if (c.playerHasItem != null && !c.playerHasItem.isEmpty()) {
-            if (!playerHasItem(player, c.playerHasItem)) {
+        // P2 #47: use getters instead of direct field access
+        String hasItem = c.getPlayerHasItem();
+        if (hasItem != null && !hasItem.isEmpty()) {
+            if (!playerHasItem(player, hasItem)) {
                 return false;
             }
         }
 
         // timeMin/timeMax: check game time (supports cross-midnight ranges)
         long time = player.level().getDayTime() % 24000;
-        if (c.timeMin != null && c.timeMax != null) {
-            if (c.timeMin <= c.timeMax && (time < c.timeMin || time > c.timeMax)) return false;
-            if (c.timeMin > c.timeMax && !(time >= c.timeMin || time <= c.timeMax)) return false;
+        Integer tmin = c.getTimeMin();
+        Integer tmax = c.getTimeMax();
+        if (tmin != null && tmax != null) {
+            if (tmin <= tmax && (time < tmin || time > tmax)) return false;
+            if (tmin > tmax && !(time >= tmin || time <= tmax)) return false;
         } else {
-            if (c.timeMin != null && time < c.timeMin) return false;
-            if (c.timeMax != null && time > c.timeMax) return false;
+            if (tmin != null && time < tmin) return false;
+            if (tmax != null && time > tmax) return false;
         }
 
         // weather
-        if (c.weather != null) {
+        String w = c.getWeather();
+        if (w != null) {
             String actual = player.level().isThundering() ? "thunder" :
                 player.level().isRaining() ? "rain" : "clear";
-            if (!actual.equals(c.weather)) return false;
+            if (!actual.equals(w)) return false;
         }
 
         // minPlayers
-        if (c.minPlayers != null) {
+        Integer mp = c.getMinPlayers();
+        if (mp != null) {
             var server = player.getServer();
-            if (server != null && server.getPlayerCount() < c.minPlayers) return false;
+            if (server != null && server.getPlayerCount() < mp) return false;
         }
 
         return true;

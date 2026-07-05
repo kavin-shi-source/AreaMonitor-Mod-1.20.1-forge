@@ -13,8 +13,11 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import java.util.*;
 
+@OnlyIn(Dist.CLIENT)
 public class TriggerEditPanel extends Screen {
 
     private static final int PARCH_DARK  = 0xD03A2A1A;
@@ -145,10 +148,9 @@ public class TriggerEditPanel extends Screen {
         // Save / Cancel — centered at bottom (kept as fields so render() can draw them outside the scissor clip)
         int btnY = wy + wh - 30;
         int cx = wx + ww / 2;
-        saveBtn = GlassButton.create(cx - 78, btnY, 70, 18, "[" + LocalizationManager.translate("gui.save") + "]", b -> { captureCurrentState(); sendUpdate(); dirty = false; onClose(); });
+        saveBtn = GlassButton.create(cx - 78, btnY, 70, 18, "[" + LocalizationManager.translate("gui.save") + "]", b -> { captureCurrentState(); sendUpdate(); dirty = false; mainScreen.updateAfterEdit(); onClose(); });
         cancelBtn = GlassButton.create(cx + 8, btnY, 70, 18, "[" + LocalizationManager.translate("gui.cancel") + "]", b -> onClose());
-        addRenderableWidget(saveBtn);
-        addRenderableWidget(cancelBtn);
+        // P1-3 fix: do not register to addRenderableWidget — rendered/hit-tested manually to avoid double rendering.
     }
 
     private int zsec(int y, List<EditBox> cmds, List<String> cmdValues,
@@ -182,8 +184,8 @@ public class TriggerEditPanel extends Screen {
 
         // Sound 行
         addLab(lx + 4, y, "gui.trigger_sound"); EditBox se = zbox(vx, y, 160, sndV); snd.accept(se);
-        addLab(vx + 166, y, "gui.trigger_volume"); EditBox sv = zbox(vx + 188, y, 30, volV); vol.accept(sv);
-        addLab(vx + 224, y, "gui.trigger_pitch");  EditBox sp = zbox(vx + 240, y, 30, pitchV); pitch.accept(sp);
+        addLab(vx + 166, y, "gui.trigger_volume"); EditBox sv = znum(vx + 188, y, 30, volV); vol.accept(sv);
+        addLab(vx + 224, y, "gui.trigger_pitch");  EditBox sp = znum(vx + 240, y, 30, pitchV); pitch.accept(sp);
         tooltips.add(new TooltipZone(vx, y, 160, 16, "gui.tooltip_trigger_sound"));
         y += 20;
 
@@ -194,9 +196,9 @@ public class TriggerEditPanel extends Screen {
 
         // TP 行
         addLab(lx + 4, y, "gui.trigger_tp_dim"); EditBox td = zbox(vx, y, 90, tDV); tD.accept(td);
-        addLab(vx + 96, y, "gui.trigger_tp_x");   EditBox tx = zbox(vx + 106, y, 32, tXV); tX.accept(tx);
-        addLab(vx + 142, y, "gui.trigger_tp_y");  EditBox ty = zbox(vx + 152, y, 32, tYV); tY.accept(ty);
-        addLab(vx + 188, y, "gui.trigger_tp_z");  EditBox tz = zbox(vx + 198, y, 32, tZV); tZ.accept(tz);
+        addLab(vx + 96, y, "gui.trigger_tp_x");   EditBox tx = znum(vx + 106, y, 32, tXV); tX.accept(tx);
+        addLab(vx + 142, y, "gui.trigger_tp_y");  EditBox ty = znum(vx + 152, y, 32, tYV); tY.accept(ty);
+        addLab(vx + 188, y, "gui.trigger_tp_z");  EditBox tz = znum(vx + 198, y, 32, tZV); tZ.accept(tz);
         tooltips.add(new TooltipZone(vx, y, 90, 16, "gui.tooltip_trigger_tp"));
 
         return y + 24;
@@ -233,18 +235,36 @@ public class TriggerEditPanel extends Screen {
         addRenderableWidget(e);
         return e;
     }
+    private EditBox znum(int x, int y, int w, String v) {
+        EditBox e = new EditBox(this.font, x, y, w, 16, Component.empty());
+        e.setMaxLength(12);
+        e.setValue(v);
+        e.setFilter(s -> s.isEmpty() || s.equals("-") || s.equals(".") || s.equals("-.")
+            || java.util.regex.Pattern.matches("-?\\d*\\.?\\d*", s));
+        e.setResponder(v2 -> dirty = true);
+        addRenderableWidget(e);
+        return e;
+    }
     private void addLab(int x, int y, String key) { labels.add(new LabelPos(x, y, LocalizationManager.translate(key))); }
     private String getStr(JsonObject j, String k, String d) { return j != null && j.has(k) && !j.get(k).isJsonNull() ? j.get(k).getAsString() : d; }
 
     private String[] safeTpParts(String tp) {
         if (tp == null || tp.isEmpty()) return new String[]{"", "", "", ""};
-        String[] p = tp.split(" ");
-        if (p.length >= 4) return new String[]{p[0], p[1], p[2], p[3]};
-        if (p.length == 3) return new String[]{"", p[0], p[1], p[2]};
-        return new String[]{tp, "", "", ""};
+        // P2 #20 fix: handle both space-separated (current) and comma-separated (legacy) formats.
+        String[] p = tp.contains(" ") ? tp.split("\\s+") : tp.split(",");
+        if (p.length >= 4) return new String[]{p[0].trim(), p[1].trim(), p[2].trim(), p[3].trim()};
+        if (p.length == 3) return new String[]{"", p[0].trim(), p[1].trim(), p[2].trim()};
+        return new String[]{tp.trim(), "", "", ""};
     }
 
-    private JsonObject safeParse(String j) { try { return j != null ? GSON.fromJson(j, JsonObject.class) : new JsonObject(); } catch (Exception e) { return new JsonObject(); } }
+    private JsonObject safeParse(String j) {
+        try { return j != null ? GSON.fromJson(j, JsonObject.class) : new JsonObject(); }
+        catch (Exception e) {
+            // P2 #39: log parse failures instead of silently swallowing
+            com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Failed to parse trigger JSON: {}", e.getMessage());
+            return new JsonObject();
+        }
+    }
     private void rebuild() { captureCurrentState(); saveAndRebuild(); }
 
     private java.util.List<EditBox> getAllBoxes() {
@@ -262,17 +282,29 @@ public class TriggerEditPanel extends Screen {
     private String trigJson(List<EditBox> cmds, EditBox snd, EditBox vol, EditBox pitch, EditBox tM, EditBox tS, EditBox tD, EditBox tX, EditBox tY, EditBox tZ) {
         JsonObject j = new JsonObject(); var arr = new JsonArray();
         for (EditBox b : cmds) { String v = b.getValue().trim(); if (!v.isEmpty()) arr.add(v); }
-        if (arr.size() > 0) j.add("commands", arr);
+        // P1-2 fix: always write keys so server can clear fields (empty array / JsonNull clears server-side value)
+        j.add("commands", arr);
         if (snd != null && !snd.getValue().trim().isEmpty()) j.addProperty("soundEvent", snd.getValue().trim());
-        if (vol != null) try { j.addProperty("soundVolume", Float.parseFloat(vol.getValue())); } catch (Exception ig) {}
-        if (pitch != null) try { j.addProperty("soundPitch", Float.parseFloat(pitch.getValue())); } catch (Exception ig) {}
+        else j.add("soundEvent", JsonNull.INSTANCE);
+        if (vol != null) try { j.addProperty("soundVolume", Float.parseFloat(vol.getValue())); }
+        catch (NumberFormatException e) {
+            com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Invalid soundVolume '{}' for trigger, ignoring", vol.getValue());
+        }
+        if (pitch != null) try { j.addProperty("soundPitch", Float.parseFloat(pitch.getValue())); }
+        catch (NumberFormatException e) {
+            com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Invalid soundPitch '{}' for trigger, ignoring", pitch.getValue());
+        }
         if (tM != null && !tM.getValue().trim().isEmpty()) j.addProperty("titleMain", tM.getValue().trim());
+        else j.add("titleMain", JsonNull.INSTANCE);
         if (tS != null && !tS.getValue().trim().isEmpty()) j.addProperty("titleSub", tS.getValue().trim());
+        else j.add("titleSub", JsonNull.INSTANCE);
         if (tD != null && !tD.getValue().trim().isEmpty()) {
             String dim = tD.getValue().trim();
             if (tX != null && tY != null && tZ != null && !tX.getValue().trim().isEmpty() && !tY.getValue().trim().isEmpty() && !tZ.getValue().trim().isEmpty())
                 dim += " " + tX.getValue().trim() + " " + tY.getValue().trim() + " " + tZ.getValue().trim();
             j.addProperty("teleportTarget", dim);
+        } else {
+            j.add("teleportTarget", JsonNull.INSTANCE);
         }
         return j.toString();
     }
@@ -284,9 +316,13 @@ public class TriggerEditPanel extends Screen {
         ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.UPDATE, entry.name(), json.toString()));
     }
 
-    @Override public void onClose() { mainScreen.updateAfterEdit(); if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
+    @Override public void onClose() { if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        // P2 #29: confirmation dialog must consume keyboard input when visible
+        if (confirmDialog.isVisible()) {
+            return confirmDialog.keyPressed(keyCode, scanCode, modifiers);
+        }
         for (EditBox box : getAllBoxes()) {
             if (box.isFocused()) return box.keyPressed(keyCode, scanCode, modifiers);
         }
@@ -294,6 +330,8 @@ public class TriggerEditPanel extends Screen {
     }
 
     @Override public boolean charTyped(char c, int modifiers) {
+        // P2 #29: consume text input while confirmation dialog is visible
+        if (confirmDialog.isVisible()) return true;
         for (EditBox box : getAllBoxes()) {
             if (box.isFocused()) return box.charTyped(c, modifiers);
         }
@@ -335,6 +373,9 @@ public class TriggerEditPanel extends Screen {
             }
             return true;
         }
+        // P1-3 fix: manually dispatch click to unregistered saveBtn/cancelBtn
+        if (saveBtn != null && saveBtn.isMouseOver(mx, my) && saveBtn.mouseClicked(mx, my, button)) return true;
+        if (cancelBtn != null && cancelBtn.isMouseOver(mx, my) && cancelBtn.mouseClicked(mx, my, button)) return true;
         return super.mouseClicked(mx, my, button);
     }
 

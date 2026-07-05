@@ -132,6 +132,7 @@ public class SelectionCommands {
             MessageUtils.sendSuccess(context.getSource(), "config.reloaded", true);
         } catch (Exception e) {
             MessageUtils.sendFailure(context.getSource(), "config.reload_failed", e.getMessage());
+            return 0;
         }
         return 1;
     }
@@ -149,6 +150,7 @@ public class SelectionCommands {
 
         } catch (Exception e) {
             MessageUtils.sendFailure(context.getSource(), "config.regenerate_failed", e.getMessage());
+            return 0;
         }
         return 1;
     }

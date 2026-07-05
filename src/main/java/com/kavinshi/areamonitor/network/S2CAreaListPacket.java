@@ -1,9 +1,12 @@
 package com.kavinshi.areamonitor.network;
 
+import com.kavinshi.areamonitor.AreaMonitorMod;
 import com.kavinshi.areamonitor.MonitorArea;
 import com.kavinshi.areamonitor.TriggerConfig;
 import com.google.gson.Gson;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.network.NetworkEvent;
 
 import java.util.*;
@@ -14,6 +17,7 @@ import java.util.function.Supplier;
  */
 public class S2CAreaListPacket {
 
+    private static final int MAX_TOTAL_BYTES = 262144; // 256 KiB hard cap per packet
     private final List<AreaEntry> areas;
 
     public S2CAreaListPacket(List<AreaEntry> areas) {
@@ -22,34 +26,61 @@ public class S2CAreaListPacket {
 
     public S2CAreaListPacket(FriendlyByteBuf buf) {
         int size = buf.readVarInt();
+        if (size < 0 || size > 200) {
+            throw new IllegalArgumentException("Invalid area list size: " + size);
+        }
+        int startReaderIndex = buf.readerIndex();
         this.areas = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
-            areas.add(AreaEntry.decode(buf));
+            int bytesConsumed = buf.readerIndex() - startReaderIndex;
+            if (bytesConsumed > MAX_TOTAL_BYTES) {
+                AreaMonitorMod.LOGGER.warn("Area list packet exceeded {} bytes after {} entries, truncating", MAX_TOTAL_BYTES, i);
+                break;
+            }
+            try {
+                areas.add(AreaEntry.decode(buf));
+            } catch (Exception e) {
+                AreaMonitorMod.LOGGER.warn("Failed to decode area entry #{} (corrupted or truncated data), skipping", i, e);
+                break;
+            }
         }
     }
 
     public void encode(FriendlyByteBuf buf) {
+        int startWriterIndex = buf.writerIndex();
         buf.writeVarInt(areas.size());
+        int written = 0;
         for (AreaEntry entry : areas) {
+            // P1-6 fix: enforce total byte budget on encode side to avoid kicking players when payload exceeds Forge 1 MiB default
+            int bytesSoFar = buf.writerIndex() - startWriterIndex;
+            if (bytesSoFar > MAX_TOTAL_BYTES) {
+                AreaMonitorMod.LOGGER.warn("Area list encode exceeded {} bytes after {} of {} entries, truncating",
+                    MAX_TOTAL_BYTES, written, areas.size());
+                break;
+            }
             entry.encode(buf);
+            written++;
         }
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> {
-            net.minecraft.client.gui.screens.Screen screen =
-                net.minecraft.client.Minecraft.getInstance().screen;
-            if (screen instanceof com.kavinshi.areamonitor.client.gui.AreaManagementScreen gui) {
-                gui.updateAreaList(areas);
-            }
-        });
+        ctx.get().enqueueWork(() ->
+            DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                () -> () -> com.kavinshi.areamonitor.client.ClientPacketHandlers.handleAreaList(areas))
+        );
         ctx.get().setPacketHandled(true);
     }
 
     public static S2CAreaListPacket fromAreas(Collection<MonitorArea> areas) {
         List<AreaEntry> entries = new ArrayList<>();
+        int count = 0;
         for (MonitorArea area : areas) {
+            if (count >= 200) {
+                AreaMonitorMod.LOGGER.warn("Area list truncated to 200 entries (total {})", areas.size());
+                break;
+            }
             entries.add(new AreaEntry(area));
+            count++;
         }
         return new S2CAreaListPacket(entries);
     }
@@ -122,7 +153,8 @@ public class S2CAreaListPacket {
             buf.writeUtf(enterMode);
             buf.writeUtf(leaveMode);
             buf.writeUtf(boundsType);
-            buf.writeUtf(displayName);
+            buf.writeBoolean(displayName != null);
+            if (displayName != null) buf.writeUtf(displayName);
             int protBits = (protBlockBreak ? 1 : 0) | (protBlockPlace ? 2 : 0)
                 | (protBlockInteract ? 4 : 0) | (protPvp ? 8 : 0)
                 | (protExplosion ? 16 : 0) | (protEntityDamage ? 32 : 0)
@@ -147,7 +179,7 @@ public class S2CAreaListPacket {
             String enter = buf.readUtf();
             String leave = buf.readUtf();
             String bounds = buf.readUtf();
-            String disp = buf.readUtf();
+            String disp = buf.readBoolean() ? buf.readUtf() : null;
             int bits = buf.readShort();
             return new AreaEntry(name, enabled, dim, enter, leave, bounds, disp,
                 (bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0,
@@ -159,9 +191,13 @@ public class S2CAreaListPacket {
         }
 
         private static void writeNullableJson(FriendlyByteBuf buf, String json) {
-            boolean has = json != null && !json.isEmpty();
+            // If JSON exceeds packet limit, skip the field entirely rather than truncating
+            // mid-token (which would produce invalid JSON that the client fails to parse).
+            boolean has = json != null && !json.isEmpty() && json.length() <= 32760;
             buf.writeBoolean(has);
-            if (has) buf.writeUtf(json);
+            if (has) {
+                buf.writeUtf(json);
+            }
         }
 
         private static String readNullableJson(FriendlyByteBuf buf) {
@@ -190,7 +226,6 @@ public class S2CAreaListPacket {
             if (!area.hasChainTarget()) return null;
             var obj = new com.google.gson.JsonObject();
             obj.addProperty("chainNext", area.getChainNext());
-            obj.addProperty("chainDelayTicks", area.getChainDelayTicks());
             return obj.toString();
         }
 
@@ -205,6 +240,15 @@ public class S2CAreaListPacket {
                 obj.addProperty("centerX", circle.getCenterX());
                 obj.addProperty("centerZ", circle.getCenterZ());
                 obj.addProperty("radius", circle.getRadius());
+            } else if (area.getBounds() instanceof MonitorArea.PolygonBounds poly) {
+                var arr = new com.google.gson.JsonArray();
+                for (MonitorArea.Vec2i v : poly.getVertices()) {
+                    var p = new com.google.gson.JsonArray();
+                    p.add(v.x());
+                    p.add(v.z());
+                    arr.add(p);
+                }
+                obj.add("vertices", arr);
             }
             return obj.toString();
         }

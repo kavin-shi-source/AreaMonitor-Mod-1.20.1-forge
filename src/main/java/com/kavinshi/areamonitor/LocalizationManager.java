@@ -62,6 +62,7 @@ public class LocalizationManager {
      */
     private void loadLanguage() {
         translations.clear();
+        formattedCache.clear();
 
         AreaMonitorMod.LOGGER.info("LocalizationManager: Loading language: {}", currentLanguage);
 
@@ -158,8 +159,10 @@ public class LocalizationManager {
 
         try {
             String result = String.format(template, args);
+            // putIfAbsent is atomic; size check is a soft hint (slight overshoot under
+            // concurrency is acceptable for a bounded cache).
             if (InstanceHolder.INSTANCE.formattedCache.size() < 100) {
-                InstanceHolder.INSTANCE.formattedCache.put(cacheKey, result);
+                InstanceHolder.INSTANCE.formattedCache.putIfAbsent(cacheKey, result);
             }
             return result;
         } catch (Exception e) {

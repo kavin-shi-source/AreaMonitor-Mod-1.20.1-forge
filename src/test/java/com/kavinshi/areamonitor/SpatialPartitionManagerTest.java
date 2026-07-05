@@ -133,25 +133,17 @@ class SpatialPartitionManagerTest {
         spm.addRegion(area);
         assertEquals(1, spm.getRegionCount());
 
-        // Move to new location
+        // Move to new location — re-add with same name; P2 #12 fix ensures the stale grid
+        // entries are cleaned up before re-inserting.
         area.setBounds(new MonitorArea.RectangleBounds(500, 500, 600, 600));
-        spm.updateRegion(area);
+        spm.addRegion(area);
 
         assertEquals(1, spm.getRegionCount());
         Set<MonitorArea> result = spm.getPotentialRegions(550, 550, "minecraft:overworld");
         assertEquals(1, result.size());
-    }
-
-    @Test
-    void testGetGridStats() {
-        spm.addRegion(createArea("a", 0, 0, 100, 100));
-        spm.addRegion(createArea("b", 0, 0, 100, 100));
-
-        java.util.Map<String, Object> stats = spm.getGridStats();
-        assertNotNull(stats);
-        assertTrue(stats.containsKey("total_regions"));
-        assertTrue(stats.containsKey("total_grids"));
-        assertEquals(2, (int) stats.get("total_regions"));
+        // Old location should no longer return this region
+        Set<MonitorArea> oldResult = spm.getPotentialRegions(50, 50, "minecraft:overworld");
+        assertTrue(oldResult.isEmpty());
     }
 
     @Test

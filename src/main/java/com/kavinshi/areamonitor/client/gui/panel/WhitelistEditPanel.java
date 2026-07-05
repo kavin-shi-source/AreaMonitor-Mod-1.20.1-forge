@@ -13,8 +13,11 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import java.util.*;
 
+@OnlyIn(Dist.CLIENT)
 public class WhitelistEditPanel extends Screen {
 
     private static final int PARCH_DARK  = 0xD03A2A1A;
@@ -52,7 +55,11 @@ public class WhitelistEditPanel extends Screen {
         if (json != null) try {
             JsonArray arr = GSON.fromJson(json, JsonArray.class);
             for (var e : arr) players.add(e.getAsString());
-        } catch (Exception ignored) {}
+        } catch (Exception e) {
+            // P2 #39: log parse failures instead of silently swallowing
+            com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Failed to parse {} JSON for area '{}': {}",
+                protMode ? "protWhitelist" : "whitelist", entry.name(), e.getMessage());
+        }
     }
 
     @Override protected void init() {
@@ -76,6 +83,8 @@ public class WhitelistEditPanel extends Screen {
             String nm = nameInput.getValue().trim();
             if (!nm.isEmpty() && !players.contains(nm.toLowerCase()) && players.size() < 50) {
                 players.add(nm.toLowerCase()); nameInput.setValue(""); dirty = true; rebuild();
+                // P2 #38: keep focus on input after add so user can type the next name
+                if (nameInput != null) nameInput.setFocused(true);
             } else if (players.size() >= 50) { nameInput.setValue(""); }
         });
         tooltips.add(new TooltipZone(lx, y, 256, 18, "gui.tooltip_whitelist_input"));
@@ -105,15 +114,14 @@ public class WhitelistEditPanel extends Screen {
         int btnY = wy + wh - 30;
         int cx = wx + ww / 2;
         saveBtn = GlassButton.create(cx - 78, btnY, 70, 18, "[" + LocalizationManager.translate("gui.save") + "]", b -> {
-            if (dirty) { sendUpdate(); dirty = false; }
+            if (dirty) { sendUpdate(); dirty = false; mainScreen.updateAfterEdit(); }
             onClose();
         });
         cancelBtn = GlassButton.create(cx + 8, btnY, 70, 18, "[" + LocalizationManager.translate("gui.cancel") + "]", b -> {
             dirty = false;
             onClose();
         });
-        addRenderableWidget(saveBtn);
-        addRenderableWidget(cancelBtn);
+        // P1-3 fix: do not register saveBtn/cancelBtn/clearAllBtn — they live below the scissor clip and are rendered/hit-tested manually.
         if (!players.isEmpty()) {
             clearAllBtn = GlassButton.create(wx + ww - 78, btnY, 70, 18, "[" + LocalizationManager.translate("gui.clear_all") + "]", b -> {
                 confirmDialog.show(
@@ -124,7 +132,6 @@ public class WhitelistEditPanel extends Screen {
                     () -> { players.clear(); dirty = true; rebuild(); },
                     () -> {});
             });
-            addRenderableWidget(clearAllBtn);
         }
     }
 
@@ -132,9 +139,14 @@ public class WhitelistEditPanel extends Screen {
 
     private void rebuild() {
         String saved = nameInput != null ? nameInput.getValue() : "";
+        boolean wasFocused = nameInput != null && nameInput.isFocused();
         clearWidgets();
         init();
-        if (nameInput != null) nameInput.setValue(saved);
+        if (nameInput != null) {
+            nameInput.setValue(saved);
+            // P2 #38: preserve focus across rebuild so input doesn't lose focus after add
+            if (wasFocused) nameInput.setFocused(true);
+        }
     }
 
     private void sendUpdate() {
@@ -144,16 +156,19 @@ public class WhitelistEditPanel extends Screen {
         ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.UPDATE, entry.name(), json.toString()));
     }
 
-    @Override public void onClose() { mainScreen.updateAfterEdit(); if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
+    @Override public void onClose() { if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (confirmDialog.isVisible()) return true;
+        // P2 #29: delegate to confirm dialog for Esc/Enter handling
+        if (confirmDialog.isVisible()) return confirmDialog.keyPressed(keyCode, scanCode, modifiers);
         if (this.nameInput != null && this.nameInput.isFocused())
             return this.nameInput.keyPressed(keyCode, scanCode, modifiers);
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     @Override public boolean charTyped(char c, int modifiers) {
+        // P2 #29: consume text input while confirmation dialog is visible
+        if (confirmDialog.isVisible()) return true;
         if (this.nameInput != null && this.nameInput.isFocused())
             return this.nameInput.charTyped(c, modifiers);
         return super.charTyped(c, modifiers);
@@ -188,6 +203,10 @@ public class WhitelistEditPanel extends Screen {
             }
             return true;
         }
+        // P1-3 fix: manually dispatch click to unregistered bottom buttons
+        if (saveBtn != null && saveBtn.isMouseOver(mx, my) && saveBtn.mouseClicked(mx, my, button)) return true;
+        if (cancelBtn != null && cancelBtn.isMouseOver(mx, my) && cancelBtn.mouseClicked(mx, my, button)) return true;
+        if (clearAllBtn != null && clearAllBtn.isMouseOver(mx, my) && clearAllBtn.mouseClicked(mx, my, button)) return true;
         return super.mouseClicked(mx, my, button);
     }
 

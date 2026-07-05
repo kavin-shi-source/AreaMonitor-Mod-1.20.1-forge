@@ -7,7 +7,9 @@ import java.util.List;
 
 public class SelectionPoints {
     private BlockPos firstPoint;
+    private String firstPointDimension;
     private BlockPos secondPoint;
+    private String secondPointDimension;
     private final List<BlockPos> vertexPoints = new ArrayList<>();
     private boolean isMultiPointMode = false;
 
@@ -34,15 +36,30 @@ public class SelectionPoints {
         return firstPoint;
     }
 
+    public String getFirstPointDimension() {
+        return firstPointDimension;
+    }
+
     public BlockPos getSecondPoint() {
         return secondPoint;
     }
 
-    public void setFirstPoint(BlockPos firstPoint) {
-        this.firstPoint = firstPoint;
+    public String getSecondPointDimension() {
+        return secondPointDimension;
     }
 
-    public void setSecondPoint(BlockPos secondPoint) {
+    public void setFirstPoint(BlockPos firstPoint, String dimension) {
+        this.firstPoint = firstPoint;
+        this.firstPointDimension = dimension;
+    }
+
+    public void setSecondPoint(BlockPos secondPoint, String dimension) {
         this.secondPoint = secondPoint;
+        this.secondPointDimension = dimension;
+    }
+
+    public boolean hasConsistentDimensions() {
+        if (firstPointDimension == null || secondPointDimension == null) return true;
+        return firstPointDimension.equals(secondPointDimension);
     }
 }

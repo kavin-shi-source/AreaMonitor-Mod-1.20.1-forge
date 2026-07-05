@@ -35,11 +35,11 @@ public class MonitorArea {
     private String conditionRequirePlayer = null;
     // Area chaining: auto-teleport to next area
     private String chainNext = null;
-    private int chainDelayTicks = 0;
     // Stats (runtime only, not persisted)
     private final AtomicInteger entryCount = new AtomicInteger(0);
-    private String lastVisitor = "-";
-    private long lastVisitTime = 0;
+    // P3 #3: volatile — these stats are written by tick/thread handlers and read by command queries
+    private volatile String lastVisitor = "-";
+    private volatile long lastVisitTime = 0;
 
     public MonitorArea(String name) {
         this.name = name;
@@ -60,7 +60,11 @@ public class MonitorArea {
     public void setDisplayName(String displayName) { this.displayName = displayName; }
 
     public String getDimension() { return dimension; }
-    public void setDimension(String dimension) { this.dimension = dimension; }
+    public void setDimension(String dimension) {
+        // Guard against null — SpatialPartitionManager.getPotentialRegions calls
+        // region.getDimension().equals(dimension), which would NPE if dimension is null.
+        this.dimension = dimension != null ? dimension : DimensionUtils.OVERWORLD;
+    }
 
     public AreaBounds getBounds() { return bounds; }
     public void setBounds(AreaBounds bounds) { this.bounds = bounds; }
@@ -77,18 +81,24 @@ public class MonitorArea {
     public List<String> getWhitelist() { return whitelist; }
 
     public void setWhitelist(List<String> whitelist) {
+        // P3 #2: guard against null input
         List<String> lowercaseList = new ArrayList<>();
-        for (String name : whitelist) {
-            lowercaseList.add(name.toLowerCase());
+        if (whitelist != null) {
+            for (String name : whitelist) {
+                if (name != null) lowercaseList.add(name.toLowerCase());
+            }
         }
         this.whitelist = new CopyOnWriteArrayList<>(lowercaseList);
     }
 
     public List<String> getProtectionWhitelist() { return protectionWhitelist; }
     public void setProtectionWhitelist(List<String> whitelist) {
+        // P3 #2: guard against null input
         List<String> lowercaseList = new ArrayList<>();
-        for (String name : whitelist) {
-            lowercaseList.add(name.toLowerCase());
+        if (whitelist != null) {
+            for (String name : whitelist) {
+                if (name != null) lowercaseList.add(name.toLowerCase());
+            }
         }
         this.protectionWhitelist = new CopyOnWriteArrayList<>(lowercaseList);
     }
@@ -128,8 +138,6 @@ public class MonitorArea {
     // === Area chain ===
     public String getChainNext() { return chainNext; }
     public void setChainNext(String v) { this.chainNext = v; }
-    public int getChainDelayTicks() { return chainDelayTicks; }
-    public void setChainDelayTicks(int v) { this.chainDelayTicks = v; }
     public boolean hasChainTarget() { return chainNext != null && !chainNext.isEmpty(); }
 
     /**
@@ -171,7 +179,7 @@ public class MonitorArea {
      * Evaluate schedule: returns true if area should be enabled based on current game time.
      */
     public boolean evaluateSchedule(long gameTime) {
-        if (!scheduleEnabled || scheduleTimeMin == null || scheduleTimeMax == null) return enabled;
+        if (!scheduleEnabled || scheduleTimeMin == null || scheduleTimeMax == null) return true;
         long time = gameTime % 24000;
         int min = scheduleTimeMin, max = scheduleTimeMax;
         if (min <= max) {
@@ -213,12 +221,15 @@ public class MonitorArea {
 
         @Override
         public boolean contains(double x, double z) {
-            return x >= minX && x <= maxX && z >= minZ && z <= maxZ;
+            // minX/maxX are inclusive block coordinates; the area covers [minX, maxX+1) in
+            // continuous space (consistent with getBoundingBox). Using < maxX + 1 ensures
+            // the center of the upper-boundary block (e.g., x=12.5 when maxX=12) is contained.
+            return x >= minX && x < maxX + 1 && z >= minZ && z < maxZ + 1;
         }
 
         @Override
         public AABB getBoundingBox() {
-            return new AABB(minX, 0, minZ, maxX + 1, 256, maxZ + 1);
+            return new AABB(minX, -64, minZ, maxX + 1, 320, maxZ + 1);
         }
 
         @Override
@@ -252,8 +263,8 @@ public class MonitorArea {
 
         @Override
         public AABB getBoundingBox() {
-            return new AABB(centerX - radius, 0, centerZ - radius,
-                          centerX + radius + 1, 256, centerZ + radius + 1);
+            return new AABB(centerX - radius, -64, centerZ - radius,
+                          centerX + radius + 1, 320, centerZ + radius + 1);
         }
 
         @Override
@@ -296,7 +307,7 @@ public class MonitorArea {
                 if (v.z < minZ) minZ = v.z;
                 if (v.z > maxZ) maxZ = v.z;
             }
-            this.cachedBoundingBox = new AABB(minX, 0, minZ, maxX + 1, 256, maxZ + 1);
+            this.cachedBoundingBox = new AABB(minX, -64, minZ, maxX + 1, 320, maxZ + 1);
         }
 
         @Override
@@ -326,9 +337,36 @@ public class MonitorArea {
         }
 
         @Override public double[] getCenter() {
+            // P2 #3 fix: arithmetic mean of vertices can land outside a concave polygon,
+            // which would push chain teleports outside the area. Try centroid first, then
+            // sample the bounding box on a 1-block grid and return the first interior point.
             double cx = 0, cz = 0;
             for (var v : vertices) { cx += v.x(); cz += v.z(); }
-            return new double[]{cx / vertices.size(), cz / vertices.size()};
+            double centroidX = cx / vertices.size();
+            double centroidZ = cz / vertices.size();
+            if (contains(centroidX, centroidZ)) {
+                return new double[]{centroidX, centroidZ};
+            }
+            // Centroid is outside — sample the AABB on a 1-block grid starting from min corner.
+            int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
+            for (Vec2i v : vertices) {
+                if (v.x() < minX) minX = v.x();
+                if (v.x() > maxX) maxX = v.x();
+                if (v.z() < minZ) minZ = v.z();
+                if (v.z() > maxZ) maxZ = v.z();
+            }
+            // Step from center outward in a spiral-ish pattern is overkill; a linear scan over
+            // the AABB is bounded (≤ 32 vertices implies a bounded AABB) and runs once at most.
+            for (int z = minZ; z <= maxZ; z++) {
+                for (int x = minX; x <= maxX; x++) {
+                    if (contains(x + 0.5, z + 0.5)) {
+                        return new double[]{x + 0.5, z + 0.5};
+                    }
+                }
+            }
+            // Fallback: first vertex (guaranteed on the polygon boundary)
+            return new double[]{vertices.get(0).x() + 0.5, vertices.get(0).z() + 0.5};
         }
 
         public List<Vec2i> getVertices() {

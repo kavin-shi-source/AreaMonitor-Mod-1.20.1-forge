@@ -12,14 +12,20 @@ import net.minecraftforge.fml.loading.FMLPaths;
 import org.apache.commons.lang3.tuple.Pair;
 
 import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.Reader;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 
 public class ConfigManager {
     private static final ForgeConfigSpec SPEC;
@@ -27,6 +33,12 @@ public class ConfigManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static File areasConfigFile;
     private static File blacklistConfigFile;
+    /** Single-thread executor for async config file I/O (prevents main thread blocking) */
+    private static final ExecutorService CONFIG_IO_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "AreaMonitor-ConfigIO");
+        t.setDaemon(true);
+        return t;
+    });
 
     static {
         ForgeConfigSpec tempSpec;
@@ -172,7 +184,7 @@ public class ConfigManager {
             return;
         }
 
-        try (FileReader reader = new FileReader(areasConfigFile)) {
+        try (Reader reader = new InputStreamReader(new FileInputStream(areasConfigFile), StandardCharsets.UTF_8)) {
             AreaConfigData configData = GSON.fromJson(reader, AreaConfigData.class);
 
             // Config file integrity validation
@@ -196,9 +208,14 @@ public class ConfigManager {
                 }
             }
 
-            if (!configData.areas.isEmpty()) {
-                AreaManager areaManager = AreaManager.getInstance();
-                areaManager.clearAllData();
+            // Always clear area definitions and rebuild from config, even when areas is empty
+            // (handles the case where all areas were removed). Uses clearAreasOnly instead of
+            // clearAllData to preserve per-player area caches, avoiding server-wide false enter
+            // triggers for online players on next tick. Stale references to removed areas are
+            // filtered lazily by handleAreaEnter/handleAreaLeave (both guard on area == null).
+            AreaManager areaManager = AreaManager.getInstance();
+            synchronized (areaManager.getAreasLock()) {
+                areaManager.clearAreasOnly();
 
                 for (Map.Entry<String, AreaConfig> entry : configData.areas.entrySet()) {
                     MonitorArea area = createAreaFromConfig(entry.getKey(), entry.getValue());
@@ -207,7 +224,7 @@ public class ConfigManager {
                     }
                 }
             }
-        } catch (FileNotFoundException e) {
+        } catch (java.io.FileNotFoundException e) {
             AreaMonitorMod.LOGGER.warn("Area config file not found: {}", areasConfigFile.getAbsolutePath());
             createDefaultAreasConfig();
         } catch (JsonSyntaxException e) {
@@ -218,7 +235,8 @@ public class ConfigManager {
     }
 
     /**
-     * Save area configuration
+     * Save area configuration atomically (write to temp file then rename).
+     * Snapshot is taken synchronously on calling thread; file I/O is async to avoid blocking main thread.
      */
     public static void saveAreasConfig() {
         // Ensure file path is initialized
@@ -228,30 +246,55 @@ public class ConfigManager {
 
         if (areasConfigFile == null) return;
 
-        try {
-            File parentDir = areasConfigFile.getParentFile();
-            if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
-                AreaMonitorMod.LOGGER.error("Failed to create config directory: {}", parentDir.getAbsolutePath());
-                return;
-            }
+        File parentDir = areasConfigFile.getParentFile();
+        if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
+            AreaMonitorMod.LOGGER.error("Failed to create config directory: {}", parentDir.getAbsolutePath());
+            return;
+        }
 
-            AreaConfigData configData = new AreaConfigData();
-            configData.areas = new HashMap<>();
+        AreaConfigData configData = new AreaConfigData();
+        configData.areas = new HashMap<>();
 
+        // Hold AreaManager's lock so concurrent addArea/removeArea/loadAreasConfig cannot
+        // mutate the areas map mid-snapshot.
+        synchronized (AreaManager.getInstance().getAreasLock()) {
             for (MonitorArea area : AreaManager.getInstance().getAllAreas()) {
                 configData.areas.put(area.getName(), createConfigFromArea(area));
             }
+        }
 
-            try (FileWriter writer = new FileWriter(areasConfigFile)) {
-                GSON.toJson(configData, writer);
+        // Rebuild spatial partition synchronously (fast, < 1ms, must be on main thread)
+        AreaManager.getInstance().rebuildSpatialPartition();
+
+        // Async file I/O to avoid blocking main thread
+        final File targetFile = areasConfigFile;
+        final File tmpFile = new File(areasConfigFile.getParentFile(), "areas.json.tmp");
+        final AreaConfigData dataToWrite = configData;
+        CONFIG_IO_EXECUTOR.submit(() -> {
+            try {
+                try (Writer writer = new OutputStreamWriter(new FileOutputStream(tmpFile), StandardCharsets.UTF_8)) {
+                    GSON.toJson(dataToWrite, writer);
+                }
+                Files.move(tmpFile.toPath(), targetFile.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                AreaMonitorMod.LOGGER.info("Area config saved");
+            } catch (IOException e) {
+                AreaMonitorMod.LOGGER.error("Failed to save area config: {}", targetFile.getAbsolutePath(), e);
             }
+        });
+    }
 
-            AreaMonitorMod.LOGGER.info("Area config saved");
-
-            // Rebuild spatial partition for performance optimization
-            AreaManager.getInstance().rebuildSpatialPartition();
-        } catch (IOException e) {
-            AreaMonitorMod.LOGGER.error("Failed to save area config: {}", areasConfigFile.getAbsolutePath(), e);
+    /**
+     * P1-8 fix: safe wrapper around saveAreasConfig that never propagates exceptions to Brigadier callers.
+     * Returns true on success, false on failure (already logged).
+     */
+    public static boolean safeSaveConfig() {
+        try {
+            saveAreasConfig();
+            return true;
+        } catch (Exception e) {
+            AreaMonitorMod.LOGGER.error("Failed to save area config (safeSaveConfig)", e);
+            return false;
         }
     }
 
@@ -292,9 +335,12 @@ public class ConfigManager {
                 return;
             }
 
-            try (FileWriter writer = new FileWriter(areasConfigFile)) {
+            File tmpFile = new File(areasConfigFile.getParentFile(), "areas.json.tmp");
+            try (Writer writer = new OutputStreamWriter(new FileOutputStream(tmpFile), StandardCharsets.UTF_8)) {
                 GSON.toJson(configData, writer);
             }
+            Files.move(tmpFile.toPath(), areasConfigFile.toPath(),
+                StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 
             AreaMonitorMod.LOGGER.info("Created config file with example area");
         } catch (Exception e) {
@@ -364,7 +410,6 @@ public class ConfigManager {
         if (config.getConditionMinPlayers() != null) area.setConditionMinPlayers(config.getConditionMinPlayers());
         if (config.getConditionRequirePlayer() != null) area.setConditionRequirePlayer(config.getConditionRequirePlayer());
         if (config.getChainNext() != null) area.setChainNext(config.getChainNext());
-        if (config.getChainDelayTicks() != null) area.setChainDelayTicks(config.getChainDelayTicks());
 
         return area;
     }
@@ -376,7 +421,7 @@ public class ConfigManager {
         return GameModeUtils.fromName(mode);
     }
 
-    private static AreaConfig createConfigFromArea(MonitorArea area) {
+    public static AreaConfig createConfigFromArea(MonitorArea area) {
         AreaConfig config = new AreaConfig();
         config.setDisplayName(area.getDisplayName());
         config.setDimension(area.getDimension());
@@ -425,7 +470,6 @@ public class ConfigManager {
         config.setConditionMinPlayers(area.getConditionMinPlayers());
         config.setConditionRequirePlayer(area.getConditionRequirePlayer());
         config.setChainNext(area.getChainNext());
-        config.setChainDelayTicks(area.getChainDelayTicks());
 
         return config;
     }
@@ -433,7 +477,7 @@ public class ConfigManager {
     /**
      * Validate area config integrity with enhanced checks.
      */
-    private static boolean validateAreaConfig(String areaName, AreaConfig config) {
+    public static boolean validateAreaConfig(String areaName, AreaConfig config) {
         if (areaName == null || areaName.trim().isEmpty()) {
             AreaMonitorMod.LOGGER.warn("Area name is null or empty");
             return false;
@@ -482,7 +526,7 @@ public class ConfigManager {
                     return false;
                 }
 
-                if (config.getMinX() >= config.getMaxX() || config.getMinZ() >= config.getMaxZ()) {
+                if (config.getMinX() > config.getMaxX() || config.getMinZ() > config.getMaxZ()) {
                     AreaMonitorMod.LOGGER.warn("Area {} has invalid coordinate range: minX={}, maxX={}, minZ={}, maxZ={}",
                             areaName, config.getMinX(), config.getMaxX(), config.getMinZ(), config.getMaxZ());
                     return false;
@@ -563,7 +607,6 @@ public class ConfigManager {
         private Integer conditionMinPlayers;
         private String conditionRequirePlayer;
         private String chainNext;
-        private Integer chainDelayTicks;
 
         public String getDisplayName() { return displayName; }
         public void setDisplayName(String v) { this.displayName = v; }
@@ -616,8 +659,6 @@ public class ConfigManager {
         public void setConditionRequirePlayer(String v) { this.conditionRequirePlayer = v; }
         public String getChainNext() { return chainNext; }
         public void setChainNext(String v) { this.chainNext = v; }
-        public Integer getChainDelayTicks() { return chainDelayTicks; }
-        public void setChainDelayTicks(Integer v) { this.chainDelayTicks = v; }
     }
 
     /**
@@ -627,10 +668,39 @@ public class ConfigManager {
         try {
             Config config = CONFIG;
 
-            AreaMonitorMod.LOGGER.info("Area monitor config validation complete");
-            AreaMonitorMod.LOGGER.info("Configure specific monitoring areas in config/areamonitor/areas.json");
+            if (config.gameModeSwitchDelayMs.get() < 0) {
+                AreaMonitorMod.LOGGER.warn("Config gameModeSwitchDelayMs {} is negative, clamped to 0", config.gameModeSwitchDelayMs.get());
+                config.gameModeSwitchDelayMs.set(0L);
+            }
+            if (config.optimizationCooldownMs.get() < 1000) {
+                AreaMonitorMod.LOGGER.warn("Config optimizationCooldownMs {} is too small, clamped to 1000", config.optimizationCooldownMs.get());
+                config.optimizationCooldownMs.set(1000L);
+            }
+            String lang = config.language.get();
+            if (lang == null || (!lang.equals("en_us") && !lang.equals("zh_cn"))) {
+                AreaMonitorMod.LOGGER.warn("Config language '{}' is not supported, falling back to en_us", lang);
+                config.language.set("en_us");
+            }
+
+            int validated = 0;
+            for (MonitorArea area : AreaManager.getInstance().getAllAreas()) {
+                if (area.getName() == null || area.getName().trim().isEmpty()) {
+                    AreaMonitorMod.LOGGER.warn("Area with empty name detected, skipping validation");
+                    continue;
+                }
+                if (area.getDimension() == null || area.getDimension().trim().isEmpty()) {
+                    AreaMonitorMod.LOGGER.warn("Area '{}' has empty dimension, defaulting to minecraft:overworld", area.getName());
+                    area.setDimension("minecraft:overworld");
+                }
+                if (area.getBounds() == null) {
+                    AreaMonitorMod.LOGGER.warn("Area '{}' has null bounds, defaulting to 0,0,0,0", area.getName());
+                    area.setBounds(new MonitorArea.RectangleBounds(0, 0, 0, 0));
+                }
+                validated++;
+            }
+
+            AreaMonitorMod.LOGGER.info("Area monitor config validation complete ({} areas validated)", validated);
         } catch (Exception e) {
-            // Log full stack trace for config validation issues
             AreaMonitorMod.LOGGER.warn("Config validation failed, config may not be fully loaded", e);
         }
     }

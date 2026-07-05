@@ -1,13 +1,17 @@
 package com.kavinshi.areamonitor.client.gui.widget;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
  * A reusable confirmation dialog overlay rendered within existing screens.
  * Matches the Warm Parchment / Glass Morphism theme.
  */
+@OnlyIn(Dist.CLIENT)
 public class ConfirmDialog {
 
     // Parchment palette
@@ -22,8 +26,10 @@ public class ConfirmDialog {
     private boolean visible = false;
     private String title = "";
     private String message = "";
-    private String confirmText = "Confirm";
-    private String cancelText = "Cancel";
+    // P3 #10: defaults are only used if show() is called without explicit text — keep as empty
+    // strings so a forgotten arg shows blank rather than English fallback text on a non-en client.
+    private String confirmText = "";
+    private String cancelText = "";
     private Runnable onConfirm;
     private Runnable onCancel;
 
@@ -145,5 +151,31 @@ public class ConfirmDialog {
         }
 
         return true; // click inside dialog but not on buttons — consume it
+    }
+
+    /**
+     * Handle keyboard input when the dialog is visible.
+     * Esc -> cancel; Enter -> confirm; any other key is consumed to prevent
+     * the parent screen from acting on it (e.g. closing on Esc).
+     */
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (!visible) return false;
+
+        Runnable confirmAction = onConfirm;
+        Runnable cancelAction = onCancel;
+
+        if (keyCode == InputConstants.KEY_ESCAPE) {
+            hide();
+            if (cancelAction != null) cancelAction.run();
+            return true;
+        }
+        if (keyCode == InputConstants.KEY_RETURN || keyCode == InputConstants.KEY_NUMPADENTER) {
+            hide();
+            if (confirmAction != null) confirmAction.run();
+            return true;
+        }
+        // Consume all other keys so the parent panel does not react
+        // (e.g. parent's Esc handler, EditBox input, hotkeys).
+        return true;
     }
 }

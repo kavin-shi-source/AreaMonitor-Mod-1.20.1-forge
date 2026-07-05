@@ -17,6 +17,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Area monitoring core class responsible for monitoring player positions
@@ -24,24 +25,19 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 @Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class AreaMonitor {
-    private static final Map<UUID, PlayerState> playerStates = new ConcurrentHashMap<>();
     private static volatile MinecraftServer minecraftServer;
     private static final AtomicInteger tickCounter = new AtomicInteger(0);
     private static final AtomicInteger scheduleTickCounter = new AtomicInteger(0);
-    private static final long PENDING_ACTION_TIMEOUT_MS = 10000L;  // 10 seconds timeout for pending actions
+    private static final AtomicInteger visualizationTickCounter = new AtomicInteger(0);
+    private static final AtomicLong monotonicTickCounter = new AtomicLong(0);
+    private static final int VISUALIZATION_INTERVAL_TICKS = 5;
+    // P2 #10 fix: pending actions are now timed in ticks rather than wall-clock milliseconds,
+    // so they survive server pauses (single-player pause, integrated-server tick halt) without
+    // being expired or executed prematurely. 10s @ 20 TPS = 200 ticks.
+    private static final long PENDING_ACTION_TIMEOUT_TICKS = 200L;
 
-    private static class PlayerState {
-        int lastX = Integer.MAX_VALUE;
-        int lastZ = Integer.MAX_VALUE;
-
-        public boolean isInitialized() {
-            return lastX != Integer.MAX_VALUE && lastZ != Integer.MAX_VALUE;
-        }
-    }
-
-    private record PendingAction(UUID playerId, Runnable action, long executeTime) {
-        // Record class auto-generates constructor
-        // executeTime should be absolute timestamp (current time + delay)
+    private record PendingAction(UUID playerId, Runnable action, long executeTick) {
+        // executeTick is an absolute tick index (monotonicTickCounter value at scheduled time)
     }
 
     /**
@@ -61,34 +57,52 @@ public class AreaMonitor {
 
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
-        AreaMonitorMod.LOGGER.info("Server stopping, cleaning up resources...");
-        
-        pendingActions.clear();
-        playerStates.clear();
-        tickCounter.set(0);
-        
+        // P2 #11 fix: defensive — wrap each step in try-catch so a failure does not skip
+        // subsequent cleanup or propagate to other Forge handlers.
+        AreaMonitorMod.LOGGER.info("Server stopping, cleaning up runtime state...");
+
+        try {
+            pendingActions.clear();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("AreaMonitor: failed to clear pending actions on shutdown", ex);
+        }
+        try {
+            tickCounter.set(0);
+            monotonicTickCounter.set(0);
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("AreaMonitor: failed to reset tick counters on shutdown", ex);
+        }
+        try {
+            AreaTriggerManager.clearAll();
+        } catch (Exception ex) {
+            AreaMonitorMod.LOGGER.error("AreaMonitor: failed to clear trigger manager on shutdown", ex);
+        }
+
         minecraftServer = null;
-        
-        AreaMonitorMod.LOGGER.info("AreaMonitor cleanup completed");
+
+        AreaMonitorMod.LOGGER.info("AreaMonitor runtime cleanup completed");
     }
 
     @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
 
-        // Clear trigger locks for this tick (anti-recursion)
+        long monotonicTick = monotonicTickCounter.incrementAndGet();
+        AreaTriggerManager.setCurrentTick(monotonicTick);
+
         AreaTriggerManager.clearTickLocks();
 
-        // Process debounced triggers
         AreaTriggerManager.processDebouncedTriggers(minecraftServer);
 
         processPendingActions();
 
         PerformanceMonitor.onServerTick(minecraftServer);
 
-        AreaVisualizer.updatePersistentVisualizations();
+        if (visualizationTickCounter.incrementAndGet() >= VISUALIZATION_INTERVAL_TICKS) {
+            visualizationTickCounter.set(0);
+            AreaVisualizer.updatePersistentVisualizations();
+        }
 
-        // Process area schedules (every ~1 second)
         if (scheduleTickCounter.incrementAndGet() >= 20) {
             scheduleTickCounter.set(0);
             processSchedules();
@@ -121,21 +135,21 @@ public class AreaMonitor {
      * This prevents memory leaks from actions that never execute.
      */
     private static void processPendingActions() {
-        long currentTime = System.currentTimeMillis();
+        long currentTick = monotonicTickCounter.get();
         Iterator<PendingAction> iterator = pendingActions.iterator();
 
         while (iterator.hasNext()) {
             PendingAction action = iterator.next();
 
-            // Remove expired actions (timeout after 10 seconds)
-            if (currentTime - action.executeTime > PENDING_ACTION_TIMEOUT_MS) {
+            // Remove expired actions (timeout after PENDING_ACTION_TIMEOUT_TICKS)
+            if (currentTick - action.executeTick > PENDING_ACTION_TIMEOUT_TICKS) {
                 AreaMonitorMod.LOGGER.debug("Removing expired pending action for player {}", action.playerId);
                 iterator.remove();
                 continue;
             }
 
             // Execute actions that are ready
-            if (currentTime >= action.executeTime) {
+            if (currentTick >= action.executeTick) {
                 try {
                     action.action.run();
                 } catch (Exception e) {
@@ -150,6 +164,11 @@ public class AreaMonitor {
      * Enqueue a game mode change with configurable delay.
      */
     private static void enqueueGameModeChange(UUID playerId, GameType gameMode, boolean requireAreaCheck) {
+        // P2 #10 fix: schedule based on tick count, not wall-clock time, so a server pause
+        // (single-player menu, integrated-server tick halt) doesn't fire the action prematurely
+        // or expire it during the pause window.
+        long delayTicks = Math.max(1L, ConfigManager.CONFIG.gameModeSwitchDelayMs.get() / 50L);
+        long executeTick = monotonicTickCounter.get() + delayTicks;
         pendingActions.add(new PendingAction(playerId, () -> {
             if (minecraftServer == null) return;
 
@@ -177,7 +196,7 @@ public class AreaMonitor {
                         currentPlayer.getName().getString(), e);
                 }
             }
-        }, System.currentTimeMillis() + ConfigManager.CONFIG.gameModeSwitchDelayMs.get()));
+        }, executeTick));
     }
 
     /**
@@ -198,12 +217,11 @@ public class AreaMonitor {
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             UUID playerId = player.getUUID();
-            playerStates.remove(playerId);
             AreaManager.getInstance().clearPlayerData(playerId);
-            
+            AreaTriggerManager.clearPlayer(playerId);
+
             pendingActions.removeIf(action -> action.playerId.equals(playerId));
-            
-            // Clean up visualization data
+
             AreaVisualizer.stopPersistentVisualization(player);
             SelectionTool.cleanupPlayerData(playerId);
         }
