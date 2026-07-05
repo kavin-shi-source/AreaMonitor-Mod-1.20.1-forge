@@ -37,7 +37,7 @@ public class AreaManager {
      * cannot interleave with a clear+rebuild cycle. Reentrant, so loadAreasConfig can call addArea
      * while already holding the lock.
      */
-    private static final Object AREAS_LOCK = new Object();
+    private final Object AREAS_LOCK = new Object();
 
     /**
      * Returns the lock protecting the areas collection. ConfigManager uses this to synchronize
