@@ -56,7 +56,7 @@ public class WhitelistEditPanel extends Screen {
             JsonArray arr = GSON.fromJson(json, JsonArray.class);
             for (var e : arr) players.add(e.getAsString());
         } catch (Exception e) {
-            // P2 #39: log parse failures instead of silently swallowing
+            // : log parse failures instead of silently swallowing
             com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Failed to parse {} JSON for area '{}': {}",
                 protMode ? "protWhitelist" : "whitelist", entry.name(), e.getMessage());
         }
@@ -77,13 +77,14 @@ public class WhitelistEditPanel extends Screen {
         // Input row
         nameInput = new EditBox(this.font, lx, y, 256, 16, Component.empty());
         nameInput.setMaxLength(16);
+        nameInput.setFilter(s -> s.matches("[a-zA-Z0-9_]*"));
         nameInput.setResponder(s -> dirty = true);
         addRenderableWidget(nameInput);
         zbtn(lx + 262, y, 50, "[" + LocalizationManager.translate("command.add") + "]", () -> {
             String nm = nameInput.getValue().trim();
             if (!nm.isEmpty() && !players.contains(nm.toLowerCase()) && players.size() < 50) {
                 players.add(nm.toLowerCase()); nameInput.setValue(""); dirty = true; rebuild();
-                // P2 #38: keep focus on input after add so user can type the next name
+                // : keep focus on input after add so user can type the next name
                 if (nameInput != null) nameInput.setFocused(true);
             } else if (players.size() >= 50) { nameInput.setValue(""); }
         });
@@ -132,6 +133,8 @@ public class WhitelistEditPanel extends Screen {
                     () -> { players.clear(); dirty = true; rebuild(); },
                     () -> {});
             });
+        } else {
+            clearAllBtn = null;
         }
     }
 
@@ -144,7 +147,7 @@ public class WhitelistEditPanel extends Screen {
         init();
         if (nameInput != null) {
             nameInput.setValue(saved);
-            // P2 #38: preserve focus across rebuild so input doesn't lose focus after add
+            // : preserve focus across rebuild so input doesn't lose focus after add
             if (wasFocused) nameInput.setFocused(true);
         }
     }
@@ -159,7 +162,7 @@ public class WhitelistEditPanel extends Screen {
     @Override public void onClose() { if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // P2 #29: delegate to confirm dialog for Esc/Enter handling
+        // : delegate to confirm dialog for Esc/Enter handling
         if (confirmDialog.isVisible()) return confirmDialog.keyPressed(keyCode, scanCode, modifiers);
         if (this.nameInput != null && this.nameInput.isFocused())
             return this.nameInput.keyPressed(keyCode, scanCode, modifiers);
@@ -167,7 +170,7 @@ public class WhitelistEditPanel extends Screen {
     }
 
     @Override public boolean charTyped(char c, int modifiers) {
-        // P2 #29: consume text input while confirmation dialog is visible
+        // : consume text input while confirmation dialog is visible
         if (confirmDialog.isVisible()) return true;
         if (this.nameInput != null && this.nameInput.isFocused())
             return this.nameInput.charTyped(c, modifiers);

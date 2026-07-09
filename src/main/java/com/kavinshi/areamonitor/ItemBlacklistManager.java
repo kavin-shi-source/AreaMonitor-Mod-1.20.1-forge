@@ -66,7 +66,7 @@ public class ItemBlacklistManager {
         if (initialized) return;
         initialized = true;
 
-        // P2 #41: keep default set consistent with createDefaultBlacklistConfig()
+        // : keep default set consistent with createDefaultBlacklistConfig()
         // so subsequent loadBlacklistConfig() doesn't wipe items the user expected
         GLOBAL_BLACKLISTED_ITEMS.add(Items.ENDER_PEARL);
         GLOBAL_BLACKLISTED_ITEMS.add(Items.CHORUS_FRUIT);
@@ -80,7 +80,7 @@ public class ItemBlacklistManager {
      * Add custom blacklist for a player area.
      */
     public static void addAreaBlacklist(String areaName, Set<Item> blacklistedItems) {
-        // P2 #42: build the set fully before publishing — avoid put-then-get race
+        // : build the set fully before publishing — avoid put-then-get race
         Set<Item> set = ConcurrentHashMap.newKeySet();
         set.addAll(blacklistedItems);
         AREA_BLACKLISTS.put(areaName, set);
@@ -106,6 +106,7 @@ public class ItemBlacklistManager {
      */
     public static boolean isItemBlacklisted(Item item, ServerPlayer player) {
         Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
+        String dimension = player.level().dimension().location().toString();
 
         // If not in any area, return false
         if (currentAreas.isEmpty()) {
@@ -116,17 +117,19 @@ public class ItemBlacklistManager {
         if (GLOBAL_BLACKLISTED_ITEMS.contains(item)) {
             for (String areaName : currentAreas) {
                 MonitorArea area = AreaManager.getInstance().getArea(areaName);
-                if (area != null && area.getRestrictions().isEnableItemBlacklist()) {
+                if (area == null || !area.getDimension().equals(dimension)) continue;
+                if (area.getRestrictions().isEnableItemBlacklist()) {
                     return true;
                 }
             }
         }
 
         // Check area-specific blacklist
-        // P2 #40: respect enableItemBlacklist toggle for area-specific blacklists too
+        // : respect enableItemBlacklist toggle for area-specific blacklists too
         for (String areaName : currentAreas) {
             MonitorArea area = AreaManager.getInstance().getArea(areaName);
-            if (area == null || !area.getRestrictions().isEnableItemBlacklist()) continue;
+            if (area == null || !area.getDimension().equals(dimension)) continue;
+            if (!area.getRestrictions().isEnableItemBlacklist()) continue;
             Set<Item> areaBlacklist = AREA_BLACKLISTS.get(areaName);
             if (areaBlacklist != null && areaBlacklist.contains(item)) {
                 return true;
@@ -141,9 +144,11 @@ public class ItemBlacklistManager {
      */
     private static boolean isPlayerInRestrictedArea(ServerPlayer player) {
         Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
+        String dimension = player.level().dimension().location().toString();
         for (String areaName : currentAreas) {
             MonitorArea area = AreaManager.getInstance().getArea(areaName);
-            if (area != null && area.getRestrictions().isEnableItemBlacklist()) {
+            if (area == null || !area.getDimension().equals(dimension)) continue;
+            if (area.getRestrictions().isEnableItemBlacklist()) {
                 return true;
             }
         }
@@ -160,9 +165,10 @@ public class ItemBlacklistManager {
         String normalized = stripNamespace(baseCommand);
 
         Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
+        String dimension = player.level().dimension().location().toString();
         for (String areaName : currentAreas) {
             MonitorArea area = AreaManager.getInstance().getArea(areaName);
-            if (area == null) continue;
+            if (area == null || !area.getDimension().equals(dimension)) continue;
             RestrictionSettings rs = area.getRestrictions();
             if (rs.isBlockTeleportCommands() && isTeleportCommand(baseCommand)) {
                 return true;
@@ -185,7 +191,7 @@ public class ItemBlacklistManager {
     }
 
     private static boolean isTeleportCommand(String command) {
-        // P3 #1: strip namespace once and compare against the (already-stripped) command
+        // : strip namespace once and compare against the (already-stripped) command
         String normalized = stripNamespace(command);
         for (String tc : TELEPORT_COMMANDS) {
             String stripped = tc;
@@ -260,6 +266,7 @@ public class ItemBlacklistManager {
      */
     public static void showPlayerRestrictions(ServerPlayer player) {
         Set<String> currentAreas = AreaManager.getInstance().getCurrentAreas(player);
+        String dimension = player.level().dimension().location().toString();
         if (currentAreas.isEmpty()) {
             player.displayClientMessage(
                 MessageUtils.smartComponent(player, "command.areamonitor.blacklist.not_in_restricted_area"),
@@ -275,7 +282,7 @@ public class ItemBlacklistManager {
 
         for (String areaName : currentAreas) {
             MonitorArea area = AreaManager.getInstance().getArea(areaName);
-            if (area == null) continue;
+            if (area == null || !area.getDimension().equals(dimension)) continue;
 
             player.displayClientMessage(
                 MessageUtils.smartComponent(player, "command.areamonitor.blacklist.area_info", area.getDisplayName()),
@@ -358,14 +365,25 @@ public class ItemBlacklistManager {
     public static void loadBlacklistConfig() {
         if (blacklistConfigFile == null || !blacklistConfigFile.exists()) {
             createDefaultBlacklistConfig();
+            // Sync memory with the default config we just wrote — previously this returned
+            // without updating GLOBAL_BLACKLISTED_ITEMS/AREA_BLACKLISTS, leaving stale data.
+            GLOBAL_BLACKLISTED_ITEMS.clear();
+            AREA_BLACKLISTS.clear();
+            GLOBAL_BLACKLISTED_ITEMS.add(Items.ENDER_PEARL);
+            GLOBAL_BLACKLISTED_ITEMS.add(Items.CHORUS_FRUIT);
+            GLOBAL_BLACKLISTED_ITEMS.add(Items.COMPASS);
+            GLOBAL_BLACKLISTED_ITEMS.add(Items.CLOCK);
+            AreaMonitorMod.LOGGER.info("Blacklist config not found, created default and synced memory");
             return;
         }
 
         try (InputStreamReader reader = new InputStreamReader(new FileInputStream(blacklistConfigFile), StandardCharsets.UTF_8)) {
+            // Clear memory before reading — if the file is corrupt, stale data must not survive
+            GLOBAL_BLACKLISTED_ITEMS.clear();
+            AREA_BLACKLISTS.clear();
             BlacklistConfigData configData = GSON.fromJson(reader, BlacklistConfigData.class);
             if (configData != null) {
                 // Load global blacklist
-                GLOBAL_BLACKLISTED_ITEMS.clear();
                 if (configData.global_blacklist != null) {
                     for (String itemId : configData.global_blacklist) {
                         Item item = parseItemFromId(itemId);
@@ -376,7 +394,6 @@ public class ItemBlacklistManager {
                 }
 
                 // Load area blacklists
-                AREA_BLACKLISTS.clear();
                 if (configData.area_blacklists != null) {
                     for (Map.Entry<String, List<String>> entry : configData.area_blacklists.entrySet()) {
                         // Use concurrent set — isItemBlacklisted reads these from event-handler threads
@@ -513,5 +530,11 @@ public class ItemBlacklistManager {
             AreaMonitorMod.LOGGER.warn("Invalid item ID format: {}", itemId);
             return null;
         }
+    }
+
+    public static void clearAllData() {
+        GLOBAL_BLACKLISTED_ITEMS.clear();
+        AREA_BLACKLISTS.clear();
+        initialized = false;
     }
 }

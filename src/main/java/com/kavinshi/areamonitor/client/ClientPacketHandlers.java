@@ -30,7 +30,7 @@ public final class ClientPacketHandlers {
     /**
      * Update the area list on the currently-open AreaManagementScreen.
      * Called by S2CAreaListPacket.
-     * P2 #31: when a sub-panel (edit/trigger/whitelist/restriction) is open
+     * : when a sub-panel (edit/trigger/whitelist/restriction) is open
      * instead of the management screen, buffer the update so it gets applied
      * when the user returns to the management screen.
      */

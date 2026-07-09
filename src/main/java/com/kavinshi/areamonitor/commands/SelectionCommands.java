@@ -5,6 +5,7 @@ import com.kavinshi.areamonitor.ConfigManager;
 import com.kavinshi.areamonitor.ItemBlacklistManager;
 import com.kavinshi.areamonitor.LocalizationManager;
 import com.kavinshi.areamonitor.SelectionTool;
+import com.kavinshi.areamonitor.WhitelistManager;
 import com.kavinshi.areamonitor.util.MessageUtils;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.ChatFormatting;
@@ -126,6 +127,7 @@ public class SelectionCommands {
         try {
             ConfigManager.loadAreasConfig();
             ItemBlacklistManager.loadBlacklistConfig();
+            WhitelistManager.loadWhitelist();
             ConfigManager.validateConfig();
             LocalizationManager.applyConfigLanguage(ConfigManager.CONFIG.language.get());
 

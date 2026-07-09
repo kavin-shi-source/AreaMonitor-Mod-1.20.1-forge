@@ -3,6 +3,7 @@ package com.kavinshi.areamonitor;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
+import com.kavinshi.areamonitor.commands.TriggerCommands;
 import com.kavinshi.areamonitor.model.RestrictionSettings;
 import com.kavinshi.areamonitor.util.GameModeUtils;
 import net.minecraft.world.level.GameType;
@@ -37,7 +38,7 @@ public class ConfigManager {
     private static File areasConfigFile;
     private static File blacklistConfigFile;
     /** Single-thread executor for async config file I/O (prevents main thread blocking) */
-    private static ExecutorService CONFIG_IO_EXECUTOR = createExecutor();
+    private static volatile ExecutorService CONFIG_IO_EXECUTOR = createExecutor();
 
     private static ExecutorService createExecutor() {
         return Executors.newSingleThreadExecutor(r -> {
@@ -319,6 +320,9 @@ public class ConfigManager {
         // M-2: drain pending async saves to prevent old snapshot overwriting latest data
         try {
             CONFIG_IO_EXECUTOR.submit(() -> {}).get(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            AreaMonitorMod.LOGGER.warn("Interrupted while waiting for pending async config saves");
         } catch (Exception e) {
             AreaMonitorMod.LOGGER.warn("Timeout waiting for pending async config saves", e);
         }
@@ -449,8 +453,8 @@ public class ConfigManager {
         area.setLeaveMode(parseGameMode(config.getLeaveMode()));
         area.setEnabled(config.isEnabled());
 
-        // Set bounds based on boundsType
-        String type = config.getBoundsType() != null ? config.getBoundsType() : "RECTANGLE";
+        // Set bounds based on boundsType (case-insensitive for robustness)
+        String type = config.getBoundsType() != null ? config.getBoundsType().toUpperCase(Locale.ROOT) : "RECTANGLE";
         switch (type) {
             case "CIRCLE":
                 if (config.getCenterX() != null && config.getCenterZ() != null && config.getRadius() != null) {
@@ -487,6 +491,7 @@ public class ConfigManager {
         }
 
         if (config.getRestrictions() != null) {
+            config.getRestrictions().sanitize();
             area.setRestrictions(config.getRestrictions());
         }
 
@@ -498,13 +503,13 @@ public class ConfigManager {
         // Set triggers
         if (config.getEnterTrigger() != null) {
             area.setEnterTrigger(config.getEnterTrigger());
-            if (config.getEnterTrigger().getCondition() != null)
-                config.getEnterTrigger().getCondition().sanitize();
+            config.getEnterTrigger().sanitize();
+            config.getEnterTrigger().getCommands().removeIf(cmd -> !TriggerCommands.isValidCommand(cmd));
         }
         if (config.getLeaveTrigger() != null) {
             area.setLeaveTrigger(config.getLeaveTrigger());
-            if (config.getLeaveTrigger().getCondition() != null)
-                config.getLeaveTrigger().getCondition().sanitize();
+            config.getLeaveTrigger().sanitize();
+            config.getLeaveTrigger().getCommands().removeIf(cmd -> !TriggerCommands.isValidCommand(cmd));
         }
 
         // Load schedule / condition / chain
@@ -535,7 +540,7 @@ public class ConfigManager {
         config.setEnabled(area.isEnabled());
         config.setWhitelist(area.getWhitelist());
         config.setProtectionWhitelist(area.getProtectionWhitelist());
-        config.setRestrictions(area.getRestrictions());
+        config.setRestrictions(area.getRestrictions() != null ? new RestrictionSettings(area.getRestrictions()) : null);
 
         if (area.getBounds() instanceof MonitorArea.RectangleBounds rect) {
             config.setBoundsType("RECTANGLE");
@@ -558,15 +563,15 @@ public class ConfigManager {
             config.setVertices(vertArray);
         }
 
-        // Save protection settings
-        config.setProtection(area.getProtection());
+        // Save protection settings (deep copy to preserve UPDATE atomicity)
+        config.setProtection(area.getProtection() != null ? new ProtectionSettings(area.getProtection()) : null);
 
-        // Save triggers
+        // Save triggers (deep copy so draft mutations do not leak into live area)
         if (area.getEnterTrigger() != null) {
-            config.setEnterTrigger(area.getEnterTrigger());
+            config.setEnterTrigger(new TriggerConfig(area.getEnterTrigger()));
         }
         if (area.getLeaveTrigger() != null) {
-            config.setLeaveTrigger(area.getLeaveTrigger());
+            config.setLeaveTrigger(new TriggerConfig(area.getLeaveTrigger()));
         }
 
         // Save schedule / condition / chain
@@ -585,14 +590,8 @@ public class ConfigManager {
      * Validate area config integrity with enhanced checks.
      */
     public static boolean validateAreaConfig(String areaName, AreaConfig config) {
-        if (areaName == null || areaName.trim().isEmpty()) {
-            AreaMonitorMod.LOGGER.warn("Area name is null or empty");
-            return false;
-        }
-
-        // Validate area name length
-        if (areaName.length() > 64) {
-            AreaMonitorMod.LOGGER.warn("Area {} name is too long (max 64 characters)", areaName);
+        if (!AreaManager.isValidAreaName(areaName)) {
+            AreaMonitorMod.LOGGER.warn("Invalid area name '{}': must be 1-32 characters, only letters/digits/underscore/hyphen", areaName);
             return false;
         }
 
@@ -601,8 +600,8 @@ public class ConfigManager {
             return false;
         }
 
-        // Validate coordinate range based on bounds type
-        String boundsType = config.getBoundsType() != null ? config.getBoundsType() : "RECTANGLE";
+        // Validate coordinate range based on bounds type (case-insensitive)
+        String boundsType = config.getBoundsType() != null ? config.getBoundsType().toUpperCase(Locale.ROOT) : "RECTANGLE";
 
         switch (boundsType) {
             case "CIRCLE":
@@ -612,6 +611,10 @@ public class ConfigManager {
                 }
                 if (config.getRadius() <= 0) {
                     AreaMonitorMod.LOGGER.warn("Area {} has invalid radius: {}", areaName, config.getRadius());
+                    return false;
+                }
+                if (config.getRadius() > 2000) {
+                    AreaMonitorMod.LOGGER.warn("Area {} radius too large: {} (max 2000)", areaName, config.getRadius());
                     return false;
                 }
                 break;
@@ -652,8 +655,9 @@ public class ConfigManager {
                 long areaSize = areaWidth * areaLength;
                 long maxAreaSize = 10000000L;
                 if (areaSize > maxAreaSize) {
-                    AreaMonitorMod.LOGGER.warn("Area {} is too large ({}x{} = {} blocks, max {}). This may cause performance issues.",
+                    AreaMonitorMod.LOGGER.warn("Area {} is too large ({}x{} = {} blocks, max {})",
                             areaName, areaWidth, areaLength, areaSize, maxAreaSize);
+                    return false;
                 }
                 break;
         }
@@ -670,7 +674,7 @@ public class ConfigManager {
 
         // Validate dimension
         if (config.getDimension() != null && !config.getDimension().isEmpty()) {
-            if (!config.getDimension().contains(":")) {
+            if (net.minecraft.resources.ResourceLocation.tryParse(config.getDimension()) == null) {
                 AreaMonitorMod.LOGGER.warn("Area {} has invalid dimension format: {} (should be namespace:path)",
                         areaName, config.getDimension());
                 return false;

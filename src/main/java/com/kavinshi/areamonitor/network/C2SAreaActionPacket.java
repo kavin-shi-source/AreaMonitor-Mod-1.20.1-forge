@@ -55,13 +55,13 @@ public class C2SAreaActionPacket {
             AreaMonitorMod.LOGGER.warn("Received C2SAreaActionPacket with invalid action name");
         }
         this.action = parsed;
-        this.areaName = buf.readUtf(8192);
+        this.areaName = buf.readUtf(64);
         this.payload = buf.readBoolean() ? buf.readUtf(32760) : null;
     }
 
     public void encode(FriendlyByteBuf buf) {
         buf.writeUtf(action.name(), 32);
-        buf.writeUtf(areaName, 8192);
+        buf.writeUtf(areaName, 64);
         buf.writeBoolean(payload != null);
         if (payload != null) buf.writeUtf(payload, 32760);
     }
@@ -158,7 +158,12 @@ public class C2SAreaActionPacket {
         JsonObject obj = GSON.fromJson(json, JsonObject.class);
         if (obj == null) throw new IllegalArgumentException("Invalid JSON payload");
         if (obj.has("displayName") && !obj.get("displayName").isJsonNull()) {
-            draft.setDisplayName(obj.get("displayName").getAsString());
+            String dn = obj.get("displayName").getAsString();
+            if (dn.length() <= 64) {
+                draft.setDisplayName(dn);
+            } else {
+                AreaMonitorMod.LOGGER.warn("Rejected displayName from GUI update: too long ({} chars, max 64)", dn.length());
+            }
         }
         if (obj.has("dimension") && !obj.get("dimension").isJsonNull()) {
             String dim = obj.get("dimension").getAsString();
@@ -416,13 +421,11 @@ public class C2SAreaActionPacket {
         // Triggers
         if (draft.getEnterTrigger() != null) {
             area.setEnterTrigger(draft.getEnterTrigger());
-            if (draft.getEnterTrigger().getCondition() != null)
-                draft.getEnterTrigger().getCondition().sanitize();
+            draft.getEnterTrigger().sanitize();
         }
         if (draft.getLeaveTrigger() != null) {
             area.setLeaveTrigger(draft.getLeaveTrigger());
-            if (draft.getLeaveTrigger().getCondition() != null)
-                draft.getLeaveTrigger().getCondition().sanitize();
+            draft.getLeaveTrigger().sanitize();
         }
 
         // Schedule / Condition / Chain
@@ -436,7 +439,7 @@ public class C2SAreaActionPacket {
     }
 
     /**
-     * P2 #14: Validate area name on CREATE — must be 1-32 chars of [a-zA-Z0-9_-].
+     * : Validate area name on CREATE — must be 1-32 chars of [a-zA-Z0-9_-].
      * Rejects empty/oversized names and characters that break JSON / file paths.
      */
     private static boolean isValidAreaName(String name) {

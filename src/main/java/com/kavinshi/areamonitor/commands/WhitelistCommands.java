@@ -27,8 +27,14 @@ public class WhitelistCommands {
         boolean current = ConfigManager.CONFIG.isEnabled.get();
         boolean newState = !current;
 
-        ConfigManager.CONFIG.isEnabled.set(newState);
-        ConfigManager.CONFIG.isEnabled.save();
+        try {
+            ConfigManager.CONFIG.isEnabled.set(newState);
+            ConfigManager.CONFIG.isEnabled.save();
+        } catch (Exception e) {
+            AreaMonitorMod.LOGGER.error("Failed to save config toggle for isEnabled", e);
+            MessageUtils.sendFailure(context.getSource(), "config.save_failed", e.getMessage());
+            return 0;
+        }
 
         String messageKey = newState ?
                 "command.areamonitor.toggle.enabled" :
@@ -159,7 +165,7 @@ public class WhitelistCommands {
     }
 
     /**
-     * P2 #26: Validate Minecraft player name format (3-16 chars, alphanumeric + underscore).
+     * : Validate Minecraft player name format (3-16 chars, alphanumeric + underscore).
      */
     private static boolean isValidPlayerName(String name) {
         if (name == null || name.length() < 3 || name.length() > 16) return false;

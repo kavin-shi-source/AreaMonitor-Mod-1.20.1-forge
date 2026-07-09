@@ -5,6 +5,7 @@ import com.kavinshi.areamonitor.client.gui.AreaManagementScreen;
 import com.kavinshi.areamonitor.network.C2SAreaActionPacket;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.network.ModNetwork;
+import com.kavinshi.areamonitor.util.DimensionUtils;
 import com.kavinshi.areamonitor.client.gui.widget.ConfirmDialog;
 import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
 import net.minecraft.ChatFormatting;
@@ -101,7 +102,7 @@ public class AreaEditPanel extends Screen {
             if (sched.has("timeMin")) initSchedMin = String.valueOf(sched.get("timeMin").getAsInt());
             if (sched.has("timeMax")) initSchedMax = String.valueOf(sched.get("timeMax").getAsInt());
         } catch (Exception e) {
-            // P2 #39: log parse failures instead of silently swallowing
+            // : log parse failures instead of silently swallowing
             com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Failed to parse schedule JSON for area '{}': {}", entry.name(), e.getMessage());
             schedEnabled = false;
         }
@@ -309,8 +310,8 @@ public class AreaEditPanel extends Screen {
     private void zbtn(int x, int y, int w, String text, Runnable a) { addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> a.run())); }
     private EditBox zbox(int x, int y, int w, String v) {
         EditBox e = new EditBox(this.font, x, y, w, 16, Component.empty()); e.setMaxLength(48); e.setValue(v);
-        // Allow formatting character (§) in the edit box
-        e.setFilter(s -> true);
+        // Allow formatting character (§) but reject control characters
+        e.setFilter(s -> s.chars().allMatch(c -> c >= 0x20 || c == 0xA7));
         addRenderableWidget(e); allBoxes.add(e); return e;
     }
     private EditBox zcoord(int x, int y, String initial) {
@@ -339,15 +340,7 @@ public class AreaEditPanel extends Screen {
     private void addLabel(String key, int y) { labels.add(new LabelPos(lx, y, key)); }
     private List<String> toModeNames() { return java.util.Arrays.stream(MODE_KEYS).map(LocalizationManager::translate).toList(); }
     private List<String> dimDisplayNames() {
-        return DIMENSIONS.stream().map(AreaEditPanel::shortDim).toList();
-    }
-    private static String shortDim(String dim) {
-        return switch (dim) {
-            case "minecraft:overworld" -> "overworld";
-            case "minecraft:the_nether" -> "nether";
-            case "minecraft:the_end" -> "end";
-            default -> dim;
-        };
+        return DIMENSIONS.stream().map(DimensionUtils::shortDim).toList();
     }
     private void setAllProt(boolean v) { protBreak = protPlace = protInteract = protPvp = protExplosion = protDamage = protContainer = protFluid = protItemDrop = v; }
     private String fmtPx() { return String.valueOf((int)Math.floor(this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getX() : 0)); }
@@ -396,10 +389,10 @@ public class AreaEditPanel extends Screen {
         this.clearWidgets();
         init();
 
-        // Restore values by field reference (skip bx2/bz2 if bounds mode changed — semantic meaning differs)
+        // Restore values by field reference (skip bounds coords if mode changed — semantic meaning differs)
         if (savedDisplayName != null && displayNameInput != null) displayNameInput.setValue(savedDisplayName);
-        if (savedBx1 != null && bx1 != null) bx1.setValue(savedBx1);
-        if (savedBz1 != null && bz1 != null) bz1.setValue(savedBz1);
+        if (!modeChanged && savedBx1 != null && bx1 != null) bx1.setValue(savedBx1);
+        if (!modeChanged && savedBz1 != null && bz1 != null) bz1.setValue(savedBz1);
         if (!modeChanged && savedBx2 != null && bx2 != null) bx2.setValue(savedBx2);
         if (!modeChanged && savedBz2 != null && bz2 != null) bz2.setValue(savedBz2);
         if (savedSchedMin != null && schedMin != null) schedMin.setValue(savedSchedMin);
@@ -471,28 +464,24 @@ public class AreaEditPanel extends Screen {
             schedObj.addProperty("enabled", schedEnabled);
             String smin = schedMin != null ? schedMin.getValue() : initSchedMin;
             String smax = schedMax != null ? schedMax.getValue() : initSchedMax;
-            // P2 #35: validate schedule time range (0..24000 Minecraft ticks); min must be <= max
+            // validate schedule time range (0..TICKS_PER_DAY Minecraft ticks)
             int tmin = -1, tmax = -1;
             try { if (smin != null && !smin.isEmpty()) tmin = Integer.parseInt(smin); }
             catch (NumberFormatException e) {
-                showValidationError(LocalizationManager.translate("gui.error_bounds_number"));
+                showValidationError(LocalizationManager.translate("gui.error.schedule_number"));
                 return;
             }
             try { if (smax != null && !smax.isEmpty()) tmax = Integer.parseInt(smax); }
             catch (NumberFormatException e) {
-                showValidationError(LocalizationManager.translate("gui.error_bounds_number"));
+                showValidationError(LocalizationManager.translate("gui.error.schedule_number"));
                 return;
             }
-            if (tmin != -1 && (tmin < 0 || tmin > 24000)) {
+            if (tmin != -1 && (tmin < 0 || tmin > DimensionUtils.TICKS_PER_DAY)) {
                 showValidationError(LocalizationManager.translate("gui.error.schedule_range"));
                 return;
             }
-            if (tmax != -1 && (tmax < 0 || tmax > 24000)) {
+            if (tmax != -1 && (tmax < 0 || tmax > DimensionUtils.TICKS_PER_DAY)) {
                 showValidationError(LocalizationManager.translate("gui.error.schedule_range"));
-                return;
-            }
-            if (tmin != -1 && tmax != -1 && tmin > tmax) {
-                showValidationError(LocalizationManager.translate("gui.error.schedule_order"));
                 return;
             }
             if (tmin != -1) schedObj.addProperty("timeMin", tmin);
@@ -507,8 +496,7 @@ public class AreaEditPanel extends Screen {
             String crp = condRequirePlayer != null ? condRequirePlayer.getValue() : initCondRequirePlayer;
             try { if (cmp != null && !cmp.isEmpty()) condObj.addProperty("minPlayers", Integer.parseInt(cmp)); }
             catch (NumberFormatException e) {
-                // P2 #39: surface number parse errors to user instead of silently dropping
-                showValidationError(LocalizationManager.translate("gui.error_bounds_number"));
+                showValidationError(LocalizationManager.translate("gui.error.condition_number"));
                 return;
             }
             if (crp != null && !crp.trim().isEmpty()) condObj.addProperty("requirePlayer", crp.trim().toLowerCase());
@@ -538,7 +526,7 @@ public class AreaEditPanel extends Screen {
         // P1-4 fix: auto-close after brief saving window so server rejection (action bar) is visible
         if (saving && System.currentTimeMillis() - savingStartMs > 1500) {
             saving = false;
-            // P2 #30: only refresh parent list when an actual save happened
+            // : only refresh parent list when an actual save happened
             parentScreen.updateAfterEdit();
             onClose();
             return;
@@ -637,7 +625,7 @@ public class AreaEditPanel extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // P2 #29: confirmation dialog must consume keyboard input when visible
+        // : confirmation dialog must consume keyboard input when visible
         if (confirmDialog.isVisible()) {
             return confirmDialog.keyPressed(keyCode, scanCode, modifiers);
         }
@@ -652,7 +640,7 @@ public class AreaEditPanel extends Screen {
 
     @Override
     public boolean charTyped(char c, int modifiers) {
-        // P2 #29: consume text input while confirmation dialog is visible
+        // : consume text input while confirmation dialog is visible
         if (confirmDialog.isVisible()) return true;
         for (EditBox box : allBoxes) {
             if (box.isFocused()) {

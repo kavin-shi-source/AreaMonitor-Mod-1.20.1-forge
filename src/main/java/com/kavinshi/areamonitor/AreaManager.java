@@ -18,9 +18,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AreaManager {
     private static final AreaManager INSTANCE = new AreaManager();
     
-    private static final int TITLE_FADE_IN_TICKS = 5;
-    private static final int TITLE_STAY_TICKS = 30;
-    private static final int TITLE_FADE_OUT_TICKS = 5;
+    static final int TITLE_FADE_IN_TICKS = 5;
+    static final int TITLE_STAY_TICKS = 30;
+    static final int TITLE_FADE_OUT_TICKS = 5;
+    private static final int MAX_CHAIN_HOPS = 16;
     
     private static final Set<String> EMPTY_AREA_SET = Collections.emptySet();
     
@@ -66,6 +67,7 @@ public class AreaManager {
             MonitorArea removed = areas.remove(areaName);
             if (removed != null) {
                 spatialPartition.removeRegion(areaName);
+                ItemBlacklistManager.removeAreaBlacklist(areaName);
                 AreaMonitorMod.LOGGER.info("Removed monitoring area: {}", areaName);
             }
         }
@@ -83,7 +85,7 @@ public class AreaManager {
         if (name == null || name.isEmpty() || name.length() > 32) return false;
         for (int i = 0; i < name.length(); i++) {
             char c = name.charAt(i);
-            if (!(Character.isLetterOrDigit(c) || c == '_' || c == '-')) return false;
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) return false;
         }
         return true;
     }
@@ -101,7 +103,7 @@ public class AreaManager {
             AreaMonitorMod.LOGGER.debug("AreaManager: Checking player {}", player.getName().getString());
         }
 
-        // P2 #4 fix: previously whitelisted players returned early here, which kept their
+        // previously whitelisted players returned early here, which kept their
         // playerAreas cache frozen at whatever state it was in when they were whitelisted.
         // When the whitelist entry was later removed, the next checkPlayer fired spurious
         // enter/leave events for areas the player was no longer in (or had entered while
@@ -113,13 +115,11 @@ public class AreaManager {
                 player.getName().getString());
         }
 
-        PlayerPosition position = new PlayerPosition(
-            player.getX(),
-            player.getZ(),
-            player.level().dimension().location().toString()
-        );
+        double playerX = player.getX();
+        double playerZ = player.getZ();
+        String dimension = player.level().dimension().location().toString();
 
-        Set<String> currentAreas = getCurrentAreasOptimized(player, position);
+        Set<String> currentAreas = getCurrentAreasOptimized(player, playerX, playerZ, dimension);
         Set<String> previousAreas = playerAreas.getOrDefault(player.getUUID(), EMPTY_AREA_SET);
 
         // Whitelisted players: only refresh the cache so future un-whitelisting produces correct
@@ -130,7 +130,7 @@ public class AreaManager {
             List<String> currentSnapshot = new ArrayList<>(currentAreas);
             List<String> previousSnapshot = new ArrayList<>(previousAreas);
 
-            // P2 #1 fix: capture player position before enter handling so we can detect chain teleport
+            // capture player position before enter handling so we can detect chain teleport
             // and abort the stale-snapshot iteration (avoids firing enter/leave events for areas the
             // player is no longer in after being teleported away).
             final double posXBefore = player.getX();
@@ -166,7 +166,7 @@ public class AreaManager {
      * Optimized area detection using spatial partitioning.
      * Reuses Set objects to reduce GC pressure.
      */
-    private Set<String> getCurrentAreasOptimized(ServerPlayer player, PlayerPosition position) {
+    private Set<String> getCurrentAreasOptimized(ServerPlayer player, double x, double z, String dimension) {
         UUID playerId = player.getUUID();
 
         // Reuse existing Set or create new one
@@ -174,13 +174,11 @@ public class AreaManager {
         currentAreas.clear(); // Clear previous contents
 
         // Use spatial partitioning to get potentially relevant areas
-        Set<MonitorArea> potentialAreas = spatialPartition.getPotentialRegions(
-            position.getX(), position.getZ(), position.getDimension()
-        );
+        Set<MonitorArea> potentialAreas = spatialPartition.getPotentialRegions(x, z, dimension);
 
         // Only check relevant areas
         for (MonitorArea area : potentialAreas) {
-            if (area.isEnabled() && area.isPlayerInArea(position)) {
+            if (area.isEnabled() && area.isPlayerInArea(x, z, dimension)) {
                 currentAreas.add(area.getName());
             }
         }
@@ -201,7 +199,7 @@ public class AreaManager {
         AreaMonitorMod.LOGGER.debug("Player {} entered area {}", player.getName().getString(), areaName);
 
         // Show enter message
-        showAreaMessage(player, area.getDisplayName(), true, area.getEnterMode());
+        showAreaTitle(player, area.getDisplayName(), true, area.getEnterMode());
 
         // Delayed game mode switch
         AreaMonitor.addPendingGameModeChange(player, area.getEnterMode());
@@ -223,7 +221,7 @@ public class AreaManager {
         Set<String> visited = new HashSet<>();
         visited.add(area.getName());
         MonitorArea current = area;
-        int maxHops = 16;
+        int maxHops = MAX_CHAIN_HOPS;
         while (current.hasChainTarget() && maxHops-- > 0) {
             String nextName = current.getChainNext();
             if (!visited.add(nextName)) {
@@ -234,10 +232,6 @@ public class AreaManager {
             if (next == null || !next.isEnabled()) {
                 AreaMonitorMod.LOGGER.debug("Chain target '{}' not found or disabled for area '{}'", nextName, current.getName());
                 break;
-            }
-            if (next == area) {
-                AreaMonitorMod.LOGGER.warn("Chain teleport self-loop detected for area '{}'", area.getName());
-                return;
             }
             current = next;
         }
@@ -254,9 +248,10 @@ public class AreaManager {
         var targetDim = target.getDimension();
         MinecraftServer server = AreaMonitor.getServer();
         if (server == null) return;
+        var rl = net.minecraft.resources.ResourceLocation.tryParse(targetDim);
+        if (rl == null) return;
         var targetLevel = server.getLevel(net.minecraft.resources.ResourceKey.create(
-            net.minecraft.core.registries.Registries.DIMENSION,
-            new net.minecraft.resources.ResourceLocation(targetDim)));
+            net.minecraft.core.registries.Registries.DIMENSION, rl));
         if (targetLevel == null) return;
         double tpY = findSafeY(targetLevel, (int)tpX, (int)tpZ);
         player.teleportTo(targetLevel, tpX + 0.5, tpY, tpZ + 0.5,
@@ -269,12 +264,19 @@ public class AreaManager {
         Set<String> currentAreas = currentAreasCache.get(playerId);
         if (currentAreas != null) {
             currentAreas.clear();
-            if (target.isEnabled() && target.isPlayerInArea(new PlayerPosition(
+            if (target.isEnabled() && target.isPlayerInArea(
                     player.getX(), player.getZ(),
-                    player.level().dimension().location().toString()))) {
+                    player.level().dimension().location().toString())) {
                 currentAreas.add(target.getName());
             }
             playerAreas.put(playerId, new HashSet<>(currentAreas));
+        }
+
+        // Fire enter effects (title, game mode, triggers, stats) for the chain destination.
+        // Guard: only when target is a true final destination (no further chain target) to prevent
+        // infinite recursion through processChainTeleport on cyclic or over-long chains.
+        if (!target.hasChainTarget()) {
+            handleAreaEnter(player, target.getName());
         }
     }
 
@@ -294,10 +296,12 @@ public class AreaManager {
         int y = level.getMaxBuildHeight() - 1;
         while (y > level.getMinBuildHeight()) {
             var pos = new net.minecraft.core.BlockPos(x, y, z);
+            var headPos = new net.minecraft.core.BlockPos(x, y + 1, z);
             var belowPos = new net.minecraft.core.BlockPos(x, y - 1, z);
             var state = level.getBlockState(pos);
+            var head = level.getBlockState(headPos);
             var below = level.getBlockState(belowPos);
-            if (state.isAir() && below.canOcclude() && below.isFaceSturdy(level, belowPos, net.minecraft.core.Direction.UP)) {
+            if (state.isAir() && head.isAir() && below.canOcclude() && below.isFaceSturdy(level, belowPos, net.minecraft.core.Direction.UP)) {
                 return y;
             }
             y--;
@@ -310,10 +314,16 @@ public class AreaManager {
         MonitorArea area = areas.get(areaName);
         if (area == null || !area.isEnabled()) return;
 
+        // Check area whitelist — skip leave effects for whitelisted players (consistent with handleAreaEnter)
+        String playerNameLower = player.getName().getString().toLowerCase();
+        if (area.getWhitelist().contains(playerNameLower)) {
+            return;
+        }
+
         AreaMonitorMod.LOGGER.debug("Player {} left area {}", player.getName().getString(), areaName);
 
         // Show leave message
-        showAreaMessage(player, area.getDisplayName(), false, area.getLeaveMode());
+        showAreaTitle(player, area.getDisplayName(), false, area.getLeaveMode());
 
         // Delayed game mode switch (leaving area)
         AreaMonitor.addPendingGameModeChangeOnLeave(player, area.getLeaveMode());
@@ -321,11 +331,6 @@ public class AreaManager {
         // Execute leave triggers
         AreaTriggerManager.executeLeaveTriggers(player, area);
 
-    }
-
-    private void showAreaMessage(ServerPlayer player, String areaName, boolean entering, GameType gameMode) {
-        // Only send screen center Title notification, remove chat messages
-        showAreaTitle(player, areaName, entering, gameMode);
     }
 
     private void showAreaTitle(ServerPlayer player, String areaName, boolean entering, GameType gameMode) {
@@ -360,7 +365,7 @@ public class AreaManager {
 
     /**
      * AABB-based area lookup for events that span multiple grid cells (explosions, etc.).
-     * P2 #5 fix: returns the union of all regions registered in any grid cell covered by the box.
+     * returns the union of all regions registered in any grid cell covered by the box.
      */
     public Set<MonitorArea> getPotentialAreasInBox(double minX, double minZ, double maxX, double maxZ, String dimension) {
         return spatialPartition.getPotentialRegionsInBox(minX, minZ, maxX, maxZ, dimension);

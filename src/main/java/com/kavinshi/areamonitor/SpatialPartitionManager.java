@@ -1,26 +1,33 @@
 package com.kavinshi.areamonitor;
 
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.world.phys.AABB;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * Quad-tree spatial partition manager.
+ * Spatial partition manager using a fixed-size grid.
  * Used to optimize detection performance for large numbers of regions.
+ *
+ * <p>Uses fastutil's {@link Long2ObjectOpenHashMap} with primitive long keys to avoid
+ * Long boxing on every grid lookup (hot path: per-player per-tick). A
+ * {@link ReentrantReadWriteLock} provides thread safety — reads (grid lookups)
+ * proceed concurrently, writes (area add/remove) are exclusive.</p>
  */
 public class SpatialPartitionManager {
     private static final int GRID_SIZE = 256;
 
-    private final Map<Long, Set<String>> spatialGrid = new ConcurrentHashMap<>();
+    private final Long2ObjectOpenHashMap<Set<String>> spatialGrid = new Long2ObjectOpenHashMap<>();
     private final Map<String, MonitorArea> allRegions = new ConcurrentHashMap<>();
-    // Reverse index: region name -> grid keys it occupies
-    private final Map<String, Set<Long>> regionGrids = new ConcurrentHashMap<>();
+    private final Map<String, LongSet> regionGrids = new ConcurrentHashMap<>();
+    private final ReentrantReadWriteLock gridLock = new ReentrantReadWriteLock();
 
     /**
-     * Pack grid (x, z) into a single long key to avoid allocating a GridKey object per lookup.
-     * P1-13 fix: replaces the old GridKey class — Long.valueOf reuses cached instances for small ranges
-     * and avoids the per-call allocation that produced 600-1000 temporary objects per second.
+     * Pack grid (x, z) into a single primitive long key.
      */
     private static long toKey(int x, int z) {
         return ((long) x << 32) | (z & 0xFFFFFFFFL);
@@ -30,7 +37,7 @@ public class SpatialPartitionManager {
      * Add region to spatial partition.
      */
     public void addRegion(MonitorArea region) {
-        // P2 #12 fix: if a region with the same name already exists (e.g., re-add after bounds
+        // if a region with the same name already exists (e.g., re-add after bounds
         // change), the old grid entries would leak and produce phantom matches. Remove the stale
         // grid registration before inserting the new one.
         if (allRegions.containsKey(region.getName())) {
@@ -58,28 +65,30 @@ public class SpatialPartitionManager {
      * containing the player's position must be present in the current cell.
      */
     public Set<MonitorArea> getPotentialRegions(double x, double z, String dimension) {
-        // P1-13 fix: avoid HashSet allocation when no regions occupy this grid cell (the common path)
         int gridX = (int) Math.floor(x / GRID_SIZE);
         int gridZ = (int) Math.floor(z / GRID_SIZE);
 
-        Long key = Long.valueOf(toKey(gridX, gridZ));
-        Set<String> regionNames = spatialGrid.get(key);
+        gridLock.readLock().lock();
+        try {
+            Set<String> regionNames = spatialGrid.get(toKey(gridX, gridZ));
+            if (regionNames == null) return Collections.emptySet();
 
-        if (regionNames == null) return Collections.emptySet();
-
-        Set<MonitorArea> result = new HashSet<>(regionNames.size());
-        for (String regionName : regionNames) {
-            MonitorArea region = allRegions.get(regionName);
-            if (region != null && region.getDimension().equals(dimension)) {
-                result.add(region);
+            Set<MonitorArea> result = new HashSet<>(regionNames.size());
+            for (String regionName : regionNames) {
+                MonitorArea region = allRegions.get(regionName);
+                if (region != null && region.getDimension().equals(dimension)) {
+                    result.add(region);
+                }
             }
+            return result;
+        } finally {
+            gridLock.readLock().unlock();
         }
-        return result;
     }
 
     /**
      * Get potential regions that may intersect with an AABB.
-     * P2 #5 fix: explosions and area-effect events span multiple grid cells; querying only the
+     * explosions and area-effect events span multiple grid cells; querying only the
      * center cell misses protected areas whose grid cell does not include the explosion origin
      * but contains affected blocks/entities.
      */
@@ -89,21 +98,25 @@ public class SpatialPartitionManager {
         int minGridZ = (int) Math.floor(minZ / GRID_SIZE);
         int maxGridZ = (int) Math.floor(maxZ / GRID_SIZE);
 
-        Set<MonitorArea> result = new HashSet<>();
-        for (int gx = minGridX; gx <= maxGridX; gx++) {
-            for (int gz = minGridZ; gz <= maxGridZ; gz++) {
-                Long key = Long.valueOf(toKey(gx, gz));
-                Set<String> regionNames = spatialGrid.get(key);
-                if (regionNames == null) continue;
-                for (String regionName : regionNames) {
-                    MonitorArea region = allRegions.get(regionName);
-                    if (region != null && region.getDimension().equals(dimension)) {
-                        result.add(region);
+        gridLock.readLock().lock();
+        try {
+            Set<MonitorArea> result = new HashSet<>();
+            for (int gx = minGridX; gx <= maxGridX; gx++) {
+                for (int gz = minGridZ; gz <= maxGridZ; gz++) {
+                    Set<String> regionNames = spatialGrid.get(toKey(gx, gz));
+                    if (regionNames == null) continue;
+                    for (String regionName : regionNames) {
+                        MonitorArea region = allRegions.get(regionName);
+                        if (region != null && region.getDimension().equals(dimension)) {
+                            result.add(region);
+                        }
                     }
                 }
             }
+            return result;
+        } finally {
+            gridLock.readLock().unlock();
         }
-        return result;
     }
 
     /**
@@ -124,9 +137,14 @@ public class SpatialPartitionManager {
      * Clear all data.
      */
     public void clear() {
-        spatialGrid.clear();
+        gridLock.writeLock().lock();
+        try {
+            spatialGrid.clear();
+            regionGrids.clear();
+        } finally {
+            gridLock.writeLock().unlock();
+        }
         allRegions.clear();
-        regionGrids.clear();
     }
 
     private void addRegionToGrid(MonitorArea region) {
@@ -139,20 +157,26 @@ public class SpatialPartitionManager {
         int minGridZ = (int) Math.floor(bounds.minZ / GRID_SIZE);
         int maxGridZ = (int) Math.floor((Math.ceil(bounds.maxZ) - 1.0) / GRID_SIZE);
 
-        Set<Long> occupiedGrids = ConcurrentHashMap.newKeySet();
+        LongSet occupiedGrids = new LongOpenHashSet();
 
-        for (int x = minGridX; x <= maxGridX; x++) {
-            for (int z = minGridZ; z <= maxGridZ; z++) {
-                Long gridKey = Long.valueOf(toKey(x, z));
-
-                spatialGrid.computeIfAbsent(gridKey, k -> ConcurrentHashMap.newKeySet())
-                          .add(region.getName());
-
-                occupiedGrids.add(gridKey);
+        gridLock.writeLock().lock();
+        try {
+            for (int x = minGridX; x <= maxGridX; x++) {
+                for (int z = minGridZ; z <= maxGridZ; z++) {
+                    long gridKey = toKey(x, z);
+                    Set<String> regions = spatialGrid.get(gridKey);
+                    if (regions == null) {
+                        regions = ConcurrentHashMap.newKeySet();
+                        spatialGrid.put(gridKey, regions);
+                    }
+                    regions.add(region.getName());
+                    occupiedGrids.add(gridKey);
+                }
             }
+        } finally {
+            gridLock.writeLock().unlock();
         }
 
-        // Store reverse index
         regionGrids.put(region.getName(), occupiedGrids);
     }
 
@@ -161,17 +185,22 @@ public class SpatialPartitionManager {
      * O(k) where k is the number of grids the region occupies, instead of O(n) where n is total grids.
      */
     private void removeRegionFromGrid(String regionName) {
-        Set<Long> occupiedGrids = regionGrids.remove(regionName);
+        LongSet occupiedGrids = regionGrids.remove(regionName);
 
         if (occupiedGrids != null) {
-            for (Long gridKey : occupiedGrids) {
-                // Atomically remove region name and drop the cell if empty.
-                // Using computeIfPresent prevents the race where another thread adds a new
-                // region to this cell between our isEmpty() check and spatialGrid.remove().
-                spatialGrid.computeIfPresent(gridKey, (k, regions) -> {
-                    regions.remove(regionName);
-                    return regions.isEmpty() ? null : regions;
-                });
+            gridLock.writeLock().lock();
+            try {
+                for (long gridKey : occupiedGrids) {
+                    Set<String> regions = spatialGrid.get(gridKey);
+                    if (regions != null) {
+                        regions.remove(regionName);
+                        if (regions.isEmpty()) {
+                            spatialGrid.remove(gridKey);
+                        }
+                    }
+                }
+            } finally {
+                gridLock.writeLock().unlock();
             }
         }
     }

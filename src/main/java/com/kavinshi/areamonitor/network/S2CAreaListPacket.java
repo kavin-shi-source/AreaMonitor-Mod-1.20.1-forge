@@ -51,11 +51,9 @@ public class S2CAreaListPacket {
         io.netty.buffer.ByteBuf temp = io.netty.buffer.Unpooled.buffer();
         try {
             FriendlyByteBuf tempBuf = new FriendlyByteBuf(temp);
-            int startWriterIndex = buf.writerIndex();
             int written = 0;
             for (AreaEntry entry : areas) {
-                int bytesSoFar = buf.writerIndex() - startWriterIndex + tempBuf.writerIndex();
-                if (bytesSoFar > MAX_TOTAL_BYTES) {
+                if (tempBuf.writerIndex() > MAX_TOTAL_BYTES) {
                     AreaMonitorMod.LOGGER.warn("Area list encode exceeded {} bytes after {} of {} entries, truncating",
                         MAX_TOTAL_BYTES, written, areas.size());
                     break;
@@ -124,6 +122,9 @@ public class S2CAreaListPacket {
         String boundsCoordsJson
     ) {
         private static final Gson TGSON = new Gson();
+        private static final int MAX_NAME_LEN = 64;
+        private static final int MAX_DIM_LEN = 64;
+        private static final int MAX_MODE_LEN = 16;
 
         public AreaEntry(MonitorArea area) {
             this(area.getName(),
@@ -154,14 +155,14 @@ public class S2CAreaListPacket {
         }
 
         public void encode(FriendlyByteBuf buf) {
-            buf.writeUtf(name);
+            buf.writeUtf(name, MAX_NAME_LEN);
             buf.writeBoolean(enabled);
-            buf.writeUtf(dimension);
-            buf.writeUtf(enterMode);
-            buf.writeUtf(leaveMode);
-            buf.writeUtf(boundsType);
+            buf.writeUtf(dimension, MAX_DIM_LEN);
+            buf.writeUtf(enterMode, MAX_MODE_LEN);
+            buf.writeUtf(leaveMode, MAX_MODE_LEN);
+            buf.writeUtf(boundsType, MAX_MODE_LEN);
             buf.writeBoolean(displayName != null);
-            if (displayName != null) buf.writeUtf(displayName);
+            if (displayName != null) buf.writeUtf(displayName, MAX_NAME_LEN);
             int protBits = (protBlockBreak ? 1 : 0) | (protBlockPlace ? 2 : 0)
                 | (protBlockInteract ? 4 : 0) | (protPvp ? 8 : 0)
                 | (protExplosion ? 16 : 0) | (protEntityDamage ? 32 : 0)
@@ -180,13 +181,13 @@ public class S2CAreaListPacket {
         }
 
         public static AreaEntry decode(FriendlyByteBuf buf) {
-            String name = buf.readUtf();
+            String name = buf.readUtf(MAX_NAME_LEN);
             boolean enabled = buf.readBoolean();
-            String dim = buf.readUtf();
-            String enter = buf.readUtf();
-            String leave = buf.readUtf();
-            String bounds = buf.readUtf();
-            String disp = buf.readBoolean() ? buf.readUtf() : null;
+            String dim = buf.readUtf(MAX_DIM_LEN);
+            String enter = buf.readUtf(MAX_MODE_LEN);
+            String leave = buf.readUtf(MAX_MODE_LEN);
+            String bounds = buf.readUtf(MAX_MODE_LEN);
+            String disp = buf.readBoolean() ? buf.readUtf(MAX_NAME_LEN) : null;
             int bits = buf.readShort();
             return new AreaEntry(name, enabled, dim, enter, leave, bounds, disp,
                 (bits & 1) != 0, (bits & 2) != 0, (bits & 4) != 0,
@@ -198,8 +199,9 @@ public class S2CAreaListPacket {
         }
 
         private static void writeNullableJson(FriendlyByteBuf buf, String json) {
-            // If JSON exceeds packet limit, skip the field entirely rather than truncating
-            // mid-token (which would produce invalid JSON that the client fails to parse).
+            if (json != null && !json.isEmpty() && json.length() > 32760) {
+                AreaMonitorMod.LOGGER.warn("S2CAreaListPacket: JSON field exceeds 32760 chars ({}), skipping", json.length());
+            }
             boolean has = json != null && !json.isEmpty() && json.length() <= 32760;
             buf.writeBoolean(has);
             if (has) {
@@ -208,7 +210,7 @@ public class S2CAreaListPacket {
         }
 
         private static String readNullableJson(FriendlyByteBuf buf) {
-            return buf.readBoolean() ? buf.readUtf() : null;
+            return buf.readBoolean() ? buf.readUtf(32760) : null;
         }
 
         private static String scheduleToJson(MonitorArea area) {

@@ -102,7 +102,7 @@ public final class MessageUtils {
             player = source.getPlayerOrException();
         } catch (Exception e) {
             // Source is not a player (e.g., console/command block) — fall back to server-side translation
-            AreaMonitorMod.LOGGER.debug("smartComponent: source is not a player, using server-side translation");
+            AreaMonitorMod.LOGGER.trace("smartComponent: source is not a player, using server-side translation");
         }
         return smartComponent(player, translationKey, args);
     }

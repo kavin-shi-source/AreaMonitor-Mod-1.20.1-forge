@@ -12,7 +12,7 @@ import net.minecraftforge.fml.common.Mod;
 /**
  * Selection tool event handler.
  */
-@Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID)
+@Mod.EventBusSubscriber(modid = AreaMonitorMod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class SelectionEventHandler {
 
     /**
@@ -43,6 +43,7 @@ public class SelectionEventHandler {
             SelectionPoints sel = SelectionTool.getPlayerSelection(player.getUUID());
             if (sel != null && sel.isMultiPointMode() && sel.hasEnoughVerticesForPolygon()) {
                 SelectionTool.finishPolygon(player);
+                event.setCanceled(true);
                 return;
             }
 
@@ -50,6 +51,7 @@ public class SelectionEventHandler {
                 MessageUtils.smartComponent(player, "selection.tool.instructions"),
                 false
             );
+            event.setCanceled(true);
         }
     }
 }

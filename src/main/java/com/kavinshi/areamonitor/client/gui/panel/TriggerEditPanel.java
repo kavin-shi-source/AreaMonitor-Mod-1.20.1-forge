@@ -47,7 +47,7 @@ public class TriggerEditPanel extends Screen {
     private final List<LabelPos> labels = new ArrayList<>();
     private final List<TooltipZone> tooltips = new ArrayList<>();
 
-    // ===== 状态持久化 =====
+    // ===== State persistence =====
     private boolean initializedData = false;
     private boolean enterExpanded = true;
     private boolean leaveExpanded = false;
@@ -112,8 +112,8 @@ public class TriggerEditPanel extends Screen {
             initializedData = true;
         }
 
-        // === 1. Enter Trigger 折叠栏 ===
-        int top = y; y += 14; // 区段标题行（避免与下方按钮重叠）
+        // === 1. Enter Trigger collapsible section ===
+        int top = y; y += 14; // section title row (avoid overlap with button below)
         String enterTitle = "\u00A7a" + (enterExpanded ? "\u25BC " : "\u25B6 ") + "\u00A7f" + LocalizationManager.translate("gui.trigger_enter");
         zbtn(lx, y, panelW, enterTitle, () -> { captureCurrentState(); enterExpanded = !enterExpanded; saveAndRebuild(); }); y += 20;
         if (enterExpanded) {
@@ -126,7 +126,7 @@ public class TriggerEditPanel extends Screen {
         y += 6;
         sections.add(new Section("  " + LocalizationManager.translate("gui.trigger_enter") + "  ", top, y - top));
 
-        // === 2. Leave Trigger 折叠栏 ===
+        // === 2. Leave Trigger collapsible section ===
         top = y; y += 14;
         String leaveTitle = "\u00A7c" + (leaveExpanded ? "\u25BC " : "\u25B6 ") + "\u00A7f" + LocalizationManager.translate("gui.trigger_leave");
         zbtn(lx, y, panelW, leaveTitle, () -> { captureCurrentState(); leaveExpanded = !leaveExpanded; saveAndRebuild(); }); y += 20;
@@ -182,20 +182,21 @@ public class TriggerEditPanel extends Screen {
         });
         y += 22;
 
-        // Sound 行
+        // Sound row
         addLab(lx + 4, y, "gui.trigger_sound"); EditBox se = zbox(vx, y, 160, sndV); snd.accept(se);
         addLab(vx + 166, y, "gui.trigger_volume"); EditBox sv = znum(vx + 188, y, 30, volV); vol.accept(sv);
         addLab(vx + 224, y, "gui.trigger_pitch");  EditBox sp = znum(vx + 240, y, 30, pitchV); pitch.accept(sp);
         tooltips.add(new TooltipZone(vx, y, 160, 16, "gui.tooltip_trigger_sound"));
         y += 20;
 
-        // Title 行
+        // Title row
         addLab(lx + 4, y, "gui.trigger_title"); EditBox tm = zbox(vx, y, 110, tMV); tM.accept(tm);
         addLab(vx + 116, y, "gui.trigger_subtitle"); EditBox ts = zbox(vx + 140, y, 130, tSV); tS.accept(ts);
         y += 20;
 
-        // TP 行
-        addLab(lx + 4, y, "gui.trigger_tp_dim"); EditBox td = zbox(vx, y, 90, tDV); tD.accept(td);
+        // TP row
+        addLab(lx + 4, y, "gui.trigger_tp_dim"); EditBox td = zbox(vx, y, 90, tDV);
+        td.setFilter(s -> s.isEmpty() || s.matches("[a-zA-Z0-9_\\-:]*")); tD.accept(td);
         addLab(vx + 96, y, "gui.trigger_tp_x");   EditBox tx = znum(vx + 106, y, 32, tXV); tX.accept(tx);
         addLab(vx + 142, y, "gui.trigger_tp_y");  EditBox ty = znum(vx + 152, y, 32, tYV); tY.accept(ty);
         addLab(vx + 188, y, "gui.trigger_tp_z");  EditBox tz = znum(vx + 198, y, 32, tZV); tZ.accept(tz);
@@ -252,7 +253,7 @@ public class TriggerEditPanel extends Screen {
 
     private String[] safeTpParts(String tp) {
         if (tp == null || tp.isEmpty()) return new String[]{"", "", "", ""};
-        // P2 #20 fix: handle both space-separated (current) and comma-separated (legacy) formats.
+        // handle both space-separated (current) and comma-separated (legacy) formats.
         String[] p = tp.contains(" ") ? tp.split("\\s+") : tp.split(",");
         if (p.length >= 4) return new String[]{p[0].trim(), p[1].trim(), p[2].trim(), p[3].trim()};
         if (p.length == 3) return new String[]{"", p[0].trim(), p[1].trim(), p[2].trim()};
@@ -262,7 +263,7 @@ public class TriggerEditPanel extends Screen {
     private JsonObject safeParse(String j) {
         try { return j != null ? GSON.fromJson(j, JsonObject.class) : new JsonObject(); }
         catch (Exception e) {
-            // P2 #39: log parse failures instead of silently swallowing
+            // : log parse failures instead of silently swallowing
             com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Failed to parse trigger JSON: {}", e.getMessage());
             return new JsonObject();
         }
@@ -281,29 +282,32 @@ public class TriggerEditPanel extends Screen {
         return all;
     }
 
-    private String trigJson(List<EditBox> cmds, EditBox snd, EditBox vol, EditBox pitch, EditBox tM, EditBox tS, EditBox tD, EditBox tX, EditBox tY, EditBox tZ) {
+    private String trigJsonFromValues(List<String> cmdVals, String snd, String vol, String pitch,
+            String tM, String tS, String tD, String tX, String tY, String tZ) {
         JsonObject j = new JsonObject(); var arr = new JsonArray();
-        for (EditBox b : cmds) { String v = b.getValue().trim(); if (!v.isEmpty()) arr.add(v); }
-        // P1-2 fix: always write keys so server can clear fields (empty array / JsonNull clears server-side value)
+        if (cmdVals != null) {
+            for (String v : cmdVals) { String t = v.trim(); if (!t.isEmpty()) arr.add(t); }
+        }
+        // always write keys so server can clear fields (empty array / JsonNull clears server-side value)
         j.add("commands", arr);
-        if (snd != null && !snd.getValue().trim().isEmpty()) j.addProperty("soundEvent", snd.getValue().trim());
+        if (snd != null && !snd.trim().isEmpty()) j.addProperty("soundEvent", snd.trim());
         else j.add("soundEvent", JsonNull.INSTANCE);
-        if (vol != null) try { j.addProperty("soundVolume", Float.parseFloat(vol.getValue())); }
+        if (vol != null) try { j.addProperty("soundVolume", Float.parseFloat(vol)); }
         catch (NumberFormatException e) {
-            com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Invalid soundVolume '{}' for trigger, ignoring", vol.getValue());
+            com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Invalid soundVolume '{}' for trigger, ignoring", vol);
         }
-        if (pitch != null) try { j.addProperty("soundPitch", Float.parseFloat(pitch.getValue())); }
+        if (pitch != null) try { j.addProperty("soundPitch", Float.parseFloat(pitch)); }
         catch (NumberFormatException e) {
-            com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Invalid soundPitch '{}' for trigger, ignoring", pitch.getValue());
+            com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Invalid soundPitch '{}' for trigger, ignoring", pitch);
         }
-        if (tM != null && !tM.getValue().trim().isEmpty()) j.addProperty("titleMain", tM.getValue().trim());
+        if (tM != null && !tM.trim().isEmpty()) j.addProperty("titleMain", tM.trim());
         else j.add("titleMain", JsonNull.INSTANCE);
-        if (tS != null && !tS.getValue().trim().isEmpty()) j.addProperty("titleSub", tS.getValue().trim());
+        if (tS != null && !tS.trim().isEmpty()) j.addProperty("titleSub", tS.trim());
         else j.add("titleSub", JsonNull.INSTANCE);
-        if (tD != null && !tD.getValue().trim().isEmpty()) {
-            String dim = tD.getValue().trim();
-            if (tX != null && tY != null && tZ != null && !tX.getValue().trim().isEmpty() && !tY.getValue().trim().isEmpty() && !tZ.getValue().trim().isEmpty())
-                dim += " " + tX.getValue().trim() + " " + tY.getValue().trim() + " " + tZ.getValue().trim();
+        if (tD != null && !tD.trim().isEmpty()) {
+            String dim = tD.trim();
+            if (tX != null && tY != null && tZ != null && !tX.trim().isEmpty() && !tY.trim().isEmpty() && !tZ.trim().isEmpty())
+                dim += " " + tX.trim() + " " + tY.trim() + " " + tZ.trim();
             j.addProperty("teleportTarget", dim);
         } else {
             j.add("teleportTarget", JsonNull.INSTANCE);
@@ -313,15 +317,15 @@ public class TriggerEditPanel extends Screen {
 
     private void sendUpdate() {
         var json = new JsonObject();
-        try { json.add("enterTrigger", GSON.fromJson(trigJson(enterCmds, enterSound, enterSoundVol, enterSoundPitch, enterTitleM, enterTitleS, enterTpDim, enterTpX, enterTpY, enterTpZ), JsonObject.class)); } catch (Exception e) { json.add("enterTrigger", new JsonObject()); }
-        try { json.add("leaveTrigger", GSON.fromJson(trigJson(leaveCmds, leaveSound, leaveSoundVol, leaveSoundPitch, leaveTitleM, leaveTitleS, leaveTpDim, leaveTpX, leaveTpY, leaveTpZ), JsonObject.class)); } catch (Exception e) { json.add("leaveTrigger", new JsonObject()); }
+        try { json.add("enterTrigger", GSON.fromJson(trigJsonFromValues(enterCmdValues, enterSoundVal, enterVolVal, enterPitchVal, enterTitleMVal, enterTitleSVal, enterTpDimVal, enterTpXVal, enterTpYVal, enterTpZVal), JsonObject.class)); } catch (Exception e) { json.add("enterTrigger", new JsonObject()); }
+        try { json.add("leaveTrigger", GSON.fromJson(trigJsonFromValues(leaveCmdValues, leaveSoundVal, leaveVolVal, leavePitchVal, leaveTitleMVal, leaveTitleSVal, leaveTpDimVal, leaveTpXVal, leaveTpYVal, leaveTpZVal), JsonObject.class)); } catch (Exception e) { json.add("leaveTrigger", new JsonObject()); }
         ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.UPDATE, entry.name(), json.toString()));
     }
 
     @Override public void onClose() { if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // P2 #29: confirmation dialog must consume keyboard input when visible
+        // : confirmation dialog must consume keyboard input when visible
         if (confirmDialog.isVisible()) {
             return confirmDialog.keyPressed(keyCode, scanCode, modifiers);
         }
@@ -332,7 +336,7 @@ public class TriggerEditPanel extends Screen {
     }
 
     @Override public boolean charTyped(char c, int modifiers) {
-        // P2 #29: consume text input while confirmation dialog is visible
+        // : consume text input while confirmation dialog is visible
         if (confirmDialog.isVisible()) return true;
         for (EditBox box : getAllBoxes()) {
             if (box.isFocused()) return box.charTyped(c, modifiers);

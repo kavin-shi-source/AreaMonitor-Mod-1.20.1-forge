@@ -8,7 +8,6 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -33,7 +32,7 @@ public class AreaMonitor {
     private static final AtomicLong monotonicTickCounter = new AtomicLong(0);
     private static final int VISUALIZATION_INTERVAL_TICKS = 5;
     private static final int CACHE_CLEANUP_INTERVAL_TICKS = 6000; // 5 min
-    // P2 #10 fix: pending actions are now timed in ticks rather than wall-clock milliseconds,
+    // pending actions are now timed in ticks rather than wall-clock milliseconds,
     // so they survive server pauses (single-player pause, integrated-server tick halt) without
     // being expired or executed prematurely. 10s @ 20 TPS = 200 ticks.
     private static final long PENDING_ACTION_TIMEOUT_TICKS = 200L;
@@ -55,6 +54,7 @@ public class AreaMonitor {
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
         minecraftServer = event.getServer();
         ConfigManager.resetExecutor();
+        com.kavinshi.areamonitor.util.AuditLogger.resetExecutor();
         ConfigManager.ensureConfigFiles();
         LocalizationManager.applyConfigLanguage(ConfigManager.CONFIG.language.get());
         ConfigManager.loadAreasConfig();
@@ -63,11 +63,10 @@ public class AreaMonitor {
             AreaManager.getInstance().getAllAreas().size());
     }
 
-    @SubscribeEvent
-    public static void onServerStopping(ServerStoppingEvent event) {
-        // P2 #11 fix: defensive — wrap each step in try-catch so a failure does not skip
+    public static void cleanupRuntimeState() {
+        // defensive — wrap each step in try-catch so a failure does not skip
         // subsequent cleanup or propagate to other Forge handlers.
-        AreaMonitorMod.LOGGER.info("Server stopping, cleaning up runtime state...");
+        AreaMonitorMod.LOGGER.info("Cleaning up AreaMonitor runtime state...");
 
         try {
             pendingActions.clear();
@@ -104,7 +103,7 @@ public class AreaMonitor {
 
         processPendingActions();
 
-        PerformanceMonitor.onServerTick(minecraftServer);
+        PerformanceMonitor.onServerTick();
 
         if (visualizationTickCounter.incrementAndGet() >= VISUALIZATION_INTERVAL_TICKS) {
             visualizationTickCounter.set(0);
@@ -177,7 +176,7 @@ public class AreaMonitor {
      * Enqueue a game mode change with configurable delay.
      */
     private static void enqueueGameModeChange(UUID playerId, GameType gameMode, boolean requireAreaCheck) {
-        // P2 #10 fix: schedule based on tick count, not wall-clock time, so a server pause
+        // schedule based on tick count, not wall-clock time, so a server pause
         // (single-player menu, integrated-server tick halt) doesn't fire the action prematurely
         // or expire it during the pause window.
         long delayTicks = Math.max(1L, ConfigManager.CONFIG.gameModeSwitchDelayMs.get() / 50L);
@@ -227,6 +226,15 @@ public class AreaMonitor {
     }
 
     @SubscribeEvent
+    public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            if (ConfigManager.CONFIG.isEnabled.get() && minecraftServer != null) {
+                AreaManager.getInstance().checkPlayer(player);
+            }
+        }
+    }
+
+    @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
             UUID playerId = player.getUUID();
@@ -253,8 +261,8 @@ public class AreaMonitor {
             if (!area.isScheduleEnabled()) continue;
             boolean shouldEnable = area.evaluateSchedule(gameTime) && area.evaluateCondition(minecraftServer);
             if (shouldEnable && !area.isEnabled()) {
-                // Schedule says enable, but area is disabled — and wasn't disabled by schedule
-                if (!area.isScheduleWasDisabledBySchedule()) {
+                // Schedule says enable, but area is disabled — only re-enable if schedule disabled it
+                if (area.isScheduleWasDisabledBySchedule()) {
                     area.setEnabled(true);
                     AreaMonitorMod.LOGGER.debug("Schedule: enabled area '{}'", area.getName());
                 }

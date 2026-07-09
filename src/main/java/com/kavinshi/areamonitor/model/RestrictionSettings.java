@@ -12,6 +12,20 @@ public class RestrictionSettings {
     private volatile Set<String> blockedItems = ConcurrentHashMap.newKeySet();
     private volatile Set<String> blockedCommands = ConcurrentHashMap.newKeySet();
 
+    public RestrictionSettings() {}
+
+    public RestrictionSettings(RestrictionSettings other) {
+        if (other == null) return;
+        this.enableItemBlacklist = other.enableItemBlacklist;
+        this.blockTeleportCommands = other.blockTeleportCommands;
+        Set<String> newItems = ConcurrentHashMap.newKeySet();
+        newItems.addAll(other.blockedItems);
+        this.blockedItems = newItems;
+        Set<String> newCommands = ConcurrentHashMap.newKeySet();
+        newCommands.addAll(other.blockedCommands);
+        this.blockedCommands = newCommands;
+    }
+
     public boolean isEnableItemBlacklist() {
         return enableItemBlacklist;
     }
@@ -29,7 +43,7 @@ public class RestrictionSettings {
     }
 
     /**
-     * P3 #4: return an unmodifiable view of the live set so callers cannot
+     * : return an unmodifiable view of the live set so callers cannot
      * mutate internal state without going through add/remove methods.
      * Iteration is still thread-safe due to ConcurrentHashMap backing.
      */
@@ -67,5 +81,20 @@ public class RestrictionSettings {
 
     public boolean removeBlockedCommand(String command) {
         return blockedCommands.remove(command);
+    }
+
+    /**
+     * Rebuild blocked sets as ConcurrentHashMap-backed sets.
+     * Gson deserialization bypasses setters and creates LinkedHashSet,
+     * which breaks the thread-safety guarantee of volatile Set fields.
+     */
+    public void sanitize() {
+        Set<String> newItems = ConcurrentHashMap.newKeySet();
+        newItems.addAll(blockedItems);
+        this.blockedItems = newItems;
+
+        Set<String> newCommands = ConcurrentHashMap.newKeySet();
+        newCommands.addAll(blockedCommands);
+        this.blockedCommands = newCommands;
     }
 }

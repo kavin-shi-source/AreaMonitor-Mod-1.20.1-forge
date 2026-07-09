@@ -34,7 +34,7 @@ public class AreaProtectionManager {
     public static void onItemToss(ItemTossEvent event) {
         if (!(event.getPlayer() instanceof ServerPlayer sp)) return;
         if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
-        if (!isProtected(sp, "itemDrop")) return;
+        if (!isProtected(sp, ProtectionSettings.ProtectionType.ITEM_DROP)) return;
         event.setCanceled(true);
         sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.item_drop_denied"), true);
         AreaVisualizer.spawnDeniedBurst(sp, sp.getX(), sp.getY(), sp.getZ());
@@ -45,10 +45,10 @@ public class AreaProtectionManager {
         Player player = event.getPlayer();
         if (!(player instanceof ServerPlayer sp)) return;
         if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
-        if (!isProtected(sp, "blockBreak")) return;
+        BlockPos pos = event.getPos();
+        if (!isProtectedAt(sp, pos.getX(), pos.getZ(), ProtectionSettings.ProtectionType.BLOCK_BREAK)) return;
         event.setCanceled(true);
         sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.block_break_denied"), true);
-        BlockPos pos = event.getPos();
         AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
     }
 
@@ -56,24 +56,22 @@ public class AreaProtectionManager {
     public static void onBlockPlace(BlockEvent.EntityPlaceEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer sp)) return;
         if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
-        // Check block-place protection or fluid-place protection
-        if (isProtected(sp, "blockPlace")) {
+        BlockPos pos = event.getPos();
+        if (isProtectedAt(sp, pos.getX(), pos.getZ(), ProtectionSettings.ProtectionType.BLOCK_PLACE)) {
             event.setCanceled(true);
             sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.block_place_denied"), true);
-            BlockPos pos = event.getPos();
             AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
             return;
         }
-        if (isFluidPlaceBlocked(sp, event)) {
+        if (isFluidPlaceBlocked(sp, event, pos)) {
             event.setCanceled(true);
             sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.fluid_place_denied"), true);
-            BlockPos pos = event.getPos();
             AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
         }
     }
 
-    private static boolean isFluidPlaceBlocked(ServerPlayer sp, BlockEvent.EntityPlaceEvent event) {
-        if (!isProtected(sp, "fluidPlace")) return false;
+    private static boolean isFluidPlaceBlocked(ServerPlayer sp, BlockEvent.EntityPlaceEvent event, BlockPos pos) {
+        if (!isProtectedAt(sp, pos.getX(), pos.getZ(), ProtectionSettings.ProtectionType.FLUID_PLACE)) return false;
         var state = event.getPlacedBlock();
         if (state == null) return false;
         return state.is(Blocks.WATER) || state.is(Blocks.LAVA)
@@ -87,10 +85,11 @@ public class AreaProtectionManager {
         if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
         BlockPos pos = event.getPos();
         // Container interaction protection
-        if (isProtected(sp, "containerInteract")) {
+        if (isProtectedAt(sp, pos.getX(), pos.getZ(), ProtectionSettings.ProtectionType.CONTAINER_INTERACT)) {
             var level = event.getLevel();
             var be = level.getBlockEntity(pos);
-            if (be instanceof BaseContainerBlockEntity || level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.ANVIL) || level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.CHIPPED_ANVIL) || level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.DAMAGED_ANVIL)) {
+            var state = level.getBlockState(pos);
+            if (be instanceof BaseContainerBlockEntity || state.is(net.minecraft.tags.BlockTags.ANVIL)) {
                 event.setCanceled(true);
                 sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.container_interact_denied"), true);
                 AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
@@ -98,7 +97,7 @@ public class AreaProtectionManager {
             }
         }
         // Block interaction protection
-        if (isProtected(sp, "blockInteract")) {
+        if (isProtectedAt(sp, pos.getX(), pos.getZ(), ProtectionSettings.ProtectionType.BLOCK_INTERACT)) {
             event.setCanceled(true);
             sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.block_interact_denied"), true);
             AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
@@ -113,7 +112,7 @@ public class AreaProtectionManager {
         if (target == null) return;
 
         // Container interaction protection for entity-based containers (e.g., chest minecarts)
-        if (isProtected(sp, "containerInteract") && target instanceof net.minecraft.world.Container) {
+        if (isProtectedAt(sp, target.getX(), target.getZ(), ProtectionSettings.ProtectionType.CONTAINER_INTERACT) && target instanceof net.minecraft.world.Container) {
             event.setCanceled(true);
             sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.container_interact_denied"), true);
             AreaVisualizer.spawnDeniedBurst(sp, target.getX(), target.getY(), target.getZ());
@@ -121,7 +120,7 @@ public class AreaProtectionManager {
         }
 
         // Entity interaction protection maps to blockInteract (e.g., item frames, armor stands)
-        if (isProtected(sp, "blockInteract")) {
+        if (isProtectedAt(sp, target.getX(), target.getZ(), ProtectionSettings.ProtectionType.BLOCK_INTERACT)) {
             event.setCanceled(true);
             sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.block_interact_denied"), true);
             AreaVisualizer.spawnDeniedBurst(sp, target.getX(), target.getY(), target.getZ());
@@ -180,7 +179,7 @@ public class AreaProtectionManager {
         // PVP: Player attacking another player
         if (source.getEntity() instanceof ServerPlayer attacker &&
             event.getEntity() instanceof ServerPlayer victim) {
-            if (isProtected(attacker, "pvp") || isProtected(victim, "pvp")) {
+            if (isProtected(attacker, ProtectionSettings.ProtectionType.PVP) || isProtected(victim, ProtectionSettings.ProtectionType.PVP)) {
                 event.setCanceled(true);
                 attacker.displayClientMessage(MessageUtils.smartComponent(attacker, "protection.pvp_denied"), true);
                 AreaVisualizer.spawnDeniedBurst(attacker, victim.getX(), victim.getY(), victim.getZ());
@@ -190,7 +189,7 @@ public class AreaProtectionManager {
         // Entity damage to player (non-player source: mobs, fall, fire, etc.)
         if (event.getEntity() instanceof ServerPlayer victim &&
             !(source.getEntity() instanceof Player)) {
-            if (isProtected(victim, "entityDamage")) {
+            if (isProtected(victim, ProtectionSettings.ProtectionType.ENTITY_DAMAGE)) {
                 event.setCanceled(true);
                 AreaVisualizer.spawnDeniedBurst(victim, victim.getX(), victim.getY(), victim.getZ());
                 return;
@@ -201,7 +200,7 @@ public class AreaProtectionManager {
         if (!(event.getEntity() instanceof Player)) {
             net.minecraft.world.entity.LivingEntity victim = event.getEntity();
             String dimension = victim.level().dimension().location().toString();
-            // P2 #6 fix: previously the first area whose protection whitelist contained the
+            // previously the first area whose protection whitelist contained the
             // attacker caused a `return`, bypassing every other overlapping protected area.
             // Now we require the attacker to be whitelisted in ALL overlapping protected areas
             // (or globally whitelisted) before allowing the damage.
@@ -238,7 +237,7 @@ public class AreaProtectionManager {
         double centerX = event.getExplosion().getPosition().x;
         double centerZ = event.getExplosion().getPosition().z;
 
-        // P2 #5 fix: collect candidate areas from every grid cell covered by the explosion's
+        // collect candidate areas from every grid cell covered by the explosion's
         // affected blocks/entities, not just the center cell. An explosion near a grid boundary
         // can damage blocks in a neighbouring cell that contains a protected area which the
         // center-only lookup would miss.
@@ -295,7 +294,7 @@ public class AreaProtectionManager {
     /**
      * Check if the given protection type is active for the player in any of their current areas.
      */
-    private static boolean isProtected(ServerPlayer player, String protectionType) {
+    private static boolean isProtected(ServerPlayer player, ProtectionSettings.ProtectionType protectionType) {
         // Guard against null player or player without a level (edge case during login/logout transitions)
         if (player == null || player.level() == null) return false;
         // Global whitelist bypass
@@ -306,7 +305,7 @@ public class AreaProtectionManager {
         String dimension = player.level().dimension().location().toString();
 
         Set<String> currentAreas = am.getCurrentAreas(player);
-        // P2 #7 fix: when the playerAreas cache is empty (player just entered and checkPlayer
+        // when the playerAreas cache is empty (player just entered and checkPlayer
         // hasn't ticked yet — up to 5 ticks of window), fall back to a live spatial lookup so
         // protection is enforced from the first interaction rather than after the cache warms.
         if (currentAreas.isEmpty()) {
@@ -316,7 +315,7 @@ public class AreaProtectionManager {
                 if (!area.getBounds().contains(player.getX(), player.getZ())) continue;
                 if (area.getProtectionWhitelist().contains(playerName)) continue;
                 ProtectionSettings p = area.getProtection();
-                if (matchesProtection(p, protectionType)) return true;
+                if (p.matches(protectionType)) return true;
             }
             return false;
         }
@@ -324,25 +323,30 @@ public class AreaProtectionManager {
         for (String areaName : currentAreas) {
             MonitorArea area = am.getArea(areaName);
             if (area == null || !area.isEnabled()) continue;
+            if (!area.getDimension().equals(dimension)) continue;
             // Per-area protection whitelist: player bypasses protection but still gets game mode changes
             if (area.getProtectionWhitelist().contains(playerName)) continue;
             ProtectionSettings p = area.getProtection();
-            if (matchesProtection(p, protectionType)) return true;
+            if (p.matches(protectionType)) return true;
         }
         return false;
     }
 
-    private static boolean matchesProtection(ProtectionSettings p, String protectionType) {
-        switch (protectionType) {
-            case "blockBreak": return p.isBlockBreak();
-            case "blockPlace": return p.isBlockPlace();
-            case "blockInteract": return p.isBlockInteract();
-            case "pvp": return p.isPvp();
-            case "entityDamage": return p.isEntityDamage();
-            case "containerInteract": return p.isContainerInteract();
-            case "fluidPlace": return p.isFluidPlace();
-            case "itemDrop": return p.isItemDrop();
-            default: return false;
+    private static boolean isProtectedAt(ServerPlayer player, double x, double z, ProtectionSettings.ProtectionType protectionType) {
+        if (player == null || player.level() == null) return false;
+        if (WhitelistManager.isWhitelisted(player)) return false;
+
+        AreaManager am = AreaManager.getInstance();
+        String playerName = player.getGameProfile().getName().toLowerCase();
+        String dimension = player.level().dimension().location().toString();
+
+        for (MonitorArea area : am.getPotentialAreasAt(x, z, dimension)) {
+            if (area == null || !area.isEnabled()) continue;
+            if (!area.getDimension().equals(dimension)) continue;
+            if (!area.getBounds().contains(x, z)) continue;
+            if (area.getProtectionWhitelist().contains(playerName)) continue;
+            if (area.getProtection().matches(protectionType)) return true;
         }
+        return false;
     }
 }

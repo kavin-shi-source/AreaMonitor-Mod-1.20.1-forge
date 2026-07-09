@@ -15,6 +15,8 @@ public final class DimensionUtils {
     public static final String OVERWORLD = "minecraft:overworld";
     public static final String THE_NETHER = "minecraft:the_nether";
     public static final String THE_END = "minecraft:the_end";
+
+    public static final int TICKS_PER_DAY = 24000;
     
     private DimensionUtils() {
     }
@@ -54,5 +56,21 @@ public final class DimensionUtils {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public static String shortDim(String dim) {
+        return switch (dim) {
+            case OVERWORLD -> "overworld";
+            case THE_NETHER -> "nether";
+            case THE_END -> "end";
+            default -> dim;
+        };
+    }
+
+    public static boolean isInTimeRange(long time, int min, int max) {
+        if (min <= max) {
+            return time >= min && time <= max;
+        }
+        return time >= min || time <= max;
     }
 }

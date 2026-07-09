@@ -49,9 +49,7 @@ public class BlacklistCommands {
                 String itemId = entry.getKey().location().toString();
                 String itemName = entry.getKey().location().getPath();
                 ITEM_SUGGESTION_INDEX.computeIfAbsent(itemId.charAt(0), k -> new ArrayList<>()).add(itemId);
-                if (!itemId.startsWith("minecraft:")) {
-                    ITEM_SUGGESTION_INDEX.computeIfAbsent(itemName.charAt(0), k -> new ArrayList<>()).add(itemId);
-                }
+                ITEM_SUGGESTION_INDEX.computeIfAbsent(itemName.charAt(0), k -> new ArrayList<>()).add(itemId);
             }
             suggestionIndexBuilt = true;
             AreaMonitorMod.LOGGER.debug("Item suggestion index built with {} entries",

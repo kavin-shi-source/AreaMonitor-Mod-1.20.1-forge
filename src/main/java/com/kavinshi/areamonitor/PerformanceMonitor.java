@@ -1,6 +1,5 @@
 package com.kavinshi.areamonitor;
 
-import net.minecraft.server.MinecraftServer;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -24,10 +23,10 @@ public class PerformanceMonitor {
     private static final int MAX_CHECK_INTERVAL = 20;
     private static final int MIN_CHECK_INTERVAL = 1;
 
-    private static int currentCheckInterval = 5;
-    private static long lastCheck = 0;
-    private static long lastOptimization = 0;
-    private static int consecutiveHealthyTicks = 0;
+    private static volatile int currentCheckInterval = 5;
+    private static volatile long lastCheck = 0;
+    private static volatile long lastOptimization = 0;
+    private static volatile int consecutiveHealthyTicks = 0;
 
     private static final int TICK_TIMES_ARRAY_SIZE = 100;
     private static final long[] tickTimes = new long[TICK_TIMES_ARRAY_SIZE];
@@ -39,13 +38,13 @@ public class PerformanceMonitor {
     private PerformanceMonitor() {
     }
 
-    public static void onServerTick(MinecraftServer server) {
+    public static void onServerTick() {
         long currentTime = System.currentTimeMillis();
 
         updateTPS(currentTime);
 
         if (currentTime - lastCheck >= MONITOR_INTERVAL * 50) {
-            monitorPerformance(server);
+            monitorPerformance();
             lastCheck = currentTime;
         }
 
@@ -71,7 +70,7 @@ public class PerformanceMonitor {
         }
     }
 
-    private static void monitorPerformance(MinecraftServer server) {
+    private static void monitorPerformance() {
         double currentTPS = getTPS();
         long memoryUsage = getMemoryUsagePercentage();
 

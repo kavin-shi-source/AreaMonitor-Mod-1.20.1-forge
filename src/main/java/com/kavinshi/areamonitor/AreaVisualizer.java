@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class AreaVisualizer {
     private static final int VISUALIZATION_DURATION = 100;
+    private static final int MAX_CIRCLE_SEGMENTS = 2000;
     /**
      * Maximum squared distance for particle visibility (32 blocks).
      * Players beyond this distance will not receive particle packets.
@@ -72,10 +73,10 @@ public class AreaVisualizer {
     private static void collectRectangleBorderParticles(ServerPlayer player, MonitorArea.RectangleBounds bounds, List<ParticleData> batch) {
         double y = player.getY();
 
-        collectHorizontalLineParticles(bounds.getMinX(), bounds.getMaxX(), bounds.getMinZ(), y, ParticleTypes.END_ROD, batch);
-        collectHorizontalLineParticles(bounds.getMinX(), bounds.getMaxX(), bounds.getMaxZ(), y, ParticleTypes.END_ROD, batch);
-        collectHorizontalLineParticles(bounds.getMinZ(), bounds.getMaxZ(), bounds.getMinX(), y, ParticleTypes.END_ROD, batch);
-        collectHorizontalLineParticles(bounds.getMinZ(), bounds.getMaxZ(), bounds.getMaxX(), y, ParticleTypes.END_ROD, batch);
+        collectHorizontalLineParticles(bounds.getMinX(), bounds.getMaxX(), bounds.getMinZ(), true, y, ParticleTypes.END_ROD, batch);
+        collectHorizontalLineParticles(bounds.getMinX(), bounds.getMaxX(), bounds.getMaxZ(), true, y, ParticleTypes.END_ROD, batch);
+        collectHorizontalLineParticles(bounds.getMinZ(), bounds.getMaxZ(), bounds.getMinX(), false, y, ParticleTypes.END_ROD, batch);
+        collectHorizontalLineParticles(bounds.getMinZ(), bounds.getMaxZ(), bounds.getMaxX(), false, y, ParticleTypes.END_ROD, batch);
     }
 
     /**
@@ -87,7 +88,7 @@ public class AreaVisualizer {
         double centerZ = bounds.getCenterZ();
         double radius = bounds.getRadius();
 
-        int segments = (int) (radius * 2 * Math.PI / getParticleSpacing());
+        int segments = (int) Math.min(radius * 2 * Math.PI / getParticleSpacing(), MAX_CIRCLE_SEGMENTS);
         for (int i = 0; i < segments; i++) {
             double angle = 2 * Math.PI * i / segments;
             double x = centerX + radius * Math.cos(angle);
@@ -116,10 +117,11 @@ public class AreaVisualizer {
     /**
      * Collect horizontal line particles into batch.
      */
-    private static void collectHorizontalLineParticles(double start, double end, double fixed, double y, ParticleOptions particle, List<ParticleData> batch) {
+    private static void collectHorizontalLineParticles(double start, double end, double fixed, boolean alongX, double y, ParticleOptions particle, List<ParticleData> batch) {
         double step = start < end ? getParticleSpacing() : -getParticleSpacing();
         for (double pos = start; pos <= end; pos += step) {
-            batch.add(new ParticleData(pos, y, fixed, particle));
+            if (alongX) batch.add(new ParticleData(pos, y, fixed, particle));
+            else batch.add(new ParticleData(fixed, y, pos, particle));
         }
     }
 
@@ -227,7 +229,7 @@ public class AreaVisualizer {
 
         List<ParticleData> batch = new ArrayList<>();
 
-        // P3 #7: removed dead null check — pos1.getX() above would already have NPE'd if pos1 were null
+        // : removed dead null check — pos1.getX() above would already have NPE'd if pos1 were null
         batch.add(new ParticleData(pos1.getX() + 0.5, y, pos1.getZ() + 0.5, ParticleTypes.ANGRY_VILLAGER));
         batch.add(new ParticleData(pos2.getX() + 0.5, y, pos2.getZ() + 0.5, ParticleTypes.ANGRY_VILLAGER));
         collectLineBetweenParticles(pos1, pos2, y, ParticleTypes.END_ROD, batch);

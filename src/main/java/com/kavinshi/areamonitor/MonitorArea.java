@@ -35,7 +35,7 @@ public class MonitorArea {
     private volatile String chainNext = null;
     // Stats (runtime only, not persisted)
     private final AtomicInteger entryCount = new AtomicInteger(0);
-    // P3 #3: volatile — these stats are written by tick/thread handlers and read by command queries
+    // : volatile — these stats are written by tick/thread handlers and read by command queries
     private volatile String lastVisitor = "-";
     private volatile long lastVisitTime = 0;
 
@@ -65,7 +65,10 @@ public class MonitorArea {
     }
 
     public AreaBounds getBounds() { return bounds; }
-    public void setBounds(AreaBounds bounds) { this.bounds = bounds; }
+    public void setBounds(AreaBounds bounds) {
+        if (bounds == null) throw new IllegalArgumentException("bounds cannot be null");
+        this.bounds = bounds;
+    }
 
     public GameType getEnterMode() { return enterMode; }
     public void setEnterMode(GameType enterMode) { this.enterMode = enterMode; }
@@ -79,7 +82,7 @@ public class MonitorArea {
     public List<String> getWhitelist() { return whitelist; }
 
     public void setWhitelist(List<String> whitelist) {
-        // P3 #2: guard against null input
+        // : guard against null input
         List<String> lowercaseList = new ArrayList<>();
         if (whitelist != null) {
             for (String name : whitelist) {
@@ -91,7 +94,7 @@ public class MonitorArea {
 
     public List<String> getProtectionWhitelist() { return protectionWhitelist; }
     public void setProtectionWhitelist(List<String> whitelist) {
-        // P3 #2: guard against null input
+        // : guard against null input
         List<String> lowercaseList = new ArrayList<>();
         if (whitelist != null) {
             for (String name : whitelist) {
@@ -178,21 +181,18 @@ public class MonitorArea {
      */
     public boolean evaluateSchedule(long gameTime) {
         if (!scheduleEnabled || scheduleTimeMin == null || scheduleTimeMax == null) return true;
-        long time = gameTime % 24000;
-        int min = scheduleTimeMin, max = scheduleTimeMax;
-        if (min <= max) {
-            return time >= min && time <= max;
-        } else {
-            // cross-midnight
-            return time >= min || time <= max;
-        }
+        return DimensionUtils.isInTimeRange(Math.floorMod(gameTime, DimensionUtils.TICKS_PER_DAY), scheduleTimeMin, scheduleTimeMax);
     }
 
     public boolean isPlayerInArea(PlayerPosition position) {
-        if (!position.getDimension().equals(dimension)) {
+        return isPlayerInArea(position.getX(), position.getZ(), position.getDimension());
+    }
+
+    public boolean isPlayerInArea(double x, double z, String dim) {
+        if (!dim.equals(dimension)) {
             return false;
         }
-        return bounds.contains(position.getX(), position.getZ());
+        return bounds.contains(x, z);
     }
 
     public AABB getBoundingBox() {
@@ -256,7 +256,7 @@ public class MonitorArea {
         public boolean contains(double x, double z) {
             double dx = x - centerX;
             double dz = z - centerZ;
-            return dx * dx + dz * dz <= radius * radius;
+            return dx * dx + dz * dz <= (double) radius * radius;
         }
 
         @Override
@@ -335,9 +335,10 @@ public class MonitorArea {
         }
 
         @Override public double[] getCenter() {
-            // P2 #3 fix: arithmetic mean of vertices can land outside a concave polygon,
-            // which would push chain teleports outside the area. Try centroid first, then
-            // sample the bounding box on a 1-block grid and return the first interior point.
+            // Arithmetic mean of vertices can land outside a concave polygon,
+            // which would push chain teleports outside the area. Try centroid first;
+            // if outside, fall back to the first vertex (guaranteed on the polygon boundary)
+            // to avoid expensive AABB scanning which can hang the server for large polygons.
             double cx = 0, cz = 0;
             for (var v : vertices) { cx += v.x(); cz += v.z(); }
             double centroidX = cx / vertices.size();
@@ -345,9 +346,7 @@ public class MonitorArea {
             if (contains(centroidX, centroidZ)) {
                 return new double[]{centroidX, centroidZ};
             }
-            // Centroid is outside — return the first vertex (guaranteed on the polygon boundary)
-            // to avoid expensive AABB scanning which can hang the server for large polygons.
-            return new double[]{vertices.get(0).x() + 0.5, vertices.get(0).z() + 0.5};
+            return new double[]{vertices.get(0).x(), vertices.get(0).z()};
         }
 
         public List<Vec2i> getVertices() {

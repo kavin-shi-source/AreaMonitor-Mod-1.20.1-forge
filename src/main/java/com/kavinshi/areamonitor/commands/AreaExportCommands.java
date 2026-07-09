@@ -21,6 +21,7 @@ import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 
 public class AreaExportCommands {
 
@@ -31,6 +32,10 @@ public class AreaExportCommands {
     public static int exportArea(String areaName, CommandContext<CommandSourceStack> context) {
         MonitorArea area = AreaCommandHelper.requireArea(context, areaName);
         if (area == null) return 0;
+        if (!AreaManager.isValidAreaName(areaName)) {
+            MessageUtils.sendFailure(context.getSource(), "gui.error.invalid_area_name", areaName);
+            return 0;
+        }
         var json = areaToJson(area);
         String jsonStr = GSON.toJson(json);
         context.getSource().sendSystemMessage(
@@ -39,7 +44,9 @@ public class AreaExportCommands {
             Path exportDir = FMLPaths.CONFIGDIR.get().resolve("areamonitor").resolve("exports");
             Files.createDirectories(exportDir);
             Path exportFile = exportDir.resolve(areaName + ".json");
-            Files.writeString(exportFile, jsonStr);
+            Path tmpFile = exportDir.resolve(areaName + ".json.tmp." + System.nanoTime());
+            Files.writeString(tmpFile, jsonStr);
+            Files.move(tmpFile, exportFile, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             context.getSource().sendSystemMessage(
                 Component.translatable("area.export.file_saved", exportFile.toString()));
         } catch (Exception e) {
@@ -170,19 +177,29 @@ public class AreaExportCommands {
         if (obj.has("protection")) area.setProtection(GSON.fromJson(obj.get("protection"), ProtectionSettings.class));
         if (obj.has("enterTrigger")) {
             TriggerConfig etc = GSON.fromJson(obj.get("enterTrigger"), TriggerConfig.class);
-            if (etc != null && etc.getCondition() != null) etc.getCondition().sanitize();
+            if (etc != null) {
+                etc.sanitize();
+                etc.getCommands().removeIf(cmd -> !TriggerCommands.isValidCommand(cmd));
+            }
             area.setEnterTrigger(etc);
         }
         if (obj.has("leaveTrigger")) {
             TriggerConfig ltc = GSON.fromJson(obj.get("leaveTrigger"), TriggerConfig.class);
-            if (ltc != null && ltc.getCondition() != null) ltc.getCondition().sanitize();
+            if (ltc != null) {
+                ltc.sanitize();
+                ltc.getCommands().removeIf(cmd -> !TriggerCommands.isValidCommand(cmd));
+            }
             area.setLeaveTrigger(ltc);
         }
         if (obj.has("whitelist") && obj.get("whitelist").isJsonArray()) {
             area.getWhitelist().clear();
             for (var e : obj.getAsJsonArray("whitelist")) area.getWhitelist().add(e.getAsString().toLowerCase());
         }
-        if (obj.has("restrictions")) area.setRestrictions(GSON.fromJson(obj.get("restrictions"), RestrictionSettings.class));
+        if (obj.has("restrictions")) {
+            RestrictionSettings rs = GSON.fromJson(obj.get("restrictions"), RestrictionSettings.class);
+            if (rs != null) rs.sanitize();
+            area.setRestrictions(rs);
+        }
         if (obj.has("protectionWhitelist") && obj.get("protectionWhitelist").isJsonArray()) {
             area.getProtectionWhitelist().clear();
             for (var e : obj.getAsJsonArray("protectionWhitelist")) area.getProtectionWhitelist().add(e.getAsString().toLowerCase());
@@ -190,13 +207,22 @@ public class AreaExportCommands {
         if (obj.has("schedule")) {
             JsonObject schedObj = obj.getAsJsonObject("schedule");
             area.setScheduleEnabled(schedObj.has("enabled") && schedObj.get("enabled").getAsBoolean());
-            if (schedObj.has("timeMin")) area.setScheduleTimeMin(schedObj.get("timeMin").getAsInt());
-            if (schedObj.has("timeMax")) area.setScheduleTimeMax(schedObj.get("timeMax").getAsInt());
+            if (schedObj.has("timeMin")) {
+                int tmin = schedObj.get("timeMin").getAsInt();
+                area.setScheduleTimeMin(Math.max(0, Math.min(DimensionUtils.TICKS_PER_DAY, tmin)));
+            }
+            if (schedObj.has("timeMax")) {
+                int tmax = schedObj.get("timeMax").getAsInt();
+                area.setScheduleTimeMax(Math.max(0, Math.min(DimensionUtils.TICKS_PER_DAY, tmax)));
+            }
         }
         if (obj.has("condition")) {
             JsonObject condObj = obj.getAsJsonObject("condition");
             area.setConditionEnabled(condObj.has("enabled") && condObj.get("enabled").getAsBoolean());
-            if (condObj.has("minPlayers")) area.setConditionMinPlayers(condObj.get("minPlayers").getAsInt());
+            if (condObj.has("minPlayers")) {
+                int mp = condObj.get("minPlayers").getAsInt();
+                area.setConditionMinPlayers(Math.max(0, mp));
+            }
             if (condObj.has("requirePlayer")) area.setConditionRequirePlayer(condObj.get("requirePlayer").getAsString().toLowerCase());
         }
         if (obj.has("chainNext")) {

@@ -55,7 +55,7 @@ public class RestrictionEditPanel extends Screen {
             blockTeleportCommands = zb(obj, "blockTeleportCommands", true);
             zl(obj, "blockedItems", blockedItems); zl(obj, "blockedCommands", blockedCommands);
         } catch (Exception e) {
-            // P2 #39: log parse failures instead of silently swallowing
+            // : log parse failures instead of silently swallowing
             com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Failed to parse restrictions JSON for area '{}': {}", entry.name(), e.getMessage());
         }
     }
@@ -123,7 +123,7 @@ public class RestrictionEditPanel extends Screen {
             addCmdBox.setResponder(s -> dirty = true);
             addRenderableWidget(addCmdBox);
             zbtn(lx + 226, y, 60, "[" + LocalizationManager.translate("command.add") + "]", () -> {
-                String v = addCmdBox.getValue().trim();
+                String v = addCmdBox.getValue().trim().toLowerCase();
                 if (!v.isEmpty() && !blockedCommands.contains(v) && blockedCommands.size() < 12) {
                     blockedCommands.add(v); addCmdBox.setValue(""); dirty = true; rebuild();
                 }
@@ -167,10 +167,18 @@ public class RestrictionEditPanel extends Screen {
     private void rebuild() {
         String savedItem = addItemBox != null ? addItemBox.getValue() : "";
         String savedCmd = addCmdBox != null ? addCmdBox.getValue() : "";
+        boolean itemFocused = addItemBox != null && addItemBox.isFocused();
+        boolean cmdFocused = addCmdBox != null && addCmdBox.isFocused();
         clearWidgets();
         init();
-        if (addItemBox != null) addItemBox.setValue(savedItem);
-        if (addCmdBox != null) addCmdBox.setValue(savedCmd);
+        if (addItemBox != null) {
+            addItemBox.setValue(savedItem);
+            if (itemFocused) addItemBox.setFocused(true);
+        }
+        if (addCmdBox != null) {
+            addCmdBox.setValue(savedCmd);
+            if (cmdFocused) addCmdBox.setFocused(true);
+        }
     }
 
     private void sendUpdate() {
@@ -185,7 +193,7 @@ public class RestrictionEditPanel extends Screen {
     @Override public void onClose() { if (this.minecraft != null) this.minecraft.setScreen(returnScreen); }
 
     @Override public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // P2 #29: delegate to confirm dialog for Esc/Enter handling
+        // : delegate to confirm dialog for Esc/Enter handling
         if (confirmDialog.isVisible()) return confirmDialog.keyPressed(keyCode, scanCode, modifiers);
         if (this.addItemBox != null && this.addItemBox.isFocused())
             return this.addItemBox.keyPressed(keyCode, scanCode, modifiers);
@@ -195,7 +203,7 @@ public class RestrictionEditPanel extends Screen {
     }
 
     @Override public boolean charTyped(char c, int modifiers) {
-        // P2 #29: consume text input while confirmation dialog is visible
+        // : consume text input while confirmation dialog is visible
         if (confirmDialog.isVisible()) return true;
         if (this.addItemBox != null && this.addItemBox.isFocused())
             return this.addItemBox.charTyped(c, modifiers);
@@ -214,7 +222,7 @@ public class RestrictionEditPanel extends Screen {
         if (cmdsExp) { contentH += 20 + 22 + blockedCommands.size() * 18; }
         int maxScroll = Math.max(0, contentH - visibleH);
         if (maxScroll > 0) {
-            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) delta * 20));
+            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int)(Math.signum(delta) * 20)));
             rebuild();
         }
         return true;

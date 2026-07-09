@@ -6,35 +6,52 @@ import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 
+import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 public class TriggerCommands {
 
-    // P2 #27: increased from 256 to 1024 to allow complex /execute chains
     private static final int MAX_COMMAND_LENGTH = 1024;
-    private static final Set<String> DANGEROUS_COMMANDS = Set.of(
+    private static final List<String> DANGEROUS_COMMAND_LIST = List.of(
         "stop", "restart", "op", "deop", "ban", "ban-ip", "pardon", "pardon-ip",
-        "whitelist", "reload", "reload-confirm", "save-off", "save-all"
+        "whitelist", "reload", "reload-confirm", "save-off", "save-all", "kick",
+        "data", "function", "schedule"
     );
+    private static final Set<String> DANGEROUS_COMMANDS = Set.copyOf(DANGEROUS_COMMAND_LIST);
+    private static final String NAMESPACE_PREFIX = "(?:[a-z0-9_\\-]+:)?";
+    private static final Pattern[] BLOCKED_PATTERNS;
+    static {
+        BLOCKED_PATTERNS = new Pattern[DANGEROUS_COMMAND_LIST.size()];
+        for (int i = 0; i < DANGEROUS_COMMAND_LIST.size(); i++) {
+            String dangerous = DANGEROUS_COMMAND_LIST.get(i);
+            String regex = ".*(?:/|\\brun\\s+)" + NAMESPACE_PREFIX + Pattern.quote(dangerous) + "(?:\\s|$).*";
+            BLOCKED_PATTERNS[i] = Pattern.compile(regex);
+        }
+    }
 
     private TriggerCommands() {}
 
     public static boolean isValidCommand(String command) {
         if (command == null || command.trim().isEmpty()) return false;
         if (command.length() > MAX_COMMAND_LENGTH) return false;
+        return findBlockedCommand(command) == null;
+    }
+
+    private static String findBlockedCommand(String command) {
         String trimmed = command.trim();
         String baseCmd = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
         baseCmd = baseCmd.split(" ")[0].toLowerCase();
         int colonIdx = baseCmd.indexOf(':');
         if (colonIdx > 0) baseCmd = baseCmd.substring(colonIdx + 1);
-        if (DANGEROUS_COMMANDS.contains(baseCmd)) return false;
+        if (DANGEROUS_COMMANDS.contains(baseCmd)) return baseCmd;
         String lowerCmd = trimmed.toLowerCase();
-        for (String dangerous : DANGEROUS_COMMANDS) {
-            if (lowerCmd.matches(".*(?:/|\\brun\\s+)" + java.util.regex.Pattern.quote(dangerous) + "(?:\\s|$).*")) {
-                return false;
+        for (int i = 0; i < BLOCKED_PATTERNS.length; i++) {
+            if (BLOCKED_PATTERNS[i].matcher(lowerCmd).matches()) {
+                return DANGEROUS_COMMAND_LIST.get(i);
             }
         }
-        return true;
+        return null;
     }
 
     private static TriggerConfig getOrCreateTrigger(MonitorArea area, boolean enter) {
@@ -58,24 +75,10 @@ public class TriggerCommands {
             MessageUtils.sendFailure(context.getSource(), "trigger.command_too_long", MAX_COMMAND_LENGTH);
             return 0;
         }
-        String trimmed = command.trim();
-        String baseCmd = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
-        baseCmd = baseCmd.split(" ")[0].toLowerCase();
-        int colonIdx = baseCmd.indexOf(':');
-        if (colonIdx > 0) {
-            baseCmd = baseCmd.substring(colonIdx + 1);
-        }
-        if (DANGEROUS_COMMANDS.contains(baseCmd)) {
-            MessageUtils.sendFailure(context.getSource(), "trigger.command_blocked", baseCmd);
+        String blocked = findBlockedCommand(command);
+        if (blocked != null) {
+            MessageUtils.sendFailure(context.getSource(), "trigger.command_blocked", blocked);
             return 0;
-        }
-        String lowerCmd = trimmed.toLowerCase();
-        for (String dangerous : DANGEROUS_COMMANDS) {
-            // Only flag dangerous commands that appear as sub-commands (preceded by / or "run "), not in chat text
-            if (lowerCmd.matches(".*(?:/|\\brun\\s+)" + java.util.regex.Pattern.quote(dangerous) + "(?:\\s|$).*")) {
-                MessageUtils.sendFailure(context.getSource(), "trigger.command_blocked", dangerous);
-                return 0;
-            }
         }
 
         TriggerConfig triggerConfig = getOrCreateTrigger(area, enter);

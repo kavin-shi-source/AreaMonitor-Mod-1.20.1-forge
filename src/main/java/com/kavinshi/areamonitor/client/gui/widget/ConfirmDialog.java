@@ -26,7 +26,7 @@ public class ConfirmDialog {
     private boolean visible = false;
     private String title = "";
     private String message = "";
-    // P3 #10: defaults are only used if show() is called without explicit text — keep as empty
+    // : defaults are only used if show() is called without explicit text — keep as empty
     // strings so a forgotten arg shows blank rather than English fallback text on a non-en client.
     private String confirmText = "";
     private String cancelText = "";

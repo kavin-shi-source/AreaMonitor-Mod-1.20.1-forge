@@ -12,7 +12,7 @@ import java.time.format.DateTimeFormatter;
 
 public class AreaStatsCommands {
 
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm:ss");
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private AreaStatsCommands() {}
 
@@ -22,7 +22,7 @@ public class AreaStatsCommands {
             Component.translatable("area.stats.header"));
         for (MonitorArea area : areas) {
             String lastTime = area.getLastVisitTime() > 0
-                ? Instant.ofEpochMilli(area.getLastVisitTime()).atZone(ZoneId.systemDefault()).toLocalTime().format(TIME_FORMAT)
+                ? Instant.ofEpochMilli(area.getLastVisitTime()).atZone(ZoneId.systemDefault()).toLocalDateTime().format(TIME_FORMAT)
                 : "-";
             context.getSource().sendSystemMessage(
                 Component.translatable("area.stats.line",

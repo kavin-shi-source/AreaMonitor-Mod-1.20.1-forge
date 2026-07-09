@@ -46,8 +46,8 @@ public class AreaMonitorMod {
     private void setup(final FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
             ItemBlacklistManager.initializeDefaultBlacklist();
+            AreaMonitorMod.LOGGER.info("AreaMonitor mod setup completed");
         });
-        AreaMonitorMod.LOGGER.info("AreaMonitor mod setup completed");
     }
 
     @SubscribeEvent
@@ -74,6 +74,11 @@ public class AreaMonitorMod {
         } catch (Throwable t) {
             AreaMonitorMod.LOGGER.error("Failed to save item blacklist on shutdown", t);
         }
+        try {
+            ItemBlacklistManager.clearAllData();
+        } catch (Throwable t) {
+            AreaMonitorMod.LOGGER.error("Failed to clear item blacklist data on shutdown", t);
+        }
 
         try {
             WhitelistManager.saveWhitelist();
@@ -99,7 +104,6 @@ public class AreaMonitorMod {
 
         try {
             AreaManager.getInstance().clearAllData();
-            AreaManager.getInstance().clearUnusedCaches();
         } catch (Throwable t) {
             AreaMonitorMod.LOGGER.error("Failed to clear area manager data on shutdown", t);
         }
@@ -114,6 +118,12 @@ public class AreaMonitorMod {
             com.kavinshi.areamonitor.util.AuditLogger.shutdown();
         } catch (Throwable t) {
             AreaMonitorMod.LOGGER.error("Failed to shut down audit logger", t);
+        }
+
+        try {
+            AreaMonitor.cleanupRuntimeState();
+        } catch (Throwable t) {
+            AreaMonitorMod.LOGGER.error("Failed to clean up AreaMonitor runtime state", t);
         }
 
         AreaMonitorMod.LOGGER.info("AreaMonitor data saved and resources cleaned up");

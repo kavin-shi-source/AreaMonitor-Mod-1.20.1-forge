@@ -30,6 +30,26 @@ public class TriggerConfig {
     private int debounceTicks = 0;
     private TriggerCondition condition = new TriggerCondition();
 
+    public TriggerConfig() {}
+
+    public TriggerConfig(TriggerConfig other) {
+        if (other == null) return;
+        this.commands = new ArrayList<>(other.commands);
+        this.soundEvent = other.soundEvent;
+        this.soundVolume = other.soundVolume;
+        this.soundPitch = other.soundPitch;
+        this.titleMain = other.titleMain;
+        this.titleSub = other.titleSub;
+        this.teleportTarget = other.teleportTarget;
+        this.actionBar = other.actionBar;
+        this.potion = other.potion;
+        this.potionDuration = other.potionDuration;
+        this.potionAmplifier = other.potionAmplifier;
+        this.cooldownTicks = other.cooldownTicks;
+        this.debounceTicks = other.debounceTicks;
+        this.condition = new TriggerCondition(other.condition);
+    }
+
     // Getters and Setters
     public List<String> getCommands() { return commands; }
     public void setCommands(List<String> v) { this.commands = v != null ? v : new ArrayList<>(); }
@@ -78,7 +98,23 @@ public class TriggerConfig {
             || teleportTarget != null || actionBar != null || potion != null;
     }
 
-    // P3 #15: equals/hashCode so TriggerConfig can be used in sets/maps and compared in tests
+    public void sanitize() {
+        if (soundVolume < 0) soundVolume = 0;
+        if (soundVolume > 10.0f) soundVolume = 10.0f;
+        if (soundPitch < 0) soundPitch = 0;
+        if (soundPitch > 10.0f) soundPitch = 10.0f;
+        if (potionDuration < 0) potionDuration = 0;
+        if (potionDuration > 72000) potionDuration = 72000;
+        if (potionAmplifier < 0 || potionAmplifier > 127)
+            potionAmplifier = Math.max(0, Math.min(127, potionAmplifier));
+        if (cooldownTicks < 0) cooldownTicks = 0;
+        if (cooldownTicks > 72000) cooldownTicks = 72000;
+        if (debounceTicks < 0) debounceTicks = 0;
+        if (debounceTicks > 6000) debounceTicks = 6000;
+        if (condition != null) condition.sanitize();
+    }
+
+    // : equals/hashCode so TriggerConfig can be used in sets/maps and compared in tests
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -122,12 +158,23 @@ public class TriggerConfig {
         /** Minimum online players on the server. */
         private Integer minPlayers = null;
 
+        public TriggerCondition() {}
+
+        public TriggerCondition(TriggerCondition other) {
+            if (other == null) return;
+            this.playerHasItem = other.playerHasItem;
+            this.timeMin = other.timeMin;
+            this.timeMax = other.timeMax;
+            this.weather = other.weather;
+            this.minPlayers = other.minPlayers;
+        }
+
         public String getPlayerHasItem() { return playerHasItem; }
         public void setPlayerHasItem(String v) { this.playerHasItem = v; }
 
         public Integer getTimeMin() { return timeMin; }
         public void setTimeMin(Integer v) {
-            // P2 #47: validate game time range (0..24000)
+            // : validate game time range (0..24000)
             if (v != null && (v < 0 || v > 24000)) {
                 throw new IllegalArgumentException("timeMin must be 0..24000, got " + v);
             }

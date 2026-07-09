@@ -34,6 +34,8 @@ public class LocalizationManager {
     private final Gson gson = new Gson();
     private volatile String currentLanguage = DEFAULT_LANGUAGE;
 
+    private static final int CACHE_SIZE_LIMIT = 200;
+
     /**
      * Supported languages.
      */
@@ -183,13 +185,17 @@ public class LocalizationManager {
 
         try {
             String result = String.format(template, args);
-            // ConcurrentHashMap size check is a soft hint; bounded at ~200 to prevent unbounded growth.
-            // Periodically evict when oversize to keep memory footprint low.
-            if (InstanceHolder.INSTANCE.formattedCache.size() < 200) {
-                InstanceHolder.INSTANCE.formattedCache.putIfAbsent(cacheKey, result);
-            } else {
-                InstanceHolder.INSTANCE.formattedCache.clear();
+            if (InstanceHolder.INSTANCE.formattedCache.size() >= CACHE_SIZE_LIMIT) {
+                // Evict 20% instead of clearing everything to avoid cache-hit jitter.
+                // ConcurrentHashMap's iterator is weakly consistent; approximate eviction is safe here.
+                int toRemove = CACHE_SIZE_LIMIT / 5;
+                var iterator = InstanceHolder.INSTANCE.formattedCache.keySet().iterator();
+                for (int i = 0; i < toRemove && iterator.hasNext(); i++) {
+                    iterator.next();
+                    iterator.remove();
+                }
             }
+            InstanceHolder.INSTANCE.formattedCache.putIfAbsent(cacheKey, result);
             return result;
         } catch (Exception e) {
             // Log full stack trace for localization format errors

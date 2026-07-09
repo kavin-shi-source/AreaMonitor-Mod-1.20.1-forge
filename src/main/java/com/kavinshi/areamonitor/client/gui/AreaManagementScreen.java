@@ -5,6 +5,7 @@ import com.kavinshi.areamonitor.network.C2SRequestAreaListPacket;
 import com.kavinshi.areamonitor.network.ModNetwork;
 import com.kavinshi.areamonitor.network.S2CAreaListPacket;
 import com.kavinshi.areamonitor.LocalizationManager;
+import com.kavinshi.areamonitor.util.DimensionUtils;
 import com.kavinshi.areamonitor.client.gui.panel.AreaEditPanel;
 import com.kavinshi.areamonitor.client.gui.widget.ConfirmDialog;
 import com.kavinshi.areamonitor.client.gui.widget.GlassButton;
@@ -47,10 +48,6 @@ public class AreaManagementScreen extends Screen {
     private String searchTerm = "";
     private boolean sortAsc = true; // toggle sort direction
 
-    // Toast feedback
-    private String toastMessage = "";
-    private long toastEndMs = 0;
-
     // Confirmation dialog
     private final ConfirmDialog confirmDialog = new ConfirmDialog();
 
@@ -60,16 +57,14 @@ public class AreaManagementScreen extends Screen {
     private int listLeft, listTop, listWidth;
     private int btnY;
     private int winX, winY, winW, winH;
-    // P2 #28: track whether we've already requested the area list to avoid re-requesting on resize
+    // : track whether we've already requested the area list to avoid re-requesting on resize
     private boolean listRequested = false;
-    // P2 #31: buffer for area list updates that arrive while a sub-panel is visible
+    // : buffer for area list updates that arrive while a sub-panel is visible
     private static volatile List<S2CAreaListPacket.AreaEntry> pendingAreaList = null;
-    // P2 #32: cached Component objects to avoid per-frame allocation
+    // : cached Component objects to avoid per-frame allocation
     private Component cachedTitleComponent;
     private Component cachedStatusComponent;
     private int cachedStatusAreaCount = -1;
-    private Component cachedToastComponent;
-    private String cachedToastMessage = "";
 
     public AreaManagementScreen() {
         super(Component.literal(LocalizationManager.translate("gui.title")));
@@ -79,7 +74,7 @@ public class AreaManagementScreen extends Screen {
     protected void init() {
         super.init();
         calculateLayout();
-        // P2 #31: apply any buffered update before refreshing UI
+        // : apply any buffered update before refreshing UI
         if (pendingAreaList != null) {
             updateAreaList(pendingAreaList);
             pendingAreaList = null;
@@ -88,14 +83,14 @@ public class AreaManagementScreen extends Screen {
             ModNetwork.sendToServer(new C2SRequestAreaListPacket());
             listRequested = true;
         }
-        // P2 #32: (re)build cached title component on init in case locale changed
+        // : (re)build cached title component on init in case locale changed
         cachedTitleComponent = Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE);
         cachedStatusAreaCount = -1; // force status bar rebuild
         rebuildRows();
     }
 
     /**
-     * P2 #31: buffer an area list update when the management screen is not the
+     * : buffer an area list update when the management screen is not the
      * active screen (e.g. an edit sub-panel is open). Applied on next init().
      */
     public static void bufferAreaList(List<S2CAreaListPacket.AreaEntry> areas) {
@@ -122,7 +117,7 @@ public class AreaManagementScreen extends Screen {
     public void updateAreaList(List<S2CAreaListPacket.AreaEntry> newAreas) {
         this.areas = newAreas;
         applyFilterAndSort();
-        // P2 #34: clamp scrollOffset instead of resetting to 0 — preserve user's scroll position
+        // : clamp scrollOffset instead of resetting to 0 — preserve user's scroll position
         int maxScroll = Math.max(0, filteredAreas.size() - itemsPerPage);
         if (scrollOffset > maxScroll) scrollOffset = maxScroll;
         rebuildRows();
@@ -162,7 +157,7 @@ public class AreaManagementScreen extends Screen {
         if (creating) {
             nameInput = new EditBox(this.font, cx - 110, btnY - 23, 220, 18,
                 Component.literal(LocalizationManager.translate("gui.area_name_hint")));
-            nameInput.setMaxLength(48);
+            nameInput.setMaxLength(32);
             addRenderableWidget(nameInput);
             if (nameFocused) nameInput.setFocused(true);
             glassBtn(LocalizationManager.translate("gui.create"), cx - 80, btnY, 70, this::onCreateConfirm);
@@ -184,10 +179,9 @@ public class AreaManagementScreen extends Screen {
             Component label = entry.enabled()
                 ? Component.literal("\u2714 ").withStyle(ChatFormatting.GREEN)
                     .append(Component.literal(entry.name() + " ").withStyle(ChatFormatting.WHITE))
-                    .append(Component.literal("[" + shortDim(entry.dimension()) + "] " + entry.boundsType()).withStyle(ChatFormatting.GRAY))
-                : Component.literal("\u2718 ").withStyle(ChatFormatting.RED)
+                    .append(Component.literal("[" + DimensionUtils.shortDim(entry.dimension()) + "] " + entry.boundsType()).withStyle(ChatFormatting.GRAY))                : Component.literal("\u2718 ").withStyle(ChatFormatting.RED)
                     .append(Component.literal(entry.name() + " ").withStyle(ChatFormatting.WHITE))
-                    .append(Component.literal("[" + shortDim(entry.dimension()) + "] " + entry.boundsType()).withStyle(ChatFormatting.GRAY));
+                    .append(Component.literal("[" + DimensionUtils.shortDim(entry.dimension()) + "] " + entry.boundsType()).withStyle(ChatFormatting.GRAY));
             addRenderableWidget(new AreaRowButton(listLeft, y, infoW, itemHeight - 2, label, entry.name(), this));
             addRenderableWidget(new AreaEditButton(listLeft + infoW + 2, y, 22, itemHeight - 2, entry, this));
             addRenderableWidget(new AreaToggleButton(listLeft + infoW + 26, y, 44, itemHeight - 2, entry.name(), entry.enabled(), this));
@@ -199,21 +193,12 @@ public class AreaManagementScreen extends Screen {
         addRenderableWidget(GlassButton.create(x, y, w, 20, text, b -> action.run()));
     }
 
-    private static String shortDim(String dim) {
-        return switch (dim) {
-            case "minecraft:overworld" -> "overworld";
-            case "minecraft:the_nether" -> "nether";
-            case "minecraft:the_end" -> "end";
-            default -> dim;
-        };
-    }
-
     void onToggle(String name) {
-        // P2 #33: do not show "saved" toast optimistically — wait for the refreshed area list as confirmation
+        // : do not show "saved" toast optimistically — wait for the refreshed area list as confirmation
         ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.TOGGLE, name));
     }
     void onDelete(String name) {
-        // P2 #33: do not show "deleted" toast optimistically — wait for the refreshed area list as confirmation
+        // : do not show "deleted" toast optimistically — wait for the refreshed area list as confirmation
         ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.DELETE, name));
     }
     void onRefresh() {
@@ -230,7 +215,7 @@ public class AreaManagementScreen extends Screen {
         if (nameInput != null) {
             String name = nameInput.getValue().trim();
             if (!name.isEmpty()) {
-                // P2 #33: do not show "created" toast optimistically
+                // : do not show "created" toast optimistically
                 ModNetwork.sendToServer(new C2SAreaActionPacket(C2SAreaActionPacket.Action.CREATE, name));
                 creating = false; nameInput = null; rebuildRows();
             }
@@ -239,7 +224,7 @@ public class AreaManagementScreen extends Screen {
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        // P2 #29: confirmation dialog must consume keyboard input when visible
+        // : confirmation dialog must consume keyboard input when visible
         if (confirmDialog.isVisible()) {
             return confirmDialog.keyPressed(keyCode, scanCode, modifiers);
         }
@@ -251,7 +236,7 @@ public class AreaManagementScreen extends Screen {
 
     @Override
     public boolean charTyped(char c, int modifiers) {
-        // P2 #29: consume text input while confirmation dialog is visible
+        // : consume text input while confirmation dialog is visible
         if (confirmDialog.isVisible()) return true;
         return super.charTyped(c, modifiers);
     }
@@ -275,7 +260,7 @@ public class AreaManagementScreen extends Screen {
         // === Title bar ===
         g.fill(winX + 3, winY + 3, winX + winW - 3, winY + 31, PARCH_DARK);
         g.fill(winX + 3, winY + 30, winX + winW - 3, winY + 31, BORDER_GOLD);
-        // P2 #32: use cached title component instead of allocating per frame
+        // : use cached title component instead of allocating per frame
         if (cachedTitleComponent == null) {
             cachedTitleComponent = Component.literal(this.title.getString()).withStyle(ChatFormatting.WHITE);
         }
@@ -313,15 +298,12 @@ public class AreaManagementScreen extends Screen {
         int statusY = btnY - 30;
         g.fill(winX + 3, statusY - 4, winX + winW - 3, statusY + 16, 0x303A2A1A);
         g.fill(winX + 3, statusY - 4, winX + winW - 3, statusY - 3, BORDER_GOLD);
-        // P2 #32: rebuild status Component only when area count changes
+        // : rebuild status Component only when area count changes
         if (cachedStatusAreaCount != areas.size()) {
             cachedStatusComponent = Component.literal("\u25C6 " + LocalizationManager.translate("gui.status_monitoring") + ": " + areas.size() + " " + LocalizationManager.translate("gui.status_areas")).withStyle(ChatFormatting.GRAY);
             cachedStatusAreaCount = areas.size();
         }
         g.drawCenteredString(this.font, cachedStatusComponent, cx, statusY, TEXT_DIM);
-
-        // === Toast ===
-        renderToast(g, cx);
 
         super.render(g, mx, my, pt);
 
@@ -333,6 +315,7 @@ public class AreaManagementScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double delta) {
+        if (confirmDialog.isVisible()) return true;
         if (delta > 0 && scrollOffset > 0) {
             scrollOffset--; rebuildRows();
         } else if (delta < 0 && scrollOffset < filteredAreas.size() - itemsPerPage) {
@@ -348,44 +331,6 @@ public class AreaManagementScreen extends Screen {
             return true;
         }
         return super.mouseClicked(mx, my, button);
-    }
-
-    // ===== Toast =====
-
-    private void showToast(String msg) {
-        this.toastMessage = msg;
-        this.toastEndMs = System.currentTimeMillis() + 2000;
-        // P2 #32: rebuild toast Component only when message changes
-        if (!msg.equals(cachedToastMessage)) {
-            cachedToastMessage = msg;
-            cachedToastComponent = Component.literal(msg);
-        }
-    }
-
-    private void renderToast(GuiGraphics g, int cx) {
-        if (toastMessage.isEmpty() || System.currentTimeMillis() > toastEndMs) {
-            if (!toastMessage.isEmpty()) toastMessage = "";
-            return;
-        }
-        long remaining = toastEndMs - System.currentTimeMillis();
-        int alpha = remaining > 500 ? 0xD0 : (int)(0xD0 * remaining / 500);
-        int bg = (alpha << 24) | 0x3A2A1A;
-        int brd = ((Math.min(alpha + 0x10, 0xFF)) << 24) | 0x8B6914;
-
-        int tw = this.font.width(toastMessage) + 24;
-        int tx = cx - tw / 2;
-        int ty = winY + winH / 2 - 10;
-
-        g.fill(tx, ty, tx + tw, ty + 20, bg);
-        g.fill(tx, ty, tx + tw, ty + 1, brd);
-        g.fill(tx, ty + 19, tx + tw, ty + 20, brd);
-        // P2 #32: use cached toast component
-        if (cachedToastComponent == null || !toastMessage.equals(cachedToastMessage)) {
-            cachedToastMessage = toastMessage;
-            cachedToastComponent = Component.literal(toastMessage);
-        }
-        g.drawCenteredString(this.font, cachedToastComponent,
-            cx, ty + 5, 0xFFF5DEB3);
     }
 
     // ===== Static inner widget classes (glass-styled) =====
@@ -419,13 +364,15 @@ public class AreaManagementScreen extends Screen {
     }
 
     static class AreaToggleButton extends Button {
+        private final boolean areaEnabled;
         AreaToggleButton(int x, int y, int w, int h, String name, boolean enabled, AreaManagementScreen parent) {
             super(x, y, w, h,
                 Component.literal(enabled ? LocalizationManager.translate("gui.disable") : LocalizationManager.translate("gui.enable")),
                 b -> parent.onToggle(name), DEFAULT_NARRATION);
+            this.areaEnabled = enabled;
         }
         @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
-            int c = getMessage().getString().equals(LocalizationManager.translate("gui.enable")) ? 0x504B8C3E : 0x508C3E3E;
+            int c = areaEnabled ? 0x508C3E3E : 0x504B8C3E;
             int bg = isHoveredOrFocused() ? c | 0x20000000 : c;
             g.fill(getX(), getY(), getX() + width, getY() + height, bg);
             g.fill(getX(), getY(), getX() + width, getY() + 1, 0x608B6914);

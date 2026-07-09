@@ -158,7 +158,7 @@ public class ExtendedCommands {
                                 context
                             ))))
                 )
-                // P3 #9: realigned export/import as siblings of setLeaveMode (was misleadingly indented)
+                // : realigned export/import as siblings of setLeaveMode (was misleadingly indented)
                 .then(Commands.literal("export")
                     .then(Commands.argument("name", StringArgumentType.string())
                         .suggests(AreaCommands::suggestAreaNames)
@@ -443,7 +443,7 @@ public class ExtendedCommands {
                 .executes(AreaBackupCommands::backupConfigs)
             )
 
-            // --- GUI command (requires OP4: GUI can set trigger commands without filtering) ---
+            // --- GUI command (requires OP4: trigger commands are filtered via isValidCommand on update) ---
             .then(Commands.literal("gui")
                 .requires(source -> source.hasPermission(4))
                 .executes(context -> {

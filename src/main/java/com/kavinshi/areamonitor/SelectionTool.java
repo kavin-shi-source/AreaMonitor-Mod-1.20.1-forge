@@ -346,32 +346,10 @@ public class SelectionTool {
             pos2.getX(), pos2.getZ()
         ));
 
-        AreaManager.getInstance().addArea(area);
-
-        player.displayClientMessage(
-            MessageUtils.smartComponent(player, "selection.area.created", areaName).withStyle(net.minecraft.ChatFormatting.BOLD),
-            false
-        );
-
-        player.displayClientMessage(
-            MessageUtils.smartComponent(player, "selection.area.dimension", getDimensionDisplayName(currentDimension)),
-            false
-        );
-        player.displayClientMessage(
+        finalizeAreaCreation(player, area, currentDimension,
             MessageUtils.smartComponent(player, "selection.area.range",
                 Math.min(pos1.getX(), pos2.getX()) + ", " + Math.max(pos1.getX(), pos2.getX()) + "] × [" +
-                Math.min(pos1.getZ(), pos2.getZ()) + ", " + Math.max(pos1.getZ(), pos2.getZ()) + "]"),
-            false
-        );
-
-        showModeSetupGuide(player);
-
-        ConfigManager.saveAreasConfig();
-
-        playerSelections.remove(player.getUUID());
-
-        player.playNotifySound(net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.get(),
-                              net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 2.0f);
+                Math.min(pos1.getZ(), pos2.getZ()) + ", " + Math.max(pos1.getZ(), pos2.getZ()) + "]"));
     }
 
     private static void createPolygonAreaFromSelection(ServerPlayer player, String areaName, SelectionPoints selection) {
@@ -381,24 +359,40 @@ public class SelectionTool {
             vecList.add(new MonitorArea.Vec2i(v.getX(), v.getZ()));
         }
 
-        String currentDimension = player.level().dimension().location().toString();
+        String currentDimension = selection.getPolygonDimension() != null
+            ? selection.getPolygonDimension()
+            : player.level().dimension().location().toString();
 
         MonitorArea area = new MonitorArea(areaName);
         area.setDisplayName(areaName);
         area.setDimension(currentDimension);
         area.setBounds(new MonitorArea.PolygonBounds(vecList));
 
+        finalizeAreaCreation(player, area, currentDimension,
+            MessageUtils.smartComponent(player, "selection.polygon.vertex_count", vertices.size()));
+    }
+
+    private static void finalizeAreaCreation(ServerPlayer player, MonitorArea area, String dimension,
+                                              Component extraInfo) {
         AreaManager.getInstance().addArea(area);
 
         player.displayClientMessage(
-            MessageUtils.smartComponent(player, "selection.area.created", areaName).withStyle(net.minecraft.ChatFormatting.BOLD), false);
+            MessageUtils.smartComponent(player, "selection.area.created", area.getName()).withStyle(net.minecraft.ChatFormatting.BOLD),
+            false
+        );
         player.displayClientMessage(
-            MessageUtils.smartComponent(player, "selection.area.dimension", getDimensionDisplayName(currentDimension)), false);
-        player.displayClientMessage(
-            MessageUtils.smartComponent(player, "selection.polygon.vertex_count", vertices.size()), false);
+            MessageUtils.smartComponent(player, "selection.area.dimension", getDimensionDisplayName(dimension)),
+            false
+        );
+        if (extraInfo != null) {
+            player.displayClientMessage(extraInfo, false);
+        }
 
         showModeSetupGuide(player);
-        ConfigManager.saveAreasConfig();
+        if (!ConfigManager.safeSaveConfig()) {
+            player.displayClientMessage(
+                MessageUtils.smartComponent(player, "selection.area.created_save_failed"), true);
+        }
         playerSelections.remove(player.getUUID());
         player.playNotifySound(net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.get(),
                               net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 2.0f);
@@ -478,7 +472,11 @@ public class SelectionTool {
             return;
         }
 
-        selection.addVertexPoint(pos);
+        if (!selection.addVertexPoint(pos)) {
+            player.displayClientMessage(
+                MessageUtils.smartComponent(player, "selection.polygon.vertex_limit"), true);
+            return;
+        }
         int count = selection.getVertexPoints().size();
 
         showSelectionMarker(player, pos);

@@ -1,5 +1,6 @@
 package com.kavinshi.areamonitor;
 
+import com.kavinshi.areamonitor.util.DimensionUtils;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -30,10 +31,11 @@ public class AreaTriggerManager {
     private static final Map<DebounceKey, Long> debounceMap = new ConcurrentHashMap<>();
     private static volatile long currentTick = 0;
     private static final long COOLDOWN_EXPIRY_TICKS = 72000L;
+    private static final long COOLDOWN_CLEANUP_INTERVAL_TICKS = 6000L;
     private static long lastCooldownCleanup = 0;
 
     private record DebounceKey(UUID playerId, String areaName, boolean isEnter) {}
-    // P2 #8 fix: per-(player, area, direction) lock so a player entering one area and leaving
+    // per-(player, area, direction) lock so a player entering one area and leaving
     // another in the same tick no longer has the second trigger silently dropped.
     private record TriggerLockKey(UUID playerId, String areaName, boolean isEnter) {}
 
@@ -112,6 +114,7 @@ public class AreaTriggerManager {
      * Process pending debounced triggers. Called each server tick.
      */
     public static void processDebouncedTriggers(net.minecraft.server.MinecraftServer server) {
+        if (server == null) return;
         long now = currentTick;
         List<DebounceKey> toRemove = new ArrayList<>();
         for (var entry : debounceMap.entrySet()) {
@@ -125,7 +128,7 @@ public class AreaTriggerManager {
                         TriggerConfig config = key.isEnter()
                             ? area.getEnterTrigger() : area.getLeaveTrigger();
                         if (config != null) {
-                            // P2 #9 fix: skip if player's state no longer matches the trigger direction.
+                            // skip if player's state no longer matches the trigger direction.
                             // Enter triggers require the player to still be inside the area;
                             // leave triggers require them to still be outside. This prevents stale
                             // debounces from firing after the player has already moved on.
@@ -154,7 +157,7 @@ public class AreaTriggerManager {
         }
         for (DebounceKey key : toRemove) debounceMap.remove(key);
 
-        if (now - lastCooldownCleanup >= 6000L) {
+        if (now - lastCooldownCleanup >= COOLDOWN_CLEANUP_INTERVAL_TICKS) {
             cooldownMap.entrySet().removeIf(e -> now - e.getValue() > COOLDOWN_EXPIRY_TICKS);
             lastCooldownCleanup = now;
         }
@@ -226,7 +229,8 @@ public class AreaTriggerManager {
         // 3. Show title
         if (config.getTitleMain() != null) {
             try {
-                player.connection.send(new ClientboundSetTitlesAnimationPacket(5, 40, 10));
+                player.connection.send(new ClientboundSetTitlesAnimationPacket(
+                    AreaManager.TITLE_FADE_IN_TICKS, AreaManager.TITLE_STAY_TICKS, AreaManager.TITLE_FADE_OUT_TICKS));
                 player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(config.getTitleMain())));
                 if (config.getTitleSub() != null) {
                     player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(config.getTitleSub())));
@@ -265,7 +269,7 @@ public class AreaTriggerManager {
         if (config.getTeleportTarget() != null && server != null) {
             try {
                 String tp = config.getTeleportTarget().trim();
-                // P2 #20 fix: support both space-separated (current, from GUI/commands) and
+                // support both space-separated (current, from GUI/commands) and
                 // comma-separated (legacy configs) formats.
                 String[] parts = tp.contains(" ") ? tp.split("\\s+", 4) : tp.split(",", 4);
                 if (parts.length == 4) {
@@ -279,7 +283,11 @@ public class AreaTriggerManager {
                             net.minecraft.core.registries.Registries.DIMENSION, dimKey));
                     if (targetLevel != null) {
                         player.teleportTo(targetLevel, x, y, z, player.getYRot(), player.getXRot());
+                    } else {
+                        AreaMonitorMod.LOGGER.warn("Trigger teleport target dimension '{}' not found for player {}", dim, player.getName().getString());
                     }
+                } else {
+                    AreaMonitorMod.LOGGER.warn("Trigger teleport target '{}' has invalid format (expected 'dim x y z')", tp);
                 }
             } catch (Exception e) {
                 AreaMonitorMod.LOGGER.error("Error teleporting player via trigger", e);
@@ -295,7 +303,9 @@ public class AreaTriggerManager {
         try {
             ResourceLocation resourceId = new ResourceLocation(itemIdStr);
             var item = BuiltInRegistries.ITEM.get(resourceId);
-            if (item == null) return false;
+            if (item == net.minecraft.world.item.Items.AIR && !itemIdStr.equals("minecraft:air")) {
+                return false;
+            }
             for (var stack : player.getInventory().items) {
                 if (stack.getItem() == item) return true;
             }
@@ -318,7 +328,7 @@ public class AreaTriggerManager {
         if (c == null || !c.isActive()) return true;
 
         // playerHasItem: check inventory
-        // P2 #47: use getters instead of direct field access
+        // : use getters instead of direct field access
         String hasItem = c.getPlayerHasItem();
         if (hasItem != null && !hasItem.isEmpty()) {
             if (!playerHasItem(player, hasItem)) {
@@ -327,12 +337,11 @@ public class AreaTriggerManager {
         }
 
         // timeMin/timeMax: check game time (supports cross-midnight ranges)
-        long time = player.level().getDayTime() % 24000;
+        long time = player.level().getDayTime() % DimensionUtils.TICKS_PER_DAY;
         Integer tmin = c.getTimeMin();
         Integer tmax = c.getTimeMax();
         if (tmin != null && tmax != null) {
-            if (tmin <= tmax && (time < tmin || time > tmax)) return false;
-            if (tmin > tmax && !(time >= tmin || time <= tmax)) return false;
+            if (!DimensionUtils.isInTimeRange(time, tmin, tmax)) return false;
         } else {
             if (tmin != null && time < tmin) return false;
             if (tmax != null && time > tmax) return false;

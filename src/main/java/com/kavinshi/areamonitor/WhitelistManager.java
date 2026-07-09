@@ -8,7 +8,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerAboutToStartEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLPaths;
@@ -41,8 +40,8 @@ public class WhitelistManager {
 
     /** Dirty flag for delayed write strategy */
     private static volatile boolean dirty = false;
-    private static long lastAutoSave = 0;
-    private static int saveFailures = 0;
+    private static volatile long lastAutoSave = 0;
+    private static volatile int saveFailures = 0;
     private static final long AUTO_SAVE_INTERVAL_MS = 30000; // 30 seconds
     private static final int MAX_SAVE_RETRIES = 5;
 
@@ -59,25 +58,6 @@ public class WhitelistManager {
         minecraftServer = event.getServer();
         whitelistFile = getWhitelistFile();
         loadWhitelist();
-    }
-
-    @SubscribeEvent
-    public static void onServerStopping(ServerStoppingEvent event) {
-        // P2 #11 fix: defensive — AreaMonitorMod's central handler also calls clearAllData,
-        // but Forge does not guarantee handler ordering across classes. Wrap each step so a
-        // failure here does not propagate and skip subsequent cleanup in other handlers.
-        try {
-            saveWhitelist();
-        } catch (Exception ex) {
-            AreaMonitorMod.LOGGER.error("WhitelistManager: failed to save whitelist on shutdown", ex);
-        }
-        try {
-            whitelistEntries.clear();
-            nameIndex.clear();
-        } catch (Exception ex) {
-            AreaMonitorMod.LOGGER.error("WhitelistManager: failed to clear in-memory state on shutdown", ex);
-        }
-        minecraftServer = null;
     }
 
     @SubscribeEvent
@@ -199,7 +179,7 @@ public class WhitelistManager {
             if (!whitelistEntries.isEmpty()) {
                 saveWhitelist();
                 AreaMonitorMod.LOGGER.info("Migrated {} entries from old whitelist format", whitelistEntries.size());
-                // P2 #45: delete the old .txt file to avoid future confusion and re-migration
+                // : delete the old .txt file to avoid future confusion and re-migration
                 if (!oldFile.delete()) {
                     AreaMonitorMod.LOGGER.warn("Failed to delete old whitelist file after migration: {}", oldFile.getAbsolutePath());
                 }
@@ -272,7 +252,7 @@ public class WhitelistManager {
     }
 
     public static boolean isWhitelisted(ServerPlayer player) {
-        // P2 #43: prefer UUID match; only fall back to name lookup if the name index
+        // : prefer UUID match; only fall back to name lookup if the name index
         // points to a UUID that matches this player's UUID (avoids name collision on
         // offline-mode servers where two different players may share a name).
         if (isWhitelisted(player.getUUID())) return true;
@@ -338,13 +318,15 @@ public class WhitelistManager {
     }
 
     /**
-     * P2 #11: clear all runtime state — called from the central shutdown handler in
+     * : clear all runtime state — called from the central shutdown handler in
      * AreaMonitorMod so cross-class handler ordering is no longer a concern.
      */
     public static void clearAllData() {
         whitelistEntries.clear();
         nameIndex.clear();
         dirty = false;
+        saveFailures = 0;
+        lastAutoSave = 0;
         minecraftServer = null;
     }
 }

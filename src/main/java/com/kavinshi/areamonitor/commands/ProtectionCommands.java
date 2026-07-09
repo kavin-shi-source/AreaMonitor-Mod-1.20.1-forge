@@ -66,31 +66,24 @@ public class ProtectionCommands {
         MonitorArea area = AreaCommandHelper.requireArea(context, areaName);
         if (area == null) return 0;
         ProtectionSettings protection = area.getProtection();
-        context.getSource().sendSystemMessage(
-            Component.literal(String.format(
-                LocalizationManager.translate("protection.info_header"), areaName)));
-        context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.blockBreak"), protection.isBlockBreak())));
-        context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.blockPlace"), protection.isBlockPlace())));
-        context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.blockInteract"), protection.isBlockInteract())));
-        context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.pvp"), protection.isPvp())));
-        context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.explosion"), protection.isExplosion())));
-        context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.entityDamage"), protection.isEntityDamage())));
-        context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.containerInteract"), protection.isContainerInteract())));
-        context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.fluidPlace"), protection.isFluidPlace())));
-        context.getSource().sendSystemMessage(
-            Component.literal(formatLine(LocalizationManager.translate("protection.itemDrop"), protection.isItemDrop())));
+        context.getSource().sendSuccess(
+            () -> MessageUtils.smartComponent(context.getSource(), "protection.info_header", areaName), false);
+        sendProtectionLine(context.getSource(), "protection.blockBreak", protection.isBlockBreak());
+        sendProtectionLine(context.getSource(), "protection.blockPlace", protection.isBlockPlace());
+        sendProtectionLine(context.getSource(), "protection.blockInteract", protection.isBlockInteract());
+        sendProtectionLine(context.getSource(), "protection.pvp", protection.isPvp());
+        sendProtectionLine(context.getSource(), "protection.explosion", protection.isExplosion());
+        sendProtectionLine(context.getSource(), "protection.entityDamage", protection.isEntityDamage());
+        sendProtectionLine(context.getSource(), "protection.containerInteract", protection.isContainerInteract());
+        sendProtectionLine(context.getSource(), "protection.fluidPlace", protection.isFluidPlace());
+        sendProtectionLine(context.getSource(), "protection.itemDrop", protection.isItemDrop());
         return 1;
     }
 
-    private static String formatLine(String label, boolean enabled) {
-        return (enabled ? "§a\u2713 " : "§7\u2717 ") + label;
+    private static void sendProtectionLine(CommandSourceStack source, String key, boolean enabled) {
+        source.sendSuccess(
+            () -> MessageUtils.smartComponent(source, key)
+                .append(Component.literal(enabled ? " §a\u2713" : " §7\u2717")),
+            false);
     }
 }

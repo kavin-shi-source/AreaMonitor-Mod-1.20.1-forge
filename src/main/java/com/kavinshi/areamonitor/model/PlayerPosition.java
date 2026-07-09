@@ -4,7 +4,7 @@ import java.util.Objects;
 
 public class PlayerPosition {
     private final double x;
-    // P3 #5: track Y so we can distinguish same X/Z at different heights (e.g. Nether roof vs floor)
+    // : track Y so we can distinguish same X/Z at different heights (e.g. Nether roof vs floor)
     private final double y;
     private final double z;
     private final String dimension;
@@ -44,7 +44,7 @@ public class PlayerPosition {
         return Double.compare(that.x, x) == 0 &&
                Double.compare(that.y, y) == 0 &&
                Double.compare(that.z, z) == 0 &&
-               dimension.equals(that.dimension);
+               Objects.equals(dimension, that.dimension);
     }
 
     @Override

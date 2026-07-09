@@ -3,6 +3,7 @@ package com.kavinshi.areamonitor;
 import net.minecraft.core.BlockPos;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class SelectionPoints {
@@ -14,8 +15,12 @@ public class SelectionPoints {
     private String polygonDimension;
     private boolean isMultiPointMode = false;
 
-    public List<BlockPos> getVertexPoints() { return vertexPoints; }
-    public void addVertexPoint(BlockPos pos) { this.vertexPoints.add(pos); }
+    public List<BlockPos> getVertexPoints() { return Collections.unmodifiableList(vertexPoints); }
+    public boolean addVertexPoint(BlockPos pos) {
+        if (vertexPoints.size() >= 32) return false;
+        this.vertexPoints.add(pos);
+        return true;
+    }
     public boolean isMultiPointMode() { return isMultiPointMode; }
     public void setMultiPointMode(boolean multiPointMode) { this.isMultiPointMode = multiPointMode; }
     public boolean hasEnoughVerticesForPolygon() { return vertexPoints.size() >= 3; }
@@ -59,10 +64,5 @@ public class SelectionPoints {
     public void setSecondPoint(BlockPos secondPoint, String dimension) {
         this.secondPoint = secondPoint;
         this.secondPointDimension = dimension;
-    }
-
-    public boolean hasConsistentDimensions() {
-        if (firstPointDimension == null || secondPointDimension == null) return true;
-        return firstPointDimension.equals(secondPointDimension);
     }
 }
