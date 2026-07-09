@@ -9,6 +9,7 @@ import net.minecraft.world.level.block.entity.BaseContainerBlockEntity;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraftforge.event.entity.item.ItemTossEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
@@ -70,8 +71,8 @@ public class AreaProtectionManager {
 
     private static boolean isFluidPlaceBlocked(ServerPlayer sp, BlockEvent.EntityPlaceEvent event) {
         if (!isProtected(sp, "fluidPlace")) return false;
-        // Check if the placed block is a fluid (water/lava source or flowing)
         var state = event.getPlacedBlock();
+        if (state == null) return false;
         return state.is(Blocks.WATER) || state.is(Blocks.LAVA)
             || state.getFluidState().is(Fluids.WATER)
             || state.getFluidState().is(Fluids.LAVA);
@@ -85,7 +86,7 @@ public class AreaProtectionManager {
         if (isProtected(sp, "containerInteract")) {
             var level = event.getLevel();
             var be = level.getBlockEntity(pos);
-            if (be instanceof BaseContainerBlockEntity) {
+            if (be instanceof BaseContainerBlockEntity || level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.ANVIL) || level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.CHIPPED_ANVIL) || level.getBlockState(pos).is(net.minecraft.world.level.block.Blocks.DAMAGED_ANVIL)) {
                 event.setCanceled(true);
                 sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.container_interact_denied"), true);
                 AreaVisualizer.spawnDeniedBurst(sp, pos.getX(), pos.getY(), pos.getZ());
@@ -101,11 +102,78 @@ public class AreaProtectionManager {
     }
 
     @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
+        if (!(event.getEntity() instanceof ServerPlayer sp)) return;
+        net.minecraft.world.entity.Entity target = event.getTarget();
+        if (target == null) return;
+
+        // Container interaction protection for entity-based containers (e.g., chest minecarts)
+        if (isProtected(sp, "containerInteract") && target instanceof net.minecraft.world.Container) {
+            event.setCanceled(true);
+            sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.container_interact_denied"), true);
+            AreaVisualizer.spawnDeniedBurst(sp, target.getX(), target.getY(), target.getZ());
+            return;
+        }
+
+        // Entity interaction protection maps to blockInteract (e.g., item frames, armor stands)
+        if (isProtected(sp, "blockInteract")) {
+            event.setCanceled(true);
+            sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.block_interact_denied"), true);
+            AreaVisualizer.spawnDeniedBurst(sp, target.getX(), target.getY(), target.getZ());
+        }
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
+    public static void onEntityAttack(AttackEntityEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer attacker)) return;
+        net.minecraft.world.entity.Entity victim = event.getTarget();
+        if (victim == null) return;
+        
+        // Skip players as they are handled by LivingHurtEvent for PVP
+        if (victim instanceof Player) return;
+
+        // Short-circuit when no areas exist, matching onLivingHurt
+        AreaManager am = AreaManager.getInstance();
+        if (am.getAllAreas().isEmpty()) return;
+
+        // Check if victim is in a protected area
+        String dimension = victim.level().dimension().location().toString();
+        boolean anyProtection = false;
+        boolean allWhitelisted = true;
+
+        if (WhitelistManager.isWhitelisted(attacker)) {
+            return;
+        }
+
+        String attackerName = attacker.getGameProfile().getName().toLowerCase();
+        for (MonitorArea area : am.getPotentialAreasAt(victim.getX(), victim.getZ(), dimension)) {
+            if (area == null || !area.isEnabled()) continue;
+            if (!area.getDimension().equals(dimension)) continue;
+            if (!area.getProtection().isEntityDamage()) continue;
+            if (!area.getBounds().contains(victim.getX(), victim.getZ())) continue;
+            
+            anyProtection = true;
+            if (!area.getProtectionWhitelist().contains(attackerName)) {
+                allWhitelisted = false;
+                break;
+            }
+        }
+        
+        if (anyProtection && !allWhitelisted) {
+            event.setCanceled(true);
+            // Re-use block_interact_denied or a similar message as feedback
+            attacker.displayClientMessage(MessageUtils.smartComponent(attacker, "protection.block_interact_denied"), true);
+            AreaVisualizer.spawnDeniedBurst(attacker, victim.getX(), victim.getY(), victim.getZ());
+        }
+    }
+
+    @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onLivingHurt(LivingHurtEvent event) {
-        // P1-12 fix: fast short-circuit when no areas exist — avoids per-event branch checks and HashSet allocation
         if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
+        var source = event.getSource();
+        if (source == null) return;
         // PVP: Player attacking another player
-        if (event.getSource().getEntity() instanceof ServerPlayer attacker &&
+        if (source.getEntity() instanceof ServerPlayer attacker &&
             event.getEntity() instanceof ServerPlayer victim) {
             if (isProtected(attacker, "pvp") || isProtected(victim, "pvp")) {
                 event.setCanceled(true);
@@ -116,7 +184,7 @@ public class AreaProtectionManager {
         }
         // Entity damage to player (non-player source: mobs, fall, fire, etc.)
         if (event.getEntity() instanceof ServerPlayer victim &&
-            !(event.getSource().getEntity() instanceof Player)) {
+            !(source.getEntity() instanceof Player)) {
             if (isProtected(victim, "entityDamage")) {
                 event.setCanceled(true);
                 AreaVisualizer.spawnDeniedBurst(victim, victim.getX(), victim.getY(), victim.getZ());
@@ -135,7 +203,7 @@ public class AreaProtectionManager {
             AreaManager am = AreaManager.getInstance();
             boolean anyProtection = false;
             boolean allWhitelisted = true;
-            ServerPlayer attacker = event.getSource().getEntity() instanceof ServerPlayer sp ? sp : null;
+            ServerPlayer attacker = source.getEntity() instanceof ServerPlayer sp ? sp : null;
             if (attacker != null && WhitelistManager.isWhitelisted(attacker)) {
                 return; // global whitelist bypasses everything
             }
@@ -223,6 +291,8 @@ public class AreaProtectionManager {
      * Check if the given protection type is active for the player in any of their current areas.
      */
     private static boolean isProtected(ServerPlayer player, String protectionType) {
+        // Guard against null player or player without a level (edge case during login/logout transitions)
+        if (player == null || player.level() == null) return false;
         // Global whitelist bypass
         if (WhitelistManager.isWhitelisted(player)) return false;
 

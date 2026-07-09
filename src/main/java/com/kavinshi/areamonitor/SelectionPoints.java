@@ -11,6 +11,7 @@ public class SelectionPoints {
     private BlockPos secondPoint;
     private String secondPointDimension;
     private final List<BlockPos> vertexPoints = new ArrayList<>();
+    private String polygonDimension;
     private boolean isMultiPointMode = false;
 
     public List<BlockPos> getVertexPoints() { return vertexPoints; }
@@ -18,7 +19,9 @@ public class SelectionPoints {
     public boolean isMultiPointMode() { return isMultiPointMode; }
     public void setMultiPointMode(boolean multiPointMode) { this.isMultiPointMode = multiPointMode; }
     public boolean hasEnoughVerticesForPolygon() { return vertexPoints.size() >= 3; }
-    public void clearVertices() { vertexPoints.clear(); }
+    public void clearVertices() { vertexPoints.clear(); polygonDimension = null; }
+    public void setPolygonDimension(String dim) { this.polygonDimension = dim; }
+    public String getPolygonDimension() { return polygonDimension; }
 
     public boolean hasFirstPoint() {
         return firstPoint != null;

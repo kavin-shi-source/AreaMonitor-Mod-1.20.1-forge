@@ -231,6 +231,8 @@ public class TriggerEditPanel extends Screen {
         EditBox e = new EditBox(this.font, x, y, w, 16, Component.empty());
         e.setMaxLength(200);
         e.setValue(v);
+        // Allow formatting character (§) in the edit box
+        e.setFilter(s -> true);
         e.setResponder(v2 -> dirty = true);
         addRenderableWidget(e);
         return e;

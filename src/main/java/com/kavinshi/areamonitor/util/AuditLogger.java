@@ -2,6 +2,7 @@ package com.kavinshi.areamonitor.util;
 
 import com.kavinshi.areamonitor.AreaMonitorMod;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraftforge.fml.loading.FMLPaths;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,6 +12,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * P2 #24: Lightweight audit logger for administrative commands.
@@ -32,7 +34,7 @@ public final class AuditLogger {
 
     private static Path getAuditFile() {
         if (auditFile == null) {
-            auditFile = Path.of("config", "areamonitor", "audit.log");
+            auditFile = FMLPaths.CONFIGDIR.get().resolve("areamonitor").resolve("audit.log");
         }
         return auditFile;
     }
@@ -55,5 +57,18 @@ public final class AuditLogger {
 
     public static void log(CommandSourceStack source, String action) {
         log(source, action, null);
+    }
+
+    /** Flush and close the audit log executor on server stop. */
+    public static void shutdown() {
+        IO_EXECUTOR.shutdown();
+        try {
+            if (!IO_EXECUTOR.awaitTermination(2, TimeUnit.SECONDS)) {
+                IO_EXECUTOR.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            IO_EXECUTOR.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

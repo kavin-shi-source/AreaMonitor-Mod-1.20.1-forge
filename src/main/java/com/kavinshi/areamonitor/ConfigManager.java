@@ -3,6 +3,7 @@ package com.kavinshi.areamonitor;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
+import com.kavinshi.areamonitor.model.RestrictionSettings;
 import com.kavinshi.areamonitor.util.GameModeUtils;
 import net.minecraft.world.level.GameType;
 import net.minecraftforge.common.ForgeConfigSpec;
@@ -268,7 +269,7 @@ public class ConfigManager {
 
         // Async file I/O to avoid blocking main thread
         final File targetFile = areasConfigFile;
-        final File tmpFile = new File(areasConfigFile.getParentFile(), "areas.json.tmp");
+        final File tmpFile = new File(areasConfigFile.getParentFile(), "areas.json.tmp." + System.nanoTime());
         final AreaConfigData dataToWrite = configData;
         CONFIG_IO_EXECUTOR.submit(() -> {
             try {
@@ -282,6 +283,47 @@ public class ConfigManager {
                 AreaMonitorMod.LOGGER.error("Failed to save area config: {}", targetFile.getAbsolutePath(), e);
             }
         });
+    }
+
+    /**
+     * Save area configuration synchronously.
+     * Used strictly during server shutdown to prevent JVM exit before async I/O completes.
+     */
+    public static void saveAreasConfigSync() {
+        if (areasConfigFile == null) {
+            areasConfigFile = getConfigDir().resolve("areas.json").toFile();
+        }
+
+        if (areasConfigFile == null) return;
+
+        AreaConfigData configData = new AreaConfigData();
+        configData.areas = new HashMap<>();
+
+        synchronized (AreaManager.getInstance().getAreasLock()) {
+            for (MonitorArea area : AreaManager.getInstance().getAllAreas()) {
+                configData.areas.put(area.getName(), createConfigFromArea(area));
+            }
+        }
+
+        AreaManager.getInstance().rebuildSpatialPartition();
+
+        try {
+            File parentDir = areasConfigFile.getParentFile();
+            if (parentDir != null && !parentDir.exists() && !parentDir.mkdirs()) {
+                AreaMonitorMod.LOGGER.error("Failed to create config directory: {}", parentDir.getAbsolutePath());
+                return;
+            }
+
+            File tmpFile = new File(areasConfigFile.getParentFile(), "areas.json.tmp.sync." + System.nanoTime());
+            try (Writer writer = new OutputStreamWriter(new FileOutputStream(tmpFile), StandardCharsets.UTF_8)) {
+                GSON.toJson(configData, writer);
+            }
+            Files.move(tmpFile.toPath(), areasConfigFile.toPath(),
+                StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            AreaMonitorMod.LOGGER.info("Area config saved synchronously");
+        } catch (IOException e) {
+            AreaMonitorMod.LOGGER.error("Failed to save area config synchronously: {}", areasConfigFile.getAbsolutePath(), e);
+        }
     }
 
     /**
@@ -388,6 +430,14 @@ public class ConfigManager {
         if (config.getWhitelist() != null) {
             area.setWhitelist(new ArrayList<>(config.getWhitelist()));
         }
+        
+        if (config.getProtectionWhitelist() != null) {
+            area.setProtectionWhitelist(new ArrayList<>(config.getProtectionWhitelist()));
+        }
+
+        if (config.getRestrictions() != null) {
+            area.setRestrictions(config.getRestrictions());
+        }
 
         // Set protection settings
         if (config.getProtection() != null) {
@@ -397,9 +447,13 @@ public class ConfigManager {
         // Set triggers
         if (config.getEnterTrigger() != null) {
             area.setEnterTrigger(config.getEnterTrigger());
+            if (config.getEnterTrigger().getCondition() != null)
+                config.getEnterTrigger().getCondition().sanitize();
         }
         if (config.getLeaveTrigger() != null) {
             area.setLeaveTrigger(config.getLeaveTrigger());
+            if (config.getLeaveTrigger().getCondition() != null)
+                config.getLeaveTrigger().getCondition().sanitize();
         }
 
         // Load schedule / condition / chain
@@ -429,6 +483,8 @@ public class ConfigManager {
         config.setLeaveMode(area.getLeaveMode().getName());
         config.setEnabled(area.isEnabled());
         config.setWhitelist(area.getWhitelist());
+        config.setProtectionWhitelist(area.getProtectionWhitelist());
+        config.setRestrictions(area.getRestrictions());
 
         if (area.getBounds() instanceof MonitorArea.RectangleBounds rect) {
             config.setBoundsType("RECTANGLE");
@@ -594,6 +650,8 @@ public class ConfigManager {
         private String leaveMode = "survival";
         private boolean enabled = true;
         private List<String> whitelist = new ArrayList<>();
+        private List<String> protectionWhitelist = new ArrayList<>();
+        private RestrictionSettings restrictions;
         private ProtectionSettings protection;
         private TriggerConfig enterTrigger;
         private TriggerConfig leaveTrigger;
@@ -628,6 +686,10 @@ public class ConfigManager {
         public void setEnabled(boolean v) { this.enabled = v; }
         public List<String> getWhitelist() { return whitelist; }
         public void setWhitelist(List<String> v) { this.whitelist = v != null ? v : new ArrayList<>(); }
+        public List<String> getProtectionWhitelist() { return protectionWhitelist; }
+        public void setProtectionWhitelist(List<String> v) { this.protectionWhitelist = v != null ? v : new ArrayList<>(); }
+        public RestrictionSettings getRestrictions() { return restrictions; }
+        public void setRestrictions(RestrictionSettings v) { this.restrictions = v; }
         public ProtectionSettings getProtection() { return protection; }
         public void setProtection(ProtectionSettings v) { this.protection = v; }
         public TriggerConfig getEnterTrigger() { return enterTrigger; }

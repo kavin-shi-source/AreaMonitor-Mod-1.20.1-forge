@@ -53,8 +53,32 @@ public class LocalizationManager {
     }
 
     private LocalizationManager() {
-        currentLanguage = DEFAULT_LANGUAGE;
+        currentLanguage = detectClientLanguage();
         loadLanguage();
+    }
+
+    /**
+     * Detect the appropriate language. On the client side, uses Minecraft's
+     * language setting. Falls back to English otherwise.
+     */
+    private static String detectClientLanguage() {
+        if (net.minecraftforge.fml.loading.FMLEnvironment.dist != null
+                && net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient()) {
+            try {
+                String mcLang = com.kavinshi.areamonitor.client.ClientLanguageHelper.getClientLanguage();
+                if (mcLang != null) {
+                    mcLang = mcLang.toLowerCase();
+                    for (String supported : SUPPORTED_LANGUAGES) {
+                        if (supported.equals(mcLang)) {
+                            return mcLang;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                // MC not initialized yet
+            }
+        }
+        return DEFAULT_LANGUAGE;
     }
 
     /**
@@ -159,10 +183,12 @@ public class LocalizationManager {
 
         try {
             String result = String.format(template, args);
-            // putIfAbsent is atomic; size check is a soft hint (slight overshoot under
-            // concurrency is acceptable for a bounded cache).
-            if (InstanceHolder.INSTANCE.formattedCache.size() < 100) {
+            // ConcurrentHashMap size check is a soft hint; bounded at ~200 to prevent unbounded growth.
+            // Periodically evict when oversize to keep memory footprint low.
+            if (InstanceHolder.INSTANCE.formattedCache.size() < 200) {
                 InstanceHolder.INSTANCE.formattedCache.putIfAbsent(cacheKey, result);
+            } else {
+                InstanceHolder.INSTANCE.formattedCache.clear();
             }
             return result;
         } catch (Exception e) {

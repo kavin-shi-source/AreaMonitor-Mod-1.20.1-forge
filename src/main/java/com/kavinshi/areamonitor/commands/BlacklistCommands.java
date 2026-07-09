@@ -90,15 +90,14 @@ public class BlacklistCommands {
             if (!itemName.contains(":")) {
                 itemName = "minecraft:" + itemName;
             }
-            ResourceLocation location = ResourceLocation.tryParse(itemName);
-            if (location == null) return null;
+            ResourceLocation location = new ResourceLocation(itemName);
             Item item = BuiltInRegistries.ITEM.get(location);
             if (item == Items.AIR && !itemName.equals("minecraft:air")) {
                 return null;
             }
             return item;
         } catch (Exception e) {
-            AreaMonitorMod.LOGGER.debug("Failed to parse item name: {}", itemName);
+            AreaMonitorMod.LOGGER.debug("Failed to parse item name (invalid format): {}", itemName);
             return null;
         }
     }
@@ -131,10 +130,7 @@ public class BlacklistCommands {
             return 0;
         }
 
-        Set<Item> areaBlacklist = ItemBlacklistManager.getAreaBlacklist(areaName);
-        if (areaBlacklist.isEmpty()) {
-            areaBlacklist = new HashSet<>();
-        }
+        Set<Item> areaBlacklist = new HashSet<>(ItemBlacklistManager.getAreaBlacklist(areaName));
 
         if (areaBlacklist.contains(item)) {
             MessageUtils.sendSuccess(context.getSource(), "blacklist.item_already_blacklisted", true, getItemDisplayName(item));
@@ -160,7 +156,7 @@ public class BlacklistCommands {
             return 0;
         }
 
-        Set<Item> areaBlacklist = ItemBlacklistManager.getAreaBlacklist(areaName);
+        Set<Item> areaBlacklist = new HashSet<>(ItemBlacklistManager.getAreaBlacklist(areaName));
         if (areaBlacklist.remove(item)) {
             if (areaBlacklist.isEmpty()) {
                 ItemBlacklistManager.removeAreaBlacklist(areaName);

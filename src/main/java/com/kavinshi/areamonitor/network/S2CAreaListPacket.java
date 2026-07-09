@@ -47,20 +47,24 @@ public class S2CAreaListPacket {
     }
 
     public void encode(FriendlyByteBuf buf) {
+        // Pre-encode entries into a temp buffer to know exact count within budget
+        io.netty.buffer.ByteBuf temp = io.netty.buffer.Unpooled.buffer();
+        FriendlyByteBuf tempBuf = new FriendlyByteBuf(temp);
         int startWriterIndex = buf.writerIndex();
-        buf.writeVarInt(areas.size());
         int written = 0;
         for (AreaEntry entry : areas) {
-            // P1-6 fix: enforce total byte budget on encode side to avoid kicking players when payload exceeds Forge 1 MiB default
-            int bytesSoFar = buf.writerIndex() - startWriterIndex;
+            int bytesSoFar = buf.writerIndex() - startWriterIndex + tempBuf.writerIndex();
             if (bytesSoFar > MAX_TOTAL_BYTES) {
                 AreaMonitorMod.LOGGER.warn("Area list encode exceeded {} bytes after {} of {} entries, truncating",
                     MAX_TOTAL_BYTES, written, areas.size());
                 break;
             }
-            entry.encode(buf);
+            entry.encode(tempBuf);
             written++;
         }
+        buf.writeVarInt(written);
+        buf.writeBytes(temp);
+        temp.release();
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
@@ -249,6 +253,9 @@ public class S2CAreaListPacket {
                     arr.add(p);
                 }
                 obj.add("vertices", arr);
+            } else {
+                AreaMonitorMod.LOGGER.warn("Unknown bounds type for area '{}': {}", area.getName(),
+                    area.getBounds() != null ? area.getBounds().getClass().getSimpleName() : "null");
             }
             return obj.toString();
         }

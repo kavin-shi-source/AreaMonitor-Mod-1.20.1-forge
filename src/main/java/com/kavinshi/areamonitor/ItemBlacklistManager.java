@@ -97,7 +97,8 @@ public class ItemBlacklistManager {
      * Get blacklist items for an area.
      */
     public static Set<Item> getAreaBlacklist(String areaName) {
-        return AREA_BLACKLISTS.getOrDefault(areaName, Collections.emptySet());
+        var set = AREA_BLACKLISTS.get(areaName);
+        return set != null ? Collections.unmodifiableSet(set) : Collections.emptySet();
     }
 
     /**
@@ -153,6 +154,7 @@ public class ItemBlacklistManager {
      * Check if a command is blocked.
      */
     public static boolean isCommandBlocked(String command, ServerPlayer player) {
+        if (command == null || command.isBlank()) return false;
         String baseCommand = command.split(" ")[0].toLowerCase();
         while (baseCommand.startsWith("/")) baseCommand = baseCommand.substring(1);
         String normalized = stripNamespace(baseCommand);
@@ -501,17 +503,13 @@ public class ItemBlacklistManager {
      */
     private static Item parseItemFromId(String itemId) {
         try {
-            ResourceLocation location = ResourceLocation.tryParse(itemId);
-            if (location == null) {
-                AreaMonitorMod.LOGGER.warn("Invalid item ID format: {}", itemId);
-                return null;
-            }
+            ResourceLocation location = new ResourceLocation(itemId);
             Item item = BuiltInRegistries.ITEM.get(location);
             if (item == Items.AIR && !itemId.equals("minecraft:air")) {
                 return null;
             }
             return item;
-        } catch (IllegalArgumentException e) {
+        } catch (Exception e) {
             AreaMonitorMod.LOGGER.warn("Invalid item ID format: {}", itemId);
             return null;
         }

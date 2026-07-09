@@ -135,8 +135,16 @@ public class AreaExportCommands {
                 AreaMonitorMod.LOGGER.warn("Skipping invalid dimension '{}' in import/apply", dim);
             }
         }
-        if (obj.has("enterMode")) area.setEnterMode(GameType.byName(obj.get("enterMode").getAsString()));
-        if (obj.has("leaveMode")) area.setLeaveMode(GameType.byName(obj.get("leaveMode").getAsString()));
+        if (obj.has("enterMode")) {
+            GameType mode = GameType.byName(obj.get("enterMode").getAsString());
+            if (mode != null) area.setEnterMode(mode);
+            else AreaMonitorMod.LOGGER.warn("Skipping invalid enterMode '{}' in import", obj.get("enterMode").getAsString());
+        }
+        if (obj.has("leaveMode")) {
+            GameType mode = GameType.byName(obj.get("leaveMode").getAsString());
+            if (mode != null) area.setLeaveMode(mode);
+            else AreaMonitorMod.LOGGER.warn("Skipping invalid leaveMode '{}' in import", obj.get("leaveMode").getAsString());
+        }
         if (obj.has("enabled")) area.setEnabled(obj.get("enabled").getAsBoolean());
         if (obj.has("boundsType")) {
             String t = obj.get("boundsType").getAsString();
@@ -164,6 +172,7 @@ public class AreaExportCommands {
         }
         if (obj.has("restrictions")) area.setRestrictions(GSON.fromJson(obj.get("restrictions"), RestrictionSettings.class));
         if (obj.has("protectionWhitelist") && obj.get("protectionWhitelist").isJsonArray()) {
+            area.getProtectionWhitelist().clear();
             for (var e : obj.getAsJsonArray("protectionWhitelist")) area.getProtectionWhitelist().add(e.getAsString().toLowerCase());
         }
         if (obj.has("schedule")) {

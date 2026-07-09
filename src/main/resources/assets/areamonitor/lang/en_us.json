@@ -249,6 +249,8 @@
   "gui.bounds": "Bounds",
   "gui.bounds_rectangle": "Rectangle",
   "gui.bounds_circle": "Circle",
+  "gui.bounds_polygon": "Polygon",
+  "gui.bounds_polygon_hint": "Polygon vertices cannot be edited here. Use the selection tool to recreate the area.",
   "gui.bounds_min": "Min",
   "gui.bounds_max": "Max",
   "gui.bounds_center": "Center",

@@ -45,9 +45,14 @@ public final class DimensionUtils {
      * @return Whether the dimension is a valid ResourceLocation
      */
     public static boolean isValidDimension(String dimensionId) {
-        if (dimensionId == null) {
+        if (dimensionId == null || dimensionId.isEmpty() || !dimensionId.contains(":")) {
             return false;
         }
-        return ResourceLocation.tryParse(dimensionId) != null;
+        try {
+            new ResourceLocation(dimensionId);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

@@ -29,8 +29,10 @@ public class AreaMonitor {
     private static final AtomicInteger tickCounter = new AtomicInteger(0);
     private static final AtomicInteger scheduleTickCounter = new AtomicInteger(0);
     private static final AtomicInteger visualizationTickCounter = new AtomicInteger(0);
+    private static final AtomicInteger cacheCleanupTickCounter = new AtomicInteger(0);
     private static final AtomicLong monotonicTickCounter = new AtomicLong(0);
     private static final int VISUALIZATION_INTERVAL_TICKS = 5;
+    private static final int CACHE_CLEANUP_INTERVAL_TICKS = 6000; // 5 min
     // P2 #10 fix: pending actions are now timed in ticks rather than wall-clock milliseconds,
     // so they survive server pauses (single-player pause, integrated-server tick halt) without
     // being expired or executed prematurely. 10s @ 20 TPS = 200 ticks.
@@ -106,6 +108,11 @@ public class AreaMonitor {
         if (scheduleTickCounter.incrementAndGet() >= 20) {
             scheduleTickCounter.set(0);
             processSchedules();
+        }
+
+        if (cacheCleanupTickCounter.incrementAndGet() >= CACHE_CLEANUP_INTERVAL_TICKS) {
+            cacheCleanupTickCounter.set(0);
+            AreaManager.getInstance().clearUnusedCaches();
         }
 
         int currentTick = tickCounter.incrementAndGet();
@@ -232,7 +239,9 @@ public class AreaMonitor {
      */
     private static void processSchedules() {
         if (minecraftServer == null) return;
-        long gameTime = minecraftServer.overworld().getDayTime();
+        var overworld = minecraftServer.overworld();
+        if (overworld == null) return;
+        long gameTime = overworld.getDayTime();
         AreaManager am = AreaManager.getInstance();
         for (MonitorArea area : am.getAllAreas()) {
             if (!area.isScheduleEnabled()) continue;

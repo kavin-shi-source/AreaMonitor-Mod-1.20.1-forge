@@ -209,11 +209,7 @@ public class AreaVisualizer {
         try {
             MinecraftServer server = AreaMonitor.getServer();
             if (server != null) {
-                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                    if (player.getUUID().equals(playerId)) {
-                        return player;
-                    }
-                }
+                return server.getPlayerList().getPlayer(playerId);
             }
         } catch (Exception e) {
             // Log full stack trace for debugging
@@ -247,6 +243,10 @@ public class AreaVisualizer {
         double dz = pos2.getZ() - pos1.getZ();
         double distance = Math.sqrt(dx * dx + dz * dz);
         int steps = (int) (distance / getParticleSpacing());
+        if (steps == 0) {
+            batch.add(new ParticleData(pos1.getX() + 0.5, y, pos1.getZ() + 0.5, particle));
+            return;
+        }
 
         for (int i = 0; i <= steps; i++) {
             double ratio = (double) i / steps;

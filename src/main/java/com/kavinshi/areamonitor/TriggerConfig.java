@@ -162,5 +162,25 @@ public class TriggerConfig {
             return playerHasItem != null || timeMin != null || timeMax != null
                 || weather != null || minPlayers != null;
         }
+
+        /** Sanitize invalid values that may have bypassed setters during Gson deserialization. */
+        public void sanitize() {
+            if (timeMin != null && (timeMin < 0 || timeMin > 24000)) {
+                AreaMonitorMod.LOGGER.warn("TriggerCondition: invalid timeMin {}, resetting to null", timeMin);
+                timeMin = null;
+            }
+            if (timeMax != null && (timeMax < 0 || timeMax > 24000)) {
+                AreaMonitorMod.LOGGER.warn("TriggerCondition: invalid timeMax {}, resetting to null", timeMax);
+                timeMax = null;
+            }
+            if (weather != null && !"clear".equals(weather) && !"rain".equals(weather) && !"thunder".equals(weather)) {
+                AreaMonitorMod.LOGGER.warn("TriggerCondition: invalid weather '{}', resetting to null", weather);
+                weather = null;
+            }
+            if (minPlayers != null && minPlayers < 0) {
+                AreaMonitorMod.LOGGER.warn("TriggerCondition: invalid minPlayers {}, resetting to null", minPlayers);
+                minPlayers = null;
+            }
+        }
     }
 }

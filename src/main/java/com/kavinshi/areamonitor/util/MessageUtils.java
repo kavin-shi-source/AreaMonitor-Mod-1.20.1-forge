@@ -24,8 +24,6 @@ import net.minecraft.server.level.ServerPlayer;
 public final class MessageUtils {
 
     private static final String MOD_ID = AreaMonitorMod.MOD_ID;
-    private static final io.netty.util.AttributeKey<net.minecraftforge.network.ConnectionData> FML_CONNECTION_DATA_KEY =
-        io.netty.util.AttributeKey.valueOf("fml:connectionData");
     
     private MessageUtils() {
     }
@@ -33,8 +31,8 @@ public final class MessageUtils {
     /**
      * Check if a player's client has the mod installed.
      * 
-     * <p>This uses Forge's network connection data to determine if the client
-     * has the areamonitor mod loaded. If detection fails, returns false.</p>
+     * <p>Uses Forge's official {@code NetworkHooks.getConnectionData()} API
+     * to determine if the client has the areamonitor mod loaded.</p>
      * 
      * @param player The server player to check
      * @return true if the client has the mod installed, false otherwise or if detection fails
@@ -46,17 +44,17 @@ public final class MessageUtils {
         
         try {
             net.minecraft.network.Connection connection = player.connection.connection;
-            if (connection != null && connection.channel() != null) {
-                io.netty.channel.Channel channel = connection.channel();
+            if (connection == null) {
+                return false;
+            }
 
-                net.minecraftforge.network.ConnectionData connectionData =
-                    channel.attr(FML_CONNECTION_DATA_KEY).get();
+            net.minecraftforge.network.ConnectionData connectionData =
+                net.minecraftforge.network.NetworkHooks.getConnectionData(connection);
 
-                if (connectionData != null) {
-                    com.google.common.collect.ImmutableList<String> modList = connectionData.getModList();
-                    if (modList != null) {
-                        return modList.contains(MOD_ID);
-                    }
+            if (connectionData != null) {
+                com.google.common.collect.ImmutableList<String> modList = connectionData.getModList();
+                if (modList != null) {
+                    return modList.contains(MOD_ID);
                 }
             }
         } catch (Exception e) {

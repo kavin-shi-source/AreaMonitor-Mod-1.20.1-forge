@@ -249,6 +249,8 @@
   "gui.bounds": "边界",
   "gui.bounds_rectangle": "矩形",
   "gui.bounds_circle": "圆形",
+  "gui.bounds_polygon": "多边形",
+  "gui.bounds_polygon_hint": "多边形顶点信息不可在此面板编辑，请使用选择工具重新创建区域。",
   "gui.bounds_min": "最小",
   "gui.bounds_max": "最大",
   "gui.bounds_center": "中心",

@@ -1,6 +1,7 @@
 package com.kavinshi.areamonitor.network;
 
 import com.kavinshi.areamonitor.AreaMonitorMod;
+import com.kavinshi.areamonitor.util.MessageUtils;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkDirection;
@@ -13,10 +14,10 @@ import java.util.Optional;
 public class ModNetwork {
     private static final String PROTOCOL_VERSION = "1";
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
-        ResourceLocation.tryParse(AreaMonitorMod.MOD_ID + ":main"),
+        new ResourceLocation(AreaMonitorMod.MOD_ID, "main"),
         () -> PROTOCOL_VERSION,
-        PROTOCOL_VERSION::equals,
-        PROTOCOL_VERSION::equals
+        NetworkRegistry.acceptMissingOr(PROTOCOL_VERSION),
+        NetworkRegistry.acceptMissingOr(PROTOCOL_VERSION)
     );
 
     public static void register() {
@@ -48,6 +49,9 @@ public class ModNetwork {
     }
 
     public static void sendToPlayer(Object packet, ServerPlayer player) {
+        if (!MessageUtils.clientHasMod(player)) {
+            return;
+        }
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
     }
 

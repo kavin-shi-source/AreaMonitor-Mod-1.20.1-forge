@@ -26,7 +26,7 @@ public class SelectionEventHandler {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
 
         if (SelectionTool.isHoldingSelectionTool(player)) {
-            SelectionTool.handlePlayerInteract(player, event.getPos(), InteractionHand.MAIN_HAND);
+            SelectionTool.handlePlayerInteract(player, event.getPos(), event.getHand());
             event.setCanceled(true);
         }
     }

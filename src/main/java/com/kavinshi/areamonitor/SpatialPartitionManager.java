@@ -132,10 +132,12 @@ public class SpatialPartitionManager {
     private void addRegionToGrid(MonitorArea region) {
         AABB bounds = region.getBoundingBox();
 
+        // Calculate grid boundaries. Use Math.ceil(maxX) - 1 to get the inclusive max block coordinate,
+        // preventing boundary-aligned areas (like maxX=255.0) from spilling over into the next grid cell redundantly.
         int minGridX = (int) Math.floor(bounds.minX / GRID_SIZE);
-        int maxGridX = (int) Math.floor(bounds.maxX / GRID_SIZE);
+        int maxGridX = (int) Math.floor((Math.ceil(bounds.maxX) - 1.0) / GRID_SIZE);
         int minGridZ = (int) Math.floor(bounds.minZ / GRID_SIZE);
-        int maxGridZ = (int) Math.floor(bounds.maxZ / GRID_SIZE);
+        int maxGridZ = (int) Math.floor((Math.ceil(bounds.maxZ) - 1.0) / GRID_SIZE);
 
         Set<Long> occupiedGrids = ConcurrentHashMap.newKeySet();
 

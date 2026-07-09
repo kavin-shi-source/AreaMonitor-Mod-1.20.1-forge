@@ -64,7 +64,7 @@ public class SelectionTool {
     private static net.minecraft.world.item.Item getSelectionToolItem() {
         String itemId = ConfigManager.CONFIG.selectionToolItemId.get();
         try {
-            ResourceLocation location = ResourceLocation.tryParse(itemId);
+            ResourceLocation location = new ResourceLocation(itemId);
             if (location != null) {
                 net.minecraft.world.item.Item item = BuiltInRegistries.ITEM.get(location);
                 if (item != Items.AIR) {
@@ -124,7 +124,7 @@ public class SelectionTool {
      * Handle player interaction event.
      */
     public static void handlePlayerInteract(ServerPlayer player, BlockPos pos, InteractionHand hand) {
-        if (!isHoldingSelectionTool(player) || hand != InteractionHand.MAIN_HAND) {
+        if (!isHoldingSelectionTool(player)) {
             return;
         }
 
@@ -314,7 +314,7 @@ public class SelectionTool {
             return;
         }
         SelectionPoints selection = playerSelections.get(player.getUUID());
-        if (selection == null || !selection.isComplete()) {
+        if (selection == null) {
             player.displayClientMessage(
                 MessageUtils.smartComponent(player, "selection.error.no_points"),
                 true
@@ -323,6 +323,13 @@ public class SelectionTool {
         }
         if (selection.isMultiPointMode() && selection.hasEnoughVerticesForPolygon()) {
             createPolygonAreaFromSelection(player, areaName, selection);
+            return;
+        }
+        if (!selection.isComplete()) {
+            player.displayClientMessage(
+                MessageUtils.smartComponent(player, "selection.error.no_points"),
+                true
+            );
             return;
         }
 
@@ -447,6 +454,9 @@ public class SelectionTool {
         }
         SelectionPoints selection = playerSelections.computeIfAbsent(
             player.getUUID(), k -> new SelectionPoints());
+        // Clear any previous rectangle selection
+        selection.setFirstPoint(null, null);
+        selection.setSecondPoint(null, null);
         selection.setMultiPointMode(true);
         selection.clearVertices();
         player.displayClientMessage(
@@ -456,6 +466,18 @@ public class SelectionTool {
     }
 
     private static void handlePolygonClick(ServerPlayer player, BlockPos pos, SelectionPoints selection) {
+        // Check dimension consistency
+        String currentDim = player.level().dimension().location().toString();
+        if (selection.getPolygonDimension() == null) {
+            selection.setPolygonDimension(currentDim);
+        } else if (!currentDim.equals(selection.getPolygonDimension())) {
+            player.displayClientMessage(
+                MessageUtils.smartComponent(player, "selection.cross_dimension_denied"),
+                true
+            );
+            return;
+        }
+
         selection.addVertexPoint(pos);
         int count = selection.getVertexPoints().size();
 
@@ -475,7 +497,10 @@ public class SelectionTool {
             AreaVisualizer.drawLineBetween(player, prev, pos);
         }
 
+        // When 3+ vertices, draw closing edge back to first vertex
         if (count >= 3) {
+            BlockPos first = selection.getVertexPoints().get(0);
+            AreaVisualizer.drawLineBetween(player, pos, first);
             player.displayClientMessage(
                 MessageUtils.smartComponent(player, "selection.polygon.can_finish"), false);
         }
@@ -515,6 +540,13 @@ public class SelectionTool {
 
         player.playNotifySound(net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.get(),
                               net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 2.0f);
+
+        // Visualize the complete polygon
+        for (int i = 0; i < vertices.size(); i++) {
+            BlockPos from = vertices.get(i);
+            BlockPos to = vertices.get((i + 1) % vertices.size());
+            AreaVisualizer.drawLineBetween(player, from, to);
+        }
     }
 
     /**
@@ -527,6 +559,27 @@ public class SelectionTool {
                 MessageUtils.smartComponent(player, "selection.no_active_selection"),
                 true
             );
+            return;
+        }
+
+        if (selection.isMultiPointMode()) {
+            List<BlockPos> vertices = selection.getVertexPoints();
+            player.displayClientMessage(
+                MessageUtils.smartComponent(player, "selection.polygon.complete").withStyle(net.minecraft.ChatFormatting.BOLD),
+                false
+            );
+            player.displayClientMessage(
+                MessageUtils.smartComponent(player, "selection.polygon.vertex_count", vertices.size()),
+                false
+            );
+            for (int i = 0; i < vertices.size(); i++) {
+                BlockPos v = vertices.get(i);
+                player.displayClientMessage(
+                    net.minecraft.network.chat.Component.literal(
+                        String.format("  §e#%d§7: [%d, %d, %d]", i + 1, v.getX(), v.getY(), v.getZ())),
+                    false
+                );
+            }
             return;
         }
 

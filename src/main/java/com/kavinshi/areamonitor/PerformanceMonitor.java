@@ -167,7 +167,15 @@ public class PerformanceMonitor {
 
     public static void clearAllCaches() {
         AreaManager.getInstance().clearUnusedCaches();
-        AreaMonitorMod.LOGGER.debug("All caches cleared");
+        // Reset performance tracking state
+        Arrays.fill(tickTimes, 0);
+        tickIndex.set(0);
+        lastTPS.set(20.0);
+        consecutiveHealthyTicks = 0;
+        currentCheckInterval = 5;
+        lastCheck = 0;
+        lastOptimization = 0;
+        AreaMonitorMod.LOGGER.debug("All caches cleared and performance state reset");
     }
 
     public static void clearUnusedCaches() {

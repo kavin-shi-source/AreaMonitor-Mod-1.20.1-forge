@@ -53,7 +53,8 @@ public class TriggerCommands {
         }
         String lowerCmd = trimmed.toLowerCase();
         for (String dangerous : DANGEROUS_COMMANDS) {
-            if (lowerCmd.matches(".*\\b" + java.util.regex.Pattern.quote(dangerous) + "\\b.*")) {
+            // Only flag dangerous commands that appear as sub-commands (preceded by / or "run "), not in chat text
+            if (lowerCmd.matches(".*(?:/|\\brun\\s+)" + java.util.regex.Pattern.quote(dangerous) + "(?:\\s|$).*")) {
                 MessageUtils.sendFailure(context.getSource(), "trigger.command_blocked", dangerous);
                 return 0;
             }

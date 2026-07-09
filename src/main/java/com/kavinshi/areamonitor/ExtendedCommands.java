@@ -448,13 +448,16 @@ public class ExtendedCommands {
                 .executes(context -> {
                     net.minecraft.server.level.ServerPlayer player =
                         context.getSource().getPlayerOrException();
-                    ModNetwork.sendToPlayer(new S2COpenManagementScreenPacket(), player);
-                    context.getSource().sendSystemMessage(
-                        Component.literal(LocalizationManager.translate("gui.opening") + " ")
-                            .withStyle(ChatFormatting.GREEN)
-                            .append(Component.literal(
-                                LocalizationManager.translate("gui.no_client_mod"))
-                                .withStyle(ChatFormatting.GRAY)));
+                    if (com.kavinshi.areamonitor.util.MessageUtils.clientHasMod(player)) {
+                        ModNetwork.sendToPlayer(new S2COpenManagementScreenPacket(), player);
+                        context.getSource().sendSystemMessage(
+                            Component.literal(LocalizationManager.translate("gui.opening"))
+                                .withStyle(ChatFormatting.GREEN));
+                    } else {
+                        context.getSource().sendSystemMessage(
+                            Component.literal(LocalizationManager.translate("gui.no_client_mod"))
+                                .withStyle(ChatFormatting.GRAY));
+                    }
                     return 1;
                 })
             )

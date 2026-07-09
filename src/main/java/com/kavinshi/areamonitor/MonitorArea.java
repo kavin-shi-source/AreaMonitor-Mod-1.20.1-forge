@@ -347,25 +347,8 @@ public class MonitorArea {
             if (contains(centroidX, centroidZ)) {
                 return new double[]{centroidX, centroidZ};
             }
-            // Centroid is outside — sample the AABB on a 1-block grid starting from min corner.
-            int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE;
-            int maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-            for (Vec2i v : vertices) {
-                if (v.x() < minX) minX = v.x();
-                if (v.x() > maxX) maxX = v.x();
-                if (v.z() < minZ) minZ = v.z();
-                if (v.z() > maxZ) maxZ = v.z();
-            }
-            // Step from center outward in a spiral-ish pattern is overkill; a linear scan over
-            // the AABB is bounded (≤ 32 vertices implies a bounded AABB) and runs once at most.
-            for (int z = minZ; z <= maxZ; z++) {
-                for (int x = minX; x <= maxX; x++) {
-                    if (contains(x + 0.5, z + 0.5)) {
-                        return new double[]{x + 0.5, z + 0.5};
-                    }
-                }
-            }
-            // Fallback: first vertex (guaranteed on the polygon boundary)
+            // Centroid is outside — return the first vertex (guaranteed on the polygon boundary)
+            // to avoid expensive AABB scanning which can hang the server for large polygons.
             return new double[]{vertices.get(0).x() + 0.5, vertices.get(0).z() + 0.5};
         }
 

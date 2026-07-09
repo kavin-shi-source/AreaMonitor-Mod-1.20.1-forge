@@ -195,14 +195,11 @@ public class AreaTriggerManager {
         // 0. Check conditions
         if (!checkConditions(player, config.getCondition())) return;
 
-        // 1. Execute commands
+        // 1. Execute commands — use the player's own command source so permissions
+        // and selector context (@p) are correct. Elevate permission to 2 to allow command execution.
         MinecraftServer server = player.getServer();
         if (server != null && !config.getCommands().isEmpty()) {
-            CommandSourceStack source = server.createCommandSourceStack()
-                .withPosition(new Vec3(player.getX(), player.getY(), player.getZ()))
-                .withRotation(new Vec2(player.getXRot(), player.getYRot()))
-                .withLevel((ServerLevel) player.level())
-                .withPermission(2);
+            CommandSourceStack source = player.createCommandSourceStack().withPermission(2);
             for (String cmd : config.getCommands()) {
                 try {
                     server.getCommands().performPrefixedCommand(source, cmd);
@@ -215,13 +212,11 @@ public class AreaTriggerManager {
         // 2. Play sound
         if (config.getSoundEvent() != null) {
             try {
-                ResourceLocation soundId = ResourceLocation.tryParse(config.getSoundEvent());
-                if (soundId != null) {
-                    SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(soundId);
-                    if (sound != null) {
-                        player.playNotifySound(sound, SoundSource.MASTER,
-                            config.getSoundVolume(), config.getSoundPitch());
-                    }
+                ResourceLocation soundId = new ResourceLocation(config.getSoundEvent());
+                SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(soundId);
+                if (sound != null) {
+                    player.playNotifySound(sound, SoundSource.MASTER,
+                        config.getSoundVolume(), config.getSoundPitch());
                 }
             } catch (Exception e) {
                 AreaMonitorMod.LOGGER.error("Error playing trigger sound", e);
@@ -254,14 +249,12 @@ public class AreaTriggerManager {
         // 5. Potion effect
         if (config.getPotion() != null) {
             try {
-                ResourceLocation potionId = ResourceLocation.tryParse(config.getPotion());
-                if (potionId != null) {
-                    MobEffect effect = BuiltInRegistries.MOB_EFFECT.get(potionId);
-                    if (effect != null) {
-                        player.addEffect(new MobEffectInstance(effect,
-                            config.getPotionDuration(), config.getPotionAmplifier(),
-                            false, true));
-                    }
+                ResourceLocation potionId = new ResourceLocation(config.getPotion());
+                MobEffect effect = BuiltInRegistries.MOB_EFFECT.get(potionId);
+                if (effect != null) {
+                    player.addEffect(new MobEffectInstance(effect,
+                        config.getPotionDuration(), config.getPotionAmplifier(),
+                        false, true));
                 }
             } catch (Exception e) {
                 AreaMonitorMod.LOGGER.error("Error applying potion effect via trigger", e);
@@ -280,14 +273,12 @@ public class AreaTriggerManager {
                     double x = Double.parseDouble(parts[1].trim());
                     double y = Double.parseDouble(parts[2].trim());
                     double z = Double.parseDouble(parts[3].trim());
-                    ResourceLocation dimKey = ResourceLocation.tryParse(dim);
-                    if (dimKey != null) {
-                        ServerLevel targetLevel = server.getLevel(
-                            net.minecraft.resources.ResourceKey.create(
-                                net.minecraft.core.registries.Registries.DIMENSION, dimKey));
-                        if (targetLevel != null) {
-                            player.teleportTo(targetLevel, x, y, z, player.getYRot(), player.getXRot());
-                        }
+                    ResourceLocation dimKey = new ResourceLocation(dim);
+                    ServerLevel targetLevel = server.getLevel(
+                        net.minecraft.resources.ResourceKey.create(
+                            net.minecraft.core.registries.Registries.DIMENSION, dimKey));
+                    if (targetLevel != null) {
+                        player.teleportTo(targetLevel, x, y, z, player.getYRot(), player.getXRot());
                     }
                 }
             } catch (Exception e) {
@@ -301,20 +292,23 @@ public class AreaTriggerManager {
      * Searches main inventory, armor slots, and offhand.
      */
     private static boolean playerHasItem(ServerPlayer player, String itemIdStr) {
-        ResourceLocation resourceId = ResourceLocation.tryParse(itemIdStr);
-        if (resourceId == null) return false;
-        var item = BuiltInRegistries.ITEM.get(resourceId);
-        if (item == null) return false;
-        for (var stack : player.getInventory().items) {
-            if (stack.getItem() == item) return true;
+        try {
+            ResourceLocation resourceId = new ResourceLocation(itemIdStr);
+            var item = BuiltInRegistries.ITEM.get(resourceId);
+            if (item == null) return false;
+            for (var stack : player.getInventory().items) {
+                if (stack.getItem() == item) return true;
+            }
+            for (var stack : player.getInventory().armor) {
+                if (stack.getItem() == item) return true;
+            }
+            for (var stack : player.getInventory().offhand) {
+                if (stack.getItem() == item) return true;
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
         }
-        for (var stack : player.getInventory().armor) {
-            if (stack.getItem() == item) return true;
-        }
-        for (var stack : player.getInventory().offhand) {
-            if (stack.getItem() == item) return true;
-        }
-        return false;
     }
 
     /**

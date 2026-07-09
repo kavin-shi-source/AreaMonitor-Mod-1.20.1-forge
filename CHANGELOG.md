@@ -2,6 +2,13 @@
 
 [![English Version](https://img.shields.io/badge/English-Version-blue.svg)](CHANGELOG_EN.md)
 
+## [2.0.5] - 2025-07-09
+
+### 修复
+- **客户端 Mod 检测失败**: 修复 `clientHasMod()` 检测始终返回 `false` 的 Bug。原因：使用了错误的 AttributeKey 名称 `"fml:connectionData"`（Forge 实际为 `"fml:conndata"`），改用官方 API `NetworkHooks.getConnectionData()` 解决。
+- **原版客户端被踢**: 修复未安装 Mod 的客户端连接时被服务端拒绝的问题（`mismatched mod channel list`）。网络通道版本检查改为接受 `ABSENT` 状态，注册 `IGNORESERVERONLY` DisplayTest 允许无 Mod 客户端连接。
+- **GUI 命令安全守卫**: `/areamonitor gui` 命令区分处理——有 Mod 客户端正常打开 GUI，无 Mod 客户端给出友好提示；`sendToPlayer` 增加 `clientHasMod` 守卫，避免向原版客户端发送网络包。
+
 ## [2.0.4] - 2025-07-04
 
 ### 新增

@@ -30,7 +30,10 @@ public class AreaEditPanel extends Screen {
     private final S2CAreaListPacket.AreaEntry entry;
     private EditBox displayNameInput;
     private EditBox bx1, bz1, bx2, bz2;
-    private boolean enabled, rectangleMode = true, prevRectangleMode = true, protectionExpanded = false, schedExpanded = false;
+    private boolean enabled, protectionExpanded = false, schedExpanded = false;
+    // boundsMode: "RECTANGLE", "CIRCLE", or "POLYGON"
+    private String boundsMode = "RECTANGLE";
+    private String prevBoundsMode = "RECTANGLE";
     private boolean protBreak, protPlace, protInteract, protPvp, protExplosion, protDamage;
     private boolean protContainer, protFluid, protItemDrop;
     private boolean schedEnabled;
@@ -82,7 +85,10 @@ public class AreaEditPanel extends Screen {
         this.parentScreen = parent;
         this.entry = entry;
         this.enabled = entry.enabled();
-        this.rectangleMode = !"CIRCLE".equals(entry.boundsType());
+        {
+            String bt = entry.boundsType() != null ? entry.boundsType() : "RECTANGLE";
+            this.boundsMode = "POLYGON".equals(bt) ? "POLYGON" : "CIRCLE".equals(bt) ? "CIRCLE" : "RECTANGLE";
+        }
         this.protBreak = entry.protBlockBreak(); this.protPlace = entry.protBlockPlace();
         this.protInteract = entry.protBlockInteract(); this.protPvp = entry.protPvp();
         this.protExplosion = entry.protExplosion(); this.protDamage = entry.protEntityDamage();
@@ -119,15 +125,15 @@ public class AreaEditPanel extends Screen {
         // bounds coordinates
         if (entry.boundsCoordsJson() != null) try {
             var bc = new com.google.gson.Gson().fromJson(entry.boundsCoordsJson(), com.google.gson.JsonObject.class);
-            if (rectangleMode) {
+            if ("CIRCLE".equals(boundsMode)) {
+                if (bc.has("centerX")) initBx1 = String.valueOf(bc.get("centerX").getAsInt());
+                if (bc.has("centerZ")) initBz1 = String.valueOf(bc.get("centerZ").getAsInt());
+                if (bc.has("radius")) initBx2 = String.valueOf(bc.get("radius").getAsInt());
+            } else if (!"POLYGON".equals(boundsMode)) {
                 if (bc.has("minX")) initBx1 = String.valueOf(bc.get("minX").getAsInt());
                 if (bc.has("minZ")) initBz1 = String.valueOf(bc.get("minZ").getAsInt());
                 if (bc.has("maxX")) initBx2 = String.valueOf(bc.get("maxX").getAsInt());
                 if (bc.has("maxZ")) initBz2 = String.valueOf(bc.get("maxZ").getAsInt());
-            } else {
-                if (bc.has("centerX")) initBx1 = String.valueOf(bc.get("centerX").getAsInt());
-                if (bc.has("centerZ")) initBz1 = String.valueOf(bc.get("centerZ").getAsInt());
-                if (bc.has("radius")) initBx2 = String.valueOf(bc.get("radius").getAsInt());
             }
         } catch (Exception e) {
             com.kavinshi.areamonitor.AreaMonitorMod.LOGGER.warn("Failed to parse bounds coords JSON for area '{}': {}", entry.name(), e.getMessage());
@@ -162,21 +168,27 @@ public class AreaEditPanel extends Screen {
 
         // === Bounds ===
         top = y; y += 14;
-        zbtn(lx, y, vw + 40, LocalizationManager.translate("gui.bounds") + ": " + LocalizationManager.translate(rectangleMode ? "gui.bounds_rectangle" : "gui.bounds_circle"),
-            () -> { rectangleMode = !rectangleMode; dirty = true; rebuild(); }); y += 22;
-        if (rectangleMode) {
+        zbtn(lx, y, vw + 40, LocalizationManager.translate("gui.bounds") + ": " + boundsDisplayName(),
+            () -> { nextBoundsMode(); dirty = true; rebuild(); }); y += 22;
+        if ("POLYGON".equals(boundsMode)) {
+            String vInfo = entry.boundsCoordsJson() != null ? entry.boundsCoordsJson() : "[]";
+            var polyMsg = net.minecraft.network.chat.Component.literal(
+                String.format(LocalizationManager.translate("bounds.polygon"), countPolygonVertices(vInfo)));
+            zlabel(vx, y, polyMsg.getString()); y += 20;
+            zlabel(vx, y, "  " + LocalizationManager.translate("gui.bounds_polygon_hint")); y += 20;
+        } else if ("CIRCLE".equals(boundsMode)) {
+            addLabel("gui.bounds_center", y); bx1 = zcoord(vx, y, initBx1); bz1 = zcoord(vx + 64, y, initBz1);
+            bx1.setResponder(s -> { dirty = true; initBx1 = s; }); bz1.setResponder(s -> { dirty = true; initBz1 = s; });
+            zbtn(vx + 128, y, 56, LocalizationManager.translate("gui.bounds_use_pos"), () -> { bx1.setValue(fmtPx()); bz1.setValue(fmtPz()); }); y += 20;
+            addLabel("gui.bounds_radius", y); bx2 = zcoord(vx, y, initBx2);
+            bx2.setResponder(s -> { dirty = true; initBx2 = s; });
+        } else {
             addLabel("gui.bounds_min", y); bx1 = zcoord(vx, y, initBx1); bz1 = zcoord(vx + 64, y, initBz1);
             bx1.setResponder(s -> { dirty = true; initBx1 = s; }); bz1.setResponder(s -> { dirty = true; initBz1 = s; });
             zbtn(vx + 128, y, 56, LocalizationManager.translate("gui.bounds_use_pos"), () -> { bx1.setValue(fmtPx()); bz1.setValue(fmtPz()); }); y += 20;
             addLabel("gui.bounds_max", y); bx2 = zcoord(vx, y, initBx2); bz2 = zcoord(vx + 64, y, initBz2);
             bx2.setResponder(s -> { dirty = true; initBx2 = s; }); bz2.setResponder(s -> { dirty = true; initBz2 = s; });
             zbtn(vx + 128, y, 56, LocalizationManager.translate("gui.bounds_use_pos"), () -> { bx2.setValue(fmtPx()); bz2.setValue(fmtPz()); });
-        } else {
-            addLabel("gui.bounds_center", y); bx1 = zcoord(vx, y, initBx1); bz1 = zcoord(vx + 64, y, initBz1);
-            bx1.setResponder(s -> { dirty = true; initBx1 = s; }); bz1.setResponder(s -> { dirty = true; initBz1 = s; });
-            zbtn(vx + 128, y, 56, LocalizationManager.translate("gui.bounds_use_pos"), () -> { bx1.setValue(fmtPx()); bz1.setValue(fmtPz()); }); y += 20;
-            addLabel("gui.bounds_radius", y); bx2 = zcoord(vx, y, initBx2);
-            bx2.setResponder(s -> { dirty = true; initBx2 = s; });
         }
         y += 26;
         sections.add(new SectionPos("  " + LocalizationManager.translate("gui.section_bounds") + "  ", top, y - top));
@@ -288,7 +300,7 @@ public class AreaEditPanel extends Screen {
         saveBtn = GlassButton.create(cx - 78, btnY, 70, 18, "[" + LocalizationManager.translate("gui.save") + "]", b -> onSaveAction());
         cancelBtn = GlassButton.create(cx + 8, btnY, 70, 18, "[" + LocalizationManager.translate("gui.cancel") + "]", b -> onClose());
         // P1-3 fix: do not register to addRenderableWidget — they live below the scissor clip and are rendered/hit-tested manually to avoid double rendering.
-        prevRectangleMode = rectangleMode;
+        prevBoundsMode = boundsMode;
     }
 
     private GlassButton saveBtn, cancelBtn;
@@ -297,6 +309,8 @@ public class AreaEditPanel extends Screen {
     private void zbtn(int x, int y, int w, String text, Runnable a) { addRenderableWidget(GlassButton.create(x, y, w, 18, text, b -> a.run())); }
     private EditBox zbox(int x, int y, int w, String v) {
         EditBox e = new EditBox(this.font, x, y, w, 16, Component.empty()); e.setMaxLength(48); e.setValue(v);
+        // Allow formatting character (§) in the edit box
+        e.setFilter(s -> true);
         addRenderableWidget(e); allBoxes.add(e); return e;
     }
     private EditBox zcoord(int x, int y, String initial) {
@@ -338,9 +352,36 @@ public class AreaEditPanel extends Screen {
     private void setAllProt(boolean v) { protBreak = protPlace = protInteract = protPvp = protExplosion = protDamage = protContainer = protFluid = protItemDrop = v; }
     private String fmtPx() { return String.valueOf((int)Math.floor(this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getX() : 0)); }
     private String fmtPz() { return String.valueOf((int)Math.floor(this.minecraft != null && this.minecraft.player != null ? this.minecraft.player.getZ() : 0)); }
+    private String boundsDisplayName() {
+        return LocalizationManager.translate(
+            "CIRCLE".equals(boundsMode) ? "gui.bounds_circle" :
+            "POLYGON".equals(boundsMode) ? "gui.bounds_polygon" : "gui.bounds_rectangle");
+    }
+    private void nextBoundsMode() {
+        if ("RECTANGLE".equals(boundsMode)) boundsMode = "CIRCLE";
+        else if ("CIRCLE".equals(boundsMode)) boundsMode = "POLYGON";
+        else boundsMode = "RECTANGLE";
+    }
+    private static int countPolygonVertices(String json) {
+        try {
+            var obj = new com.google.gson.Gson().fromJson(json, com.google.gson.JsonObject.class);
+            if (obj.has("vertices") && obj.get("vertices").isJsonArray())
+                return obj.getAsJsonArray("vertices").size();
+        } catch (Exception ignored) {}
+        return 0;
+    }
+    private void zlabel(int x, int y, String text) {
+        var lbl = new net.minecraft.client.gui.components.AbstractWidget(x, y, vw, 14, Component.literal(text)) {
+            @Override public void renderWidget(GuiGraphics g, int mx, int my, float pt) {
+                g.drawString(AreaEditPanel.this.font, getMessage(), getX(), getY(), 0xC0C4A882);
+            }
+            @Override protected void updateWidgetNarration(net.minecraft.client.gui.narration.NarrationElementOutput out) {}
+        };
+        addRenderableWidget(lbl);
+    }
     private void rebuild() {
         // Save EditBox values by field reference before clearing widgets
-        boolean modeChanged = (prevRectangleMode != rectangleMode);
+        boolean modeChanged = !prevBoundsMode.equals(boundsMode);
         String savedDisplayName = displayNameInput != null ? displayNameInput.getValue() : null;
         String savedBx1 = bx1 != null ? bx1.getValue() : null;
         String savedBz1 = bz1 != null ? bz1.getValue() : null;
@@ -387,9 +428,11 @@ public class AreaEditPanel extends Screen {
         json.addProperty("protExplosion", protExplosion); json.addProperty("protEntityDamage", protDamage);
         json.addProperty("protContainerInteract", protContainer); json.addProperty("protFluidPlace", protFluid);
         json.addProperty("protItemDrop", protItemDrop);
-        json.addProperty("boundsType", rectangleMode ? "RECTANGLE" : "CIRCLE");
+        json.addProperty("boundsType", boundsMode);
         try {
-            if (rectangleMode) {
+            if ("POLYGON".equals(boundsMode)) {
+                // POLYGON: preserve existing vertices, skip coordinate editing
+            } else if ("CIRCLE".equals(boundsMode)) {
                 if (bx1 == null || bz1 == null || bx2 == null || bz2 == null
                     || bx1.getValue().trim().isEmpty() || bz1.getValue().trim().isEmpty()
                     || bx2.getValue().trim().isEmpty() || bz2.getValue().trim().isEmpty()) {

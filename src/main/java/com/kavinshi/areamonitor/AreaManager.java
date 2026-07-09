@@ -256,7 +256,7 @@ public class AreaManager {
         if (server == null) return;
         var targetLevel = server.getLevel(net.minecraft.resources.ResourceKey.create(
             net.minecraft.core.registries.Registries.DIMENSION,
-            net.minecraft.resources.ResourceLocation.tryParse(targetDim)));
+            new net.minecraft.resources.ResourceLocation(targetDim)));
         if (targetLevel == null) return;
         double tpY = findSafeY(targetLevel, (int)tpX, (int)tpZ);
         player.teleportTo(targetLevel, tpX + 0.5, tpY, tpZ + 0.5,
@@ -287,6 +287,9 @@ public class AreaManager {
         // getChunk on ServerLevel will load/generate the chunk synchronously; this is acceptable
         // because chain teleport is a one-shot per enter event, not per-tick.
         try {
+            if (!level.hasChunk(chunkX, chunkZ)) {
+                return level.getSeaLevel();
+            }
             level.getChunk(chunkX, chunkZ);
         } catch (Exception ex) {
             AreaMonitorMod.LOGGER.warn("findSafeY: failed to load chunk at {},{} - falling back to sea level ({})",

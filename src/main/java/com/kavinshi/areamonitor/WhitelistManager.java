@@ -42,7 +42,9 @@ public class WhitelistManager {
     /** Dirty flag for delayed write strategy */
     private static volatile boolean dirty = false;
     private static long lastAutoSave = 0;
+    private static int saveFailures = 0;
     private static final long AUTO_SAVE_INTERVAL_MS = 30000; // 30 seconds
+    private static final int MAX_SAVE_RETRIES = 5;
 
     private static File getWhitelistFile() {
         Path configDir = FMLPaths.CONFIGDIR.get().resolve("areamonitor");
@@ -82,9 +84,11 @@ public class WhitelistManager {
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
         if (!dirty) return;
+        if (saveFailures >= MAX_SAVE_RETRIES) return;
 
         long now = System.currentTimeMillis();
-        if (now - lastAutoSave >= AUTO_SAVE_INTERVAL_MS) {
+        long backoff = saveFailures > 0 ? AUTO_SAVE_INTERVAL_MS * (1L << Math.min(saveFailures, 4)) : AUTO_SAVE_INTERVAL_MS;
+        if (now - lastAutoSave >= backoff) {
             saveWhitelist();
             lastAutoSave = now;
         }
@@ -237,12 +241,17 @@ public class WhitelistManager {
                 StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
 
             dirty = false;
+            saveFailures = 0;
             AreaMonitorMod.LOGGER.debug("Whitelist saved ({} entries)", whitelistEntries.size());
         } catch (IOException e) {
-            // P2 #44: keep dirty=true so next auto-save retries; reset lastAutoSave so the
-            // retry happens on the next tick instead of waiting a full AUTO_SAVE_INTERVAL_MS.
-            AreaMonitorMod.LOGGER.error("Failed to save whitelist file: {}", whitelistFile.getAbsolutePath(), e);
-            lastAutoSave = 0;
+            saveFailures++;
+            if (saveFailures >= MAX_SAVE_RETRIES) {
+                AreaMonitorMod.LOGGER.error("Whitelist save failed {} times, giving up. Changes may be lost on restart.", saveFailures, e);
+                dirty = false;
+            } else {
+                AreaMonitorMod.LOGGER.error("Failed to save whitelist (attempt {}/{}): {}", saveFailures, MAX_SAVE_RETRIES, e.getMessage());
+            }
+            lastAutoSave = System.currentTimeMillis();
         }
     }
 
