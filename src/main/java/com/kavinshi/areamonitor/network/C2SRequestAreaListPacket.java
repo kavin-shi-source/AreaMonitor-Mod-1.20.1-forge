@@ -23,7 +23,7 @@ public class C2SRequestAreaListPacket {
         NetworkEvent.Context context = ctx.get();
         context.enqueueWork(() -> {
             ServerPlayer player = context.getSender();
-            if (player != null && player.hasPermissions(2)) {
+            if (player != null && player.hasPermissions(4)) {
                 S2CAreaListPacket response = S2CAreaListPacket.fromAreas(
                     AreaManager.getInstance().getAllAreas());
                 ModNetwork.sendToPlayer(response, player);

@@ -49,22 +49,25 @@ public class S2CAreaListPacket {
     public void encode(FriendlyByteBuf buf) {
         // Pre-encode entries into a temp buffer to know exact count within budget
         io.netty.buffer.ByteBuf temp = io.netty.buffer.Unpooled.buffer();
-        FriendlyByteBuf tempBuf = new FriendlyByteBuf(temp);
-        int startWriterIndex = buf.writerIndex();
-        int written = 0;
-        for (AreaEntry entry : areas) {
-            int bytesSoFar = buf.writerIndex() - startWriterIndex + tempBuf.writerIndex();
-            if (bytesSoFar > MAX_TOTAL_BYTES) {
-                AreaMonitorMod.LOGGER.warn("Area list encode exceeded {} bytes after {} of {} entries, truncating",
-                    MAX_TOTAL_BYTES, written, areas.size());
-                break;
+        try {
+            FriendlyByteBuf tempBuf = new FriendlyByteBuf(temp);
+            int startWriterIndex = buf.writerIndex();
+            int written = 0;
+            for (AreaEntry entry : areas) {
+                int bytesSoFar = buf.writerIndex() - startWriterIndex + tempBuf.writerIndex();
+                if (bytesSoFar > MAX_TOTAL_BYTES) {
+                    AreaMonitorMod.LOGGER.warn("Area list encode exceeded {} bytes after {} of {} entries, truncating",
+                        MAX_TOTAL_BYTES, written, areas.size());
+                    break;
+                }
+                entry.encode(tempBuf);
+                written++;
             }
-            entry.encode(tempBuf);
-            written++;
+            buf.writeVarInt(written);
+            buf.writeBytes(temp);
+        } finally {
+            temp.release();
         }
-        buf.writeVarInt(written);
-        buf.writeBytes(temp);
-        temp.release();
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {

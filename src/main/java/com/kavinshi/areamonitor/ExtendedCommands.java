@@ -443,8 +443,9 @@ public class ExtendedCommands {
                 .executes(AreaBackupCommands::backupConfigs)
             )
 
-            // --- GUI command ---
+            // --- GUI command (requires OP4: GUI can set trigger commands without filtering) ---
             .then(Commands.literal("gui")
+                .requires(source -> source.hasPermission(4))
                 .executes(context -> {
                     net.minecraft.server.level.ServerPlayer player =
                         context.getSource().getPlayerOrException();

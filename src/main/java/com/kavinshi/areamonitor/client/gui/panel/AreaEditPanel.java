@@ -433,20 +433,6 @@ public class AreaEditPanel extends Screen {
             if ("POLYGON".equals(boundsMode)) {
                 // POLYGON: preserve existing vertices, skip coordinate editing
             } else if ("CIRCLE".equals(boundsMode)) {
-                if (bx1 == null || bz1 == null || bx2 == null || bz2 == null
-                    || bx1.getValue().trim().isEmpty() || bz1.getValue().trim().isEmpty()
-                    || bx2.getValue().trim().isEmpty() || bz2.getValue().trim().isEmpty()) {
-                    showValidationError(LocalizationManager.translate("gui.error_bounds_required"));
-                    return;
-                }
-                int minX = v(bx1), minZ = v(bz1), maxX = v(bx2), maxZ = v(bz2);
-                if (minX > maxX || minZ > maxZ) {
-                    showValidationError(LocalizationManager.translate("gui.error_bounds_range"));
-                    return;
-                }
-                json.addProperty("minX", minX); json.addProperty("minZ", minZ);
-                json.addProperty("maxX", maxX); json.addProperty("maxZ", maxZ);
-            } else {
                 if (bx1 == null || bz1 == null || bx2 == null
                     || bx1.getValue().trim().isEmpty() || bz1.getValue().trim().isEmpty()
                     || bx2.getValue().trim().isEmpty()) {
@@ -460,6 +446,20 @@ public class AreaEditPanel extends Screen {
                 }
                 json.addProperty("centerX", v(bx1)); json.addProperty("centerZ", v(bz1));
                 json.addProperty("radius", radius);
+            } else {
+                if (bx1 == null || bz1 == null || bx2 == null || bz2 == null
+                    || bx1.getValue().trim().isEmpty() || bz1.getValue().trim().isEmpty()
+                    || bx2.getValue().trim().isEmpty() || bz2.getValue().trim().isEmpty()) {
+                    showValidationError(LocalizationManager.translate("gui.error_bounds_required"));
+                    return;
+                }
+                int minX = v(bx1), minZ = v(bz1), maxX = v(bx2), maxZ = v(bz2);
+                if (minX > maxX || minZ > maxZ) {
+                    showValidationError(LocalizationManager.translate("gui.error_bounds_range"));
+                    return;
+                }
+                json.addProperty("minX", minX); json.addProperty("minZ", minZ);
+                json.addProperty("maxX", maxX); json.addProperty("maxZ", maxZ);
             }
         } catch (NumberFormatException ignored) {
             showValidationError(LocalizationManager.translate("gui.error_bounds_number"));

@@ -51,6 +51,10 @@ public class AreaExportCommands {
     }
 
     public static int importArea(String areaName, String jsonStr, CommandContext<CommandSourceStack> context) {
+        if (!AreaManager.isValidAreaName(areaName)) {
+            MessageUtils.sendFailure(context.getSource(), "gui.error.invalid_area_name", areaName);
+            return 0;
+        }
         if (AreaManager.getInstance().getArea(areaName) != null) {
             MessageUtils.sendFailure(context.getSource(), "command.areamonitor.area.exists", areaName);
             return 0;
@@ -164,8 +168,16 @@ public class AreaExportCommands {
             }
         }
         if (obj.has("protection")) area.setProtection(GSON.fromJson(obj.get("protection"), ProtectionSettings.class));
-        if (obj.has("enterTrigger")) area.setEnterTrigger(GSON.fromJson(obj.get("enterTrigger"), TriggerConfig.class));
-        if (obj.has("leaveTrigger")) area.setLeaveTrigger(GSON.fromJson(obj.get("leaveTrigger"), TriggerConfig.class));
+        if (obj.has("enterTrigger")) {
+            TriggerConfig etc = GSON.fromJson(obj.get("enterTrigger"), TriggerConfig.class);
+            if (etc != null && etc.getCondition() != null) etc.getCondition().sanitize();
+            area.setEnterTrigger(etc);
+        }
+        if (obj.has("leaveTrigger")) {
+            TriggerConfig ltc = GSON.fromJson(obj.get("leaveTrigger"), TriggerConfig.class);
+            if (ltc != null && ltc.getCondition() != null) ltc.getCondition().sanitize();
+            area.setLeaveTrigger(ltc);
+        }
         if (obj.has("whitelist") && obj.get("whitelist").isJsonArray()) {
             area.getWhitelist().clear();
             for (var e : obj.getAsJsonArray("whitelist")) area.getWhitelist().add(e.getAsString().toLowerCase());

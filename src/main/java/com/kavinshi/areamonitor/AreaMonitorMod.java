@@ -52,13 +52,7 @@ public class AreaMonitorMod {
 
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
-        LocalizationManager.applyConfigLanguage(ConfigManager.CONFIG.language.get());
-
-        ConfigManager.loadAreasConfig();
-        ItemBlacklistManager.loadBlacklistConfig();
-
         AreaMonitorMod.LOGGER.info("Server started, area monitor ready");
-        AreaMonitorMod.LOGGER.info("Loaded {} areas", AreaManager.getInstance().getAllAreas().size());
     }
 
     @SubscribeEvent
@@ -69,6 +63,11 @@ public class AreaMonitorMod {
             ConfigManager.saveAreasConfigSync();
         } catch (Throwable t) {
             AreaMonitorMod.LOGGER.error("Failed to save areas config on shutdown", t);
+        }
+        try {
+            ConfigManager.shutdown();
+        } catch (Throwable t) {
+            AreaMonitorMod.LOGGER.error("Failed to shutdown config executor", t);
         }
         try {
             ItemBlacklistManager.saveBlacklistConfig();

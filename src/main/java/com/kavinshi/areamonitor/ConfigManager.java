@@ -27,6 +27,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 
 public class ConfigManager {
     private static final ForgeConfigSpec SPEC;
@@ -35,11 +37,15 @@ public class ConfigManager {
     private static File areasConfigFile;
     private static File blacklistConfigFile;
     /** Single-thread executor for async config file I/O (prevents main thread blocking) */
-    private static final ExecutorService CONFIG_IO_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
-        Thread t = new Thread(r, "AreaMonitor-ConfigIO");
-        t.setDaemon(true);
-        return t;
-    });
+    private static ExecutorService CONFIG_IO_EXECUTOR = createExecutor();
+
+    private static ExecutorService createExecutor() {
+        return Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "AreaMonitor-ConfigIO");
+            t.setDaemon(true);
+            return t;
+        });
+    }
 
     static {
         ForgeConfigSpec tempSpec;
@@ -253,36 +259,50 @@ public class ConfigManager {
             return;
         }
 
-        AreaConfigData configData = new AreaConfigData();
-        configData.areas = new HashMap<>();
-
-        // Hold AreaManager's lock so concurrent addArea/removeArea/loadAreasConfig cannot
-        // mutate the areas map mid-snapshot.
+        String jsonStr;
         synchronized (AreaManager.getInstance().getAreasLock()) {
+            AreaConfigData configData = new AreaConfigData();
+            configData.areas = new HashMap<>();
             for (MonitorArea area : AreaManager.getInstance().getAllAreas()) {
                 configData.areas.put(area.getName(), createConfigFromArea(area));
             }
+            // Serialize on main thread under lock → immutable string, no concurrency risk for async I/O
+            jsonStr = GSON.toJson(configData);
         }
 
         // Rebuild spatial partition synchronously (fast, < 1ms, must be on main thread)
         AreaManager.getInstance().rebuildSpatialPartition();
 
-        // Async file I/O to avoid blocking main thread
+        // Async file I/O only (writes immutable string, no concurrent object access)
         final File targetFile = areasConfigFile;
         final File tmpFile = new File(areasConfigFile.getParentFile(), "areas.json.tmp." + System.nanoTime());
-        final AreaConfigData dataToWrite = configData;
-        CONFIG_IO_EXECUTOR.submit(() -> {
-            try {
-                try (Writer writer = new OutputStreamWriter(new FileOutputStream(tmpFile), StandardCharsets.UTF_8)) {
-                    GSON.toJson(dataToWrite, writer);
+        try {
+            CONFIG_IO_EXECUTOR.submit(() -> {
+                try {
+                    try (Writer writer = new OutputStreamWriter(new FileOutputStream(tmpFile), StandardCharsets.UTF_8)) {
+                        writer.write(jsonStr);
+                    }
+                    Files.move(tmpFile.toPath(), targetFile.toPath(),
+                        StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+                    AreaMonitorMod.LOGGER.info("Area config saved");
+                } catch (IOException e) {
+                    AreaMonitorMod.LOGGER.error("Failed to save area config: {}", targetFile.getAbsolutePath(), e);
                 }
+            });
+        } catch (RejectedExecutionException e) {
+            AreaMonitorMod.LOGGER.warn("Async executor unavailable, falling back to sync save");
+            try (Writer writer = new OutputStreamWriter(new FileOutputStream(tmpFile), StandardCharsets.UTF_8)) {
+                writer.write(jsonStr);
+            } catch (IOException ioe) {
+                AreaMonitorMod.LOGGER.error("Fallback sync save failed: {}", targetFile.getAbsolutePath(), ioe);
+            }
+            try {
                 Files.move(tmpFile.toPath(), targetFile.toPath(),
                     StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                AreaMonitorMod.LOGGER.info("Area config saved");
-            } catch (IOException e) {
-                AreaMonitorMod.LOGGER.error("Failed to save area config: {}", targetFile.getAbsolutePath(), e);
+            } catch (IOException ioe) {
+                AreaMonitorMod.LOGGER.error("Fallback sync move failed: {}", targetFile.getAbsolutePath(), ioe);
             }
-        });
+        }
     }
 
     /**
@@ -295,6 +315,13 @@ public class ConfigManager {
         }
 
         if (areasConfigFile == null) return;
+
+        // M-2: drain pending async saves to prevent old snapshot overwriting latest data
+        try {
+            CONFIG_IO_EXECUTOR.submit(() -> {}).get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            AreaMonitorMod.LOGGER.warn("Timeout waiting for pending async config saves", e);
+        }
 
         AreaConfigData configData = new AreaConfigData();
         configData.areas = new HashMap<>();
@@ -337,6 +364,30 @@ public class ConfigManager {
         } catch (Exception e) {
             AreaMonitorMod.LOGGER.error("Failed to save area config (safeSaveConfig)", e);
             return false;
+        }
+    }
+
+    /**
+     * M-3: Shut down the config I/O executor. Called on server stopping.
+     */
+    public static void shutdown() {
+        CONFIG_IO_EXECUTOR.shutdown();
+        try {
+            if (!CONFIG_IO_EXECUTOR.awaitTermination(5, TimeUnit.SECONDS)) {
+                CONFIG_IO_EXECUTOR.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            CONFIG_IO_EXECUTOR.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Recreate the executor if it was previously shut down (integrated server re-entry).
+     */
+    public static void resetExecutor() {
+        if (CONFIG_IO_EXECUTOR.isShutdown()) {
+            CONFIG_IO_EXECUTOR = createExecutor();
         }
     }
 

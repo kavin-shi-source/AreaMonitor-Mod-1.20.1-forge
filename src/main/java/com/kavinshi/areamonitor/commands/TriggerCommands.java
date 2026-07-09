@@ -19,6 +19,24 @@ public class TriggerCommands {
 
     private TriggerCommands() {}
 
+    public static boolean isValidCommand(String command) {
+        if (command == null || command.trim().isEmpty()) return false;
+        if (command.length() > MAX_COMMAND_LENGTH) return false;
+        String trimmed = command.trim();
+        String baseCmd = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
+        baseCmd = baseCmd.split(" ")[0].toLowerCase();
+        int colonIdx = baseCmd.indexOf(':');
+        if (colonIdx > 0) baseCmd = baseCmd.substring(colonIdx + 1);
+        if (DANGEROUS_COMMANDS.contains(baseCmd)) return false;
+        String lowerCmd = trimmed.toLowerCase();
+        for (String dangerous : DANGEROUS_COMMANDS) {
+            if (lowerCmd.matches(".*(?:/|\\brun\\s+)" + java.util.regex.Pattern.quote(dangerous) + "(?:\\s|$).*")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static TriggerConfig getOrCreateTrigger(MonitorArea area, boolean enter) {
         TriggerConfig triggerConfig = enter ? area.getEnterTrigger() : area.getLeaveTrigger();
         if (triggerConfig == null) {

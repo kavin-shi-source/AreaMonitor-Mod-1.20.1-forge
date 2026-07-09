@@ -13,28 +13,26 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class MonitorArea {
     private final String name;
-    private String displayName;
-    private String dimension;
-    private AreaBounds bounds;
-    private GameType enterMode;
-    private GameType leaveMode;
-    private boolean enabled;
-    private List<String> whitelist;
-    private List<String> protectionWhitelist; // per-area protection bypass
-    private RestrictionSettings restrictions;
-    private ProtectionSettings protection = new ProtectionSettings();
-    private TriggerConfig enterTrigger = null;
-    private TriggerConfig leaveTrigger = null;
-    private boolean scheduleEnabled = false;
-    private boolean scheduleWasDisabledBySchedule = false; // transient runtime state
-    private Integer scheduleTimeMin = null; // 0-24000 game ticks
-    private Integer scheduleTimeMax = null; // 0-24000 game ticks
-    // Condition-based activation (works alongside schedule)
-    private boolean conditionEnabled = false;
-    private Integer conditionMinPlayers = null;
-    private String conditionRequirePlayer = null;
-    // Area chaining: auto-teleport to next area
-    private String chainNext = null;
+    private volatile String displayName;
+    private volatile String dimension;
+    private volatile AreaBounds bounds;
+    private volatile GameType enterMode;
+    private volatile GameType leaveMode;
+    private volatile boolean enabled;
+    private volatile List<String> whitelist;
+    private volatile List<String> protectionWhitelist;
+    private volatile RestrictionSettings restrictions;
+    private volatile ProtectionSettings protection = new ProtectionSettings();
+    private volatile TriggerConfig enterTrigger = null;
+    private volatile TriggerConfig leaveTrigger = null;
+    private volatile boolean scheduleEnabled = false;
+    private volatile boolean scheduleWasDisabledBySchedule = false;
+    private volatile Integer scheduleTimeMin = null;
+    private volatile Integer scheduleTimeMax = null;
+    private volatile boolean conditionEnabled = false;
+    private volatile Integer conditionMinPlayers = null;
+    private volatile String conditionRequirePlayer = null;
+    private volatile String chainNext = null;
     // Stats (runtime only, not persisted)
     private final AtomicInteger entryCount = new AtomicInteger(0);
     // P3 #3: volatile — these stats are written by tick/thread handlers and read by command queries

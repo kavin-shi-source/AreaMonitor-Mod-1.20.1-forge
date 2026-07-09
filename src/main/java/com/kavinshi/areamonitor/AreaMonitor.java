@@ -54,7 +54,13 @@ public class AreaMonitor {
     @SubscribeEvent
     public static void onServerAboutToStart(ServerAboutToStartEvent event) {
         minecraftServer = event.getServer();
+        ConfigManager.resetExecutor();
         ConfigManager.ensureConfigFiles();
+        LocalizationManager.applyConfigLanguage(ConfigManager.CONFIG.language.get());
+        ConfigManager.loadAreasConfig();
+        ItemBlacklistManager.loadBlacklistConfig();
+        AreaMonitorMod.LOGGER.info("Server about to start, loaded {} areas",
+            AreaManager.getInstance().getAllAreas().size());
     }
 
     @SubscribeEvent
@@ -65,19 +71,19 @@ public class AreaMonitor {
 
         try {
             pendingActions.clear();
-        } catch (Exception ex) {
-            AreaMonitorMod.LOGGER.error("AreaMonitor: failed to clear pending actions on shutdown", ex);
+        } catch (Throwable t) {
+            AreaMonitorMod.LOGGER.error("AreaMonitor: failed to clear pending actions on shutdown", t);
         }
         try {
             tickCounter.set(0);
             monotonicTickCounter.set(0);
-        } catch (Exception ex) {
-            AreaMonitorMod.LOGGER.error("AreaMonitor: failed to reset tick counters on shutdown", ex);
+        } catch (Throwable t) {
+            AreaMonitorMod.LOGGER.error("AreaMonitor: failed to reset tick counters on shutdown", t);
         }
         try {
             AreaTriggerManager.clearAll();
-        } catch (Exception ex) {
-            AreaMonitorMod.LOGGER.error("AreaMonitor: failed to clear trigger manager on shutdown", ex);
+        } catch (Throwable t) {
+            AreaMonitorMod.LOGGER.error("AreaMonitor: failed to clear trigger manager on shutdown", t);
         }
 
         minecraftServer = null;

@@ -33,6 +33,7 @@ public class AreaProtectionManager {
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onItemToss(ItemTossEvent event) {
         if (!(event.getPlayer() instanceof ServerPlayer sp)) return;
+        if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
         if (!isProtected(sp, "itemDrop")) return;
         event.setCanceled(true);
         sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.item_drop_denied"), true);
@@ -43,6 +44,7 @@ public class AreaProtectionManager {
     public static void onBlockBreak(BlockEvent.BreakEvent event) {
         Player player = event.getPlayer();
         if (!(player instanceof ServerPlayer sp)) return;
+        if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
         if (!isProtected(sp, "blockBreak")) return;
         event.setCanceled(true);
         sp.displayClientMessage(MessageUtils.smartComponent(sp, "protection.block_break_denied"), true);
@@ -53,6 +55,7 @@ public class AreaProtectionManager {
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onBlockPlace(BlockEvent.EntityPlaceEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer sp)) return;
+        if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
         // Check block-place protection or fluid-place protection
         if (isProtected(sp, "blockPlace")) {
             event.setCanceled(true);
@@ -81,6 +84,7 @@ public class AreaProtectionManager {
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onBlockInteract(PlayerInteractEvent.RightClickBlock event) {
         if (!(event.getEntity() instanceof ServerPlayer sp)) return;
+        if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
         BlockPos pos = event.getPos();
         // Container interaction protection
         if (isProtected(sp, "containerInteract")) {
@@ -104,6 +108,7 @@ public class AreaProtectionManager {
     @SubscribeEvent(priority = EventPriority.HIGH)
     public static void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
         if (!(event.getEntity() instanceof ServerPlayer sp)) return;
+        if (AreaManager.getInstance().getAllAreas().isEmpty()) return;
         net.minecraft.world.entity.Entity target = event.getTarget();
         if (target == null) return;
 
@@ -339,25 +344,5 @@ public class AreaProtectionManager {
             case "itemDrop": return p.isItemDrop();
             default: return false;
         }
-    }
-
-    /**
-     * Location-based protection check for non-player entities (villagers, animals, etc.)
-     * that have no whitelist concept. Used by entityDamage and explosion protection.
-     * Uses spatial partitioning for O(k) lookup instead of O(n).
-     */
-    private static boolean isProtectedAtLocation(double x, double z, String dimension, String protectionType) {
-        AreaManager am = AreaManager.getInstance();
-        for (MonitorArea area : am.getPotentialAreasAt(x, z, dimension)) {
-            if (area == null || !area.isEnabled()) continue;
-            if (!area.getDimension().equals(dimension)) continue;
-            if (!area.getBounds().contains(x, z)) continue;
-            ProtectionSettings p = area.getProtection();
-            switch (protectionType) {
-                case "entityDamage": if (p.isEntityDamage()) return true; break;
-                case "explosion": if (p.isExplosion()) return true; break;
-            }
-        }
-        return false;
     }
 }

@@ -9,8 +9,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RestrictionSettings {
     private volatile boolean enableItemBlacklist = true;
     private volatile boolean blockTeleportCommands = true;
-    private Set<String> blockedItems = ConcurrentHashMap.newKeySet();
-    private Set<String> blockedCommands = ConcurrentHashMap.newKeySet();
+    private volatile Set<String> blockedItems = ConcurrentHashMap.newKeySet();
+    private volatile Set<String> blockedCommands = ConcurrentHashMap.newKeySet();
 
     public boolean isEnableItemBlacklist() {
         return enableItemBlacklist;
@@ -38,8 +38,9 @@ public class RestrictionSettings {
     }
 
     public void setBlockedItems(Collection<String> blockedItems) {
-        this.blockedItems.clear();
-        if (blockedItems != null) this.blockedItems.addAll(blockedItems);
+        Set<String> newSet = ConcurrentHashMap.newKeySet();
+        if (blockedItems != null) newSet.addAll(blockedItems);
+        this.blockedItems = newSet;
     }
 
     public boolean addBlockedItem(String item) {
@@ -55,8 +56,9 @@ public class RestrictionSettings {
     }
 
     public void setBlockedCommands(Collection<String> blockedCommands) {
-        this.blockedCommands.clear();
-        if (blockedCommands != null) this.blockedCommands.addAll(blockedCommands);
+        Set<String> newSet = ConcurrentHashMap.newKeySet();
+        if (blockedCommands != null) newSet.addAll(blockedCommands);
+        this.blockedCommands = newSet;
     }
 
     public boolean addBlockedCommand(String command) {

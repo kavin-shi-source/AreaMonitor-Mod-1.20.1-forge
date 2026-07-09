@@ -281,15 +281,10 @@ public class AreaManager {
     private static double findSafeY(net.minecraft.world.level.Level level, int x, int z) {
         int chunkX = x >> 4;
         int chunkZ = z >> 4;
-        // P2 #2 fix: synchronously load the chunk if not yet loaded so we can scan real terrain.
-        // Previously this returned 64 (sea level) which often trapped players inside solid blocks
-        // or mid-air on cross-dimension teleports where the target chunk had not been generated.
+        // Synchronously load the chunk if not yet loaded so we can scan real terrain.
         // getChunk on ServerLevel will load/generate the chunk synchronously; this is acceptable
         // because chain teleport is a one-shot per enter event, not per-tick.
         try {
-            if (!level.hasChunk(chunkX, chunkZ)) {
-                return level.getSeaLevel();
-            }
             level.getChunk(chunkX, chunkZ);
         } catch (Exception ex) {
             AreaMonitorMod.LOGGER.warn("findSafeY: failed to load chunk at {},{} - falling back to sea level ({})",

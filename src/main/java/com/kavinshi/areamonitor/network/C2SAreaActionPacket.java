@@ -6,6 +6,7 @@ import com.kavinshi.areamonitor.ConfigManager;
 import com.kavinshi.areamonitor.MonitorArea;
 import com.kavinshi.areamonitor.ProtectionSettings;
 import com.kavinshi.areamonitor.TriggerConfig;
+import com.kavinshi.areamonitor.commands.TriggerCommands;
 import com.kavinshi.areamonitor.model.RestrictionSettings;
 import com.kavinshi.areamonitor.util.DimensionUtils;
 import com.google.gson.Gson;
@@ -69,7 +70,7 @@ public class C2SAreaActionPacket {
         NetworkEvent.Context context = ctx.get();
         context.enqueueWork(() -> {
             ServerPlayer player = context.getSender();
-            if (player == null || !player.hasPermissions(2)) return;
+            if (player == null || !player.hasPermissions(4)) return;
             if (action == null) return;
 
             // Handle actions that modify area data...
@@ -131,7 +132,7 @@ public class C2SAreaActionPacket {
                     
                     // 4. Apply validated draft back to live area
                     applyDraftToArea(area, draft);
-                    ConfigManager.safeSaveConfig();
+                    stateChanged = true;
                     break;
                 }
             }
@@ -274,23 +275,30 @@ public class C2SAreaActionPacket {
         if (obj.has("commands") && obj.get("commands").isJsonArray()) {
             List<String> newCommands = new ArrayList<>();
             for (var e : obj.getAsJsonArray("commands")) {
-                if (e.isJsonPrimitive()) newCommands.add(e.getAsString());
+                if (e.isJsonPrimitive()) {
+                    String cmd = e.getAsString();
+                    if (TriggerCommands.isValidCommand(cmd)) {
+                        newCommands.add(cmd);
+                    } else {
+                        AreaMonitorMod.LOGGER.warn("Rejected dangerous/invalid command in trigger update: {}", cmd);
+                    }
+                }
             }
             tc.getCommands().clear();
             tc.getCommands().addAll(newCommands);
         }
         if (obj.has("soundEvent")) tc.setSoundEvent(obj.get("soundEvent").isJsonNull() ? null : obj.get("soundEvent").getAsString());
-        if (obj.has("soundVolume")) tc.setSoundVolume(obj.get("soundVolume").getAsFloat());
-        if (obj.has("soundPitch")) tc.setSoundPitch(obj.get("soundPitch").getAsFloat());
+        if (obj.has("soundVolume") && !obj.get("soundVolume").isJsonNull()) tc.setSoundVolume(obj.get("soundVolume").getAsFloat());
+        if (obj.has("soundPitch") && !obj.get("soundPitch").isJsonNull()) tc.setSoundPitch(obj.get("soundPitch").getAsFloat());
         if (obj.has("titleMain")) tc.setTitleMain(obj.get("titleMain").isJsonNull() ? null : obj.get("titleMain").getAsString());
         if (obj.has("titleSub")) tc.setTitleSub(obj.get("titleSub").isJsonNull() ? null : obj.get("titleSub").getAsString());
         if (obj.has("teleportTarget")) tc.setTeleportTarget(obj.get("teleportTarget").isJsonNull() ? null : obj.get("teleportTarget").getAsString());
         if (obj.has("actionBar")) tc.setActionBar(obj.get("actionBar").isJsonNull() ? null : obj.get("actionBar").getAsString());
         if (obj.has("potion")) tc.setPotion(obj.get("potion").isJsonNull() ? null : obj.get("potion").getAsString());
-        if (obj.has("potionDuration")) tc.setPotionDuration(obj.get("potionDuration").getAsInt());
-        if (obj.has("potionAmplifier")) tc.setPotionAmplifier(obj.get("potionAmplifier").getAsInt());
-        if (obj.has("cooldownTicks")) tc.setCooldownTicks(obj.get("cooldownTicks").getAsInt());
-        if (obj.has("debounceTicks")) tc.setDebounceTicks(obj.get("debounceTicks").getAsInt());
+        if (obj.has("potionDuration") && !obj.get("potionDuration").isJsonNull()) tc.setPotionDuration(obj.get("potionDuration").getAsInt());
+        if (obj.has("potionAmplifier") && !obj.get("potionAmplifier").isJsonNull()) tc.setPotionAmplifier(obj.get("potionAmplifier").getAsInt());
+        if (obj.has("cooldownTicks") && !obj.get("cooldownTicks").isJsonNull()) tc.setCooldownTicks(obj.get("cooldownTicks").getAsInt());
+        if (obj.has("debounceTicks") && !obj.get("debounceTicks").isJsonNull()) tc.setDebounceTicks(obj.get("debounceTicks").getAsInt());
         // Condition update
         if (obj.has("condition")) {
             TriggerConfig.TriggerCondition cond = GSON.fromJson(obj.get("condition"), TriggerConfig.TriggerCondition.class);
@@ -300,8 +308,8 @@ public class C2SAreaActionPacket {
 
     private static void updateRestrictions(RestrictionSettings rs, JsonObject obj) {
         if (rs == null || obj == null) return;
-        if (obj.has("enableItemBlacklist")) rs.setEnableItemBlacklist(obj.get("enableItemBlacklist").getAsBoolean());
-        if (obj.has("blockTeleportCommands")) rs.setBlockTeleportCommands(obj.get("blockTeleportCommands").getAsBoolean());
+        if (obj.has("enableItemBlacklist") && !obj.get("enableItemBlacklist").isJsonNull()) rs.setEnableItemBlacklist(obj.get("enableItemBlacklist").getAsBoolean());
+        if (obj.has("blockTeleportCommands") && !obj.get("blockTeleportCommands").isJsonNull()) rs.setBlockTeleportCommands(obj.get("blockTeleportCommands").getAsBoolean());
         if (obj.has("blockedItems") && obj.get("blockedItems").isJsonArray()) {
             List<String> newList = new ArrayList<>();
             for (var e : obj.getAsJsonArray("blockedItems")) {
